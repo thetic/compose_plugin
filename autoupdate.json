@@ -1,0 +1,7 @@
+{
+    "\/tmp\/stack": {
+        "enabled": true,
+        "schedule": "daily",
+        "time": "02:00"
+    }
+}
