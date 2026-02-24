@@ -587,6 +587,27 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 }
             }
         }
+        
+        // Handle dashboard tile toggle -> disable/enable hide containers option
+        function toggleExpandByDefault() {
+            var stacksDefaultExpanded = $('#STACKS_DEFAULT_EXPANDED').is(':checked');
+            var $hide = $('#ONLY_EXPAND_RUNNING_STACKS');
+            var $wrapper = $hide.closest('dl');
+            if (!stacksDefaultExpanded) {
+                if ($hide.is(':checked')) {
+                    $hide.prop('checked', false).change();
+                }
+                $wrapper.css({
+                    opacity: 0.4,
+                    pointerEvents: 'none'
+                });
+            } else {
+                $wrapper.css({
+                    opacity: 1,
+                    pointerEvents: ''
+                });
+            }
+        }
 
         // Convert checkbox values to true/false strings before form submission
         $('form[name="compose_manager_settings"]').on('submit', function(e) {
@@ -641,17 +662,19 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
         // Apply hide containers on load and on change
         toggleHideContainers();
-        // Use delegated binding to survive switch-button DOM wrapping/replacement
-        $(document).on('change', '#SHOW_DASHBOARD_TILE', toggleHideContainers);
+        $('#SHOW_DASHBOARD_TILE').change(toggleHideContainers);
+
+        // Apply expand stacks by default on load and on change
+        toggleExpandByDefault();
+        $('#STACKS_DEFAULT_EXPANDED').change(toggleExpandByDefault);
 
         // Apply compose on top on load and on change
         toggleComposeOnTop();
         $('#SHOW_COMPOSE_IN_HEADER_MENU').change(toggleComposeOnTop);
 
         // Handle auto-check toggle state change
-        $('#AUTO_CHECK_UPDATES').change(function() {
-            toggleAutoCheckInterval();
-        });
+        toggleAutoCheckInterval();
+        $('#AUTO_CHECK_UPDATES').change(toggleAutoCheckInterval);
 
         // allow patch UI change handler to run now that switches are initialized
         _ignorePatchUIChange = false;
@@ -661,6 +684,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         // Set only the correct tab and content as active
         $('.compose-tab[data-tab="' + savedTab + '"]').addClass('active');
         $('#compose-tab-' + savedTab).addClass('active');
+        
         // If the default tab is backup, load the backup list immediately
         if (savedTab === 'backup') {
             loadBackupArchives();
@@ -1257,16 +1281,6 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         </dl>
 
         <dl>
-            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Expand Stacks by Default)_:</dt>
-            <dd>
-                <input type="checkbox" name="STACKS_DEFAULT_EXPANDED" id="STACKS_DEFAULT_EXPANDED" class="compose-toggle" <?= ($cfg['STACKS_DEFAULT_EXPANDED'] ?? 'false') == 'true' ? 'checked' : '' ?>>
-                <blockquote class="inline_help">
-                    When enabled, all stack detail rows will be expanded when the page loads.
-                </blockquote>
-            </dd>
-        </dl>
-
-        <dl>
             <dt style="cursor: help;" onclick="toggleHelp(this)">_(Hide Compose Containers from Docker)_:</dt>
             <dd>
                 <input type="checkbox" name="HIDE_COMPOSE_FROM_DOCKER" id="HIDE_COMPOSE_FROM_DOCKER" class="compose-toggle" <?= ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') == 'true' ? 'checked' : '' ?>>
@@ -1296,6 +1310,26 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     Hide containers managed by Compose stacks from Unraid's Docker Containers dashboard tile.<br>
                     This avoids duplicate entries when both the Compose Stacks tile and Docker Containers tile are visible on the Dashboard.<br>
                     This option requires "Show Dashboard Tile" to be enabled.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Expand Stacks by Default)_:</dt>
+            <dd>
+                <input type="checkbox" name="STACKS_DEFAULT_EXPANDED" id="STACKS_DEFAULT_EXPANDED" class="compose-toggle" <?= ($cfg['STACKS_DEFAULT_EXPANDED'] ?? 'false') == 'true' ? 'checked' : '' ?>>
+                <blockquote class="inline_help">
+                    When enabled, all stack detail rows will be expanded when the page loads.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Only Expand Running Stacks)_:</dt>
+            <dd>
+                <input type="checkbox" id="ONLY_EXPAND_RUNNING_STACKS" name="ONLY_EXPAND_RUNNING_STACKS" class="compose-toggle" <?= ($cfg['ONLY_EXPAND_RUNNING_STACKS'] ?? 'false') == 'true' ? 'checked' : '' ?>>
+                <blockquote class="inline_help">
+                    When enabled, only running stacks will be expanded by default.
                 </blockquote>
             </dd>
         </dl>

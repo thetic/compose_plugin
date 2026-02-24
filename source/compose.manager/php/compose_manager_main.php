@@ -1371,6 +1371,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (config['STACKS_DEFAULT_EXPANDED'] == 'true') {
                     // Expand all stacks if the default is set to expanded
                     $('#compose_stacks tr.compose-sortable').each(function() {
+                        if ($(this).data('isup') != "1" && config['ONLY_EXPAND_RUNNING_STACKS'] == 'true') {
+                            return; // Skip stopped stacks if ONLY_EXPAND_RUNNING_STACKS is true
+                        }
                         var stackId = $(this).attr('id').replace('stack-row-', '');
                         toggleStackDetails(stackId);
                     });
