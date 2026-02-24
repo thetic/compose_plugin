@@ -163,127 +163,138 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Load stack list asynchronously (namespaced to avoid conflict with Docker tab's loadlist)
     function composeLoadlist() {
-        composeClientDebug('[composeLoadlist] start', null, 'daemon', 'debug');
-        // Ensure local spinner exists and show it after a short delay to avoid flash on fast loads
-        if ($('#compose-local-spinner').length === 0) {
-            // place spinner just above the list and ensure parent can position overlay if needed
-            $('#compose_list').before('<div id="compose-local-spinner" class="compose-local-spinner" style="display:none"><i class="fa fa-spin fa-circle-o-notch"></i> <span class="compose-local-spinner-text">Loading stack list...</span></div>');
-            $('#compose_list').parent().css('position', 'relative');
-        }
-        composeTimers.load = setTimeout(function() {
-            $('#compose-local-spinner').fadeIn('fast');
-        }, 500);
+        // Return a Promise so callers can reliably .then() / .catch() on completion
+        return new Promise(function(resolve, reject) {
+            composeClientDebug('[composeLoadlist] start', null, 'daemon', 'debug');
+            // Ensure local spinner exists and show it after a short delay to avoid flash on fast loads
+            if ($('#compose-local-spinner').length === 0) {
+                // place spinner just above the list and ensure parent can position overlay if needed
+                $('#compose_list').before('<div id="compose-local-spinner" class="compose-local-spinner" style="display:none"><i class="fa fa-spin fa-circle-o-notch"></i> <span class="compose-local-spinner-text">Loading stack list...</span></div>');
+                $('#compose_list').parent().css('position', 'relative');
+            }
+            composeTimers.load = setTimeout(function() {
+                $('#compose-local-spinner').fadeIn('fast');
+            }, 500);
 
-        $.get('/plugins/compose.manager/php/compose_list.php', function(data) {
-            try {
-                composeClientDebug('[composeLoadlist] success', null, 'daemon', 'debug');
-            } catch (e) {}
-            clearTimeout(composeTimers.load);
+            $.get('/plugins/compose.manager/php/compose_list.php')
+            .done(function(data) {
+                try {
+                    composeClientDebug('[composeLoadlist] success', null, 'daemon', 'debug');
+                } catch (e) {}
+                clearTimeout(composeTimers.load);
 
-            // Insert the loaded content
-            $('#compose_list').html(data);
+                // Insert the loaded content
+                $('#compose_list').html(data);
 
-            // Initialize UI components for the newly loaded content
-            initStackListUI();
+                // Initialize UI components for the newly loaded content
+                initStackListUI();
 
-            // Debug: log initial per-stack rendered status icons (data-status attribute)
-            try {
-                var initialStatuses = [];
-                $('#compose_stacks tr.compose-sortable').each(function() {
-                    var project = $(this).data('project');
-                    var icon = $(this).find('.compose-status-icon').first();
-                    var status = icon.attr('data-status') || icon.attr('class') || '';
-                    initialStatuses.push({
-                        project: project,
-                        status: status
+                // Debug: log initial per-stack rendered status icons (data-status attribute)
+                try {
+                    var initialStatuses = [];
+                    $('#compose_stacks tr.compose-sortable').each(function() {
+                        var project = $(this).data('project');
+                        var icon = $(this).find('.compose-status-icon').first();
+                        var status = icon.attr('data-status') || icon.attr('class') || '';
+                        initialStatuses.push({
+                            project: project,
+                            status: status
+                        });
                     });
-                });
-                composeClientDebug('[composeLoadlist] initial-stack-statuses', {
-                    stacks: initialStatuses
-                }, 'daemon', 'debug');
-            } catch (e) {}
-
-            // Normalize icons based on state text to ensure server-side render and
-            // client-side update logic agree (workaround for caching or older server HTML)
-            try {
-                $('#compose_stacks tr.compose-sortable').each(function() {
-                    var $row = $(this);
-                    var stateText = $row.find('.state').text().toLowerCase();
-                    var $icon = $row.find('.compose-status-icon').first();
-                    if (!$icon.length) return;
-                    var desiredShape = null;
-                    var desiredColor = 'grey-text';
-                    if (stateText.indexOf('partial') !== -1) {
-                        desiredShape = 'exclamation-circle';
-                        desiredColor = 'orange-text';
-                    } else if (stateText.indexOf('started') !== -1) {
-                        desiredShape = 'play';
-                        desiredColor = 'green-text';
-                    } else if (stateText.indexOf('paused') !== -1) {
-                        desiredShape = 'pause';
-                        desiredColor = 'orange-text';
-                    } else {
-                        desiredShape = 'square';
-                        desiredColor = 'grey-text';
-                    }
-
-                    // If icon already matches, skip
-                    if (($icon.hasClass('fa-' + desiredShape) && $icon.hasClass(desiredColor))) return;
-
-                    composeClientDebug('[composeLoadlist] normalize-icon', {
-                        project: $row.data('project'),
-                        stateText: stateText,
-                        desiredShape: desiredShape,
-                        desiredColor: desiredColor,
-                        before: $icon.attr('class')
+                    composeClientDebug('[composeLoadlist] initial-stack-statuses', {
+                        stacks: initialStatuses
                     }, 'daemon', 'debug');
-                    // Remove old fa-* classes, color classes and apply desired ones
-                    $icon.removeClass(function(i, cls) {
-                        return (cls.match(/fa-[^\s]+/g) || []).join(' ');
+                } catch (e) {}
+
+                // Normalize icons based on state text to ensure server-side render and
+                // client-side update logic agree (workaround for caching or older server HTML)
+                try {
+                    $('#compose_stacks tr.compose-sortable').each(function() {
+                        var $row = $(this);
+                        var stateText = $row.find('.state').text().toLowerCase();
+                        var $icon = $row.find('.compose-status-icon').first();
+                        if (!$icon.length) return;
+                        var desiredShape = null;
+                        var desiredColor = 'grey-text';
+                        if (stateText.indexOf('partial') !== -1) {
+                            desiredShape = 'exclamation-circle';
+                            desiredColor = 'orange-text';
+                        } else if (stateText.indexOf('started') !== -1) {
+                            desiredShape = 'play';
+                            desiredColor = 'green-text';
+                        } else if (stateText.indexOf('paused') !== -1) {
+                            desiredShape = 'pause';
+                            desiredColor = 'orange-text';
+                        } else {
+                            desiredShape = 'square';
+                            desiredColor = 'grey-text';
+                        }
+
+                        // If icon already matches, skip
+                        if (($icon.hasClass('fa-' + desiredShape) && $icon.hasClass(desiredColor))) return;
+
+                        composeClientDebug('[composeLoadlist] normalize-icon', {
+                            project: $row.data('project'),
+                            stateText: stateText,
+                            desiredShape: desiredShape,
+                            desiredColor: desiredColor,
+                            before: $icon.attr('class')
+                        }, 'daemon', 'debug');
+                        // Remove old fa-* classes, color classes and apply desired ones
+                        $icon.removeClass(function(i, cls) {
+                            return (cls.match(/fa-[^\s]+/g) || []).join(' ');
+                        });
+                        $icon.removeClass('green-text orange-text grey-text cyan-text');
+                        $icon.addClass('fa fa-' + desiredShape + ' ' + desiredColor + ' compose-status-icon');
+                        composeClientDebug('[composeLoadlist] normalize-icon-done', {
+                            project: $row.data('project'),
+                            after: $icon.attr('class')
+                        }, 'daemon', 'debug');
                     });
-                    $icon.removeClass('green-text orange-text grey-text cyan-text');
-                    $icon.addClass('fa fa-' + desiredShape + ' ' + desiredColor + ' compose-status-icon');
-                    composeClientDebug('[composeLoadlist] normalize-icon-done', {
-                        project: $row.data('project'),
-                        after: $icon.attr('class')
-                    }, 'daemon', 'debug');
-                });
-            } catch (e) {}
+                } catch (e) {}
 
-            // Cleanup any temporary per-container spinners or leftover in-progress state
-            try {
-                $('#compose_list').find('.compose-container-spinner').each(function() {
-                    var $sp = $(this);
-                    var $wrap = $sp.closest('.hand');
-                    $sp.remove();
-                    $wrap.find('img').css('opacity', 1);
-                });
-                // Restore any state text preserved by setStackActionInProgress
-                $('#compose_stacks .state').each(function() {
-                    var $s = $(this);
-                    if ($s.data('orig-text')) {
-                        $s.text($s.data('orig-text'));
-                        $s.removeData('orig-text');
-                    }
-                });
-            } catch (e) {}
+                // Cleanup any temporary per-container spinners or leftover in-progress state
+                try {
+                    $('#compose_list').find('.compose-container-spinner').each(function() {
+                        var $sp = $(this);
+                        var $wrap = $sp.closest('.hand');
+                        $sp.remove();
+                        $wrap.find('img').css('opacity', 1);
+                    });
+                    // Restore any state text preserved by setStackActionInProgress
+                    $('#compose_stacks .state').each(function() {
+                        var $s = $(this);
+                        if ($s.data('orig-text')) {
+                            $s.text($s.data('orig-text'));
+                            $s.removeData('orig-text');
+                        }
+                    });
+                } catch (e) {}
 
-            // Hide local spinner
-            $('#compose-local-spinner').fadeOut('fast');
+                // Hide local spinner
+                $('#compose-local-spinner').fadeOut('fast');
 
-            // Show buttons now that content is loaded
-            $('input[type=button]').show();
+                // Show buttons now that content is loaded
+                $('input[type=button]').show();
 
-            // Notify other features (e.g. hide-from-docker) that compose list is ready
-            $(document).trigger('compose-list-loaded');
-        }).fail(function(xhr, status, error) {
-            composeClientDebug('[composeLoadlist] failed', {
-                status: status,
-                error: error
-            }, 'daemon', 'error');
-            clearTimeout(composeTimers.load);
-            $('#compose-local-spinner').fadeOut('fast');
-            $('#compose_list').html('<tr><td colspan="7" style="text-align:center;padding:20px;color:#c00;">Failed to load stack list. Please refresh the page.</td></tr>');
+                // Notify other features (e.g. hide-from-docker) that compose list is ready
+                $(document).trigger('compose-list-loaded');
+
+                // Resolve the promise so callers know the list has been loaded
+                try { resolve(data); } catch (e) { resolve(); }
+            })
+            .fail(function(xhr, status, error) {
+                composeClientDebug('[composeLoadlist] failed', {
+                    status: status,
+                    error: error
+                }, 'daemon', 'error');
+                clearTimeout(composeTimers.load);
+                $('#compose-local-spinner').fadeOut('fast');
+                $('#compose_list').html('<tr><td colspan="7" style="text-align:center;padding:20px;color:#c00;">Failed to load stack list. Please refresh the page.</td></tr>');
+
+                // Reject the promise so callers can handle the error
+                try { reject({xhr: xhr, status: status, error: error}); } catch (e) { reject(error); }
+            });
         });
     }
 
@@ -1355,8 +1366,17 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         // Load the stack list asynchronously (like Docker tab)
         // This defers the expensive docker commands to after the page renders
-        composeLoadlist();
-
+        composeLoadlist().then(function() {
+            getConfig().then(function(config) {
+                if (config['STACKS_DEFAULT_EXPANDED'] == 'true') {
+                    // Expand all stacks if the default is set to expanded
+                    $('#compose_stacks tr.compose-sortable').each(function() {
+                        var stackId = $(this).attr('id').replace('stack-row-', '');
+                        toggleStackDetails(stackId);
+                    });
+                }
+            });
+        });
         // ── Cross-widget sync ──────────────────────────────────────────
         // On the Docker page the Compose stacks list is rendered below
         // the built-in Docker containers table (non-tabbed) or in a
@@ -1570,8 +1590,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var $el = $("#" + myID);
         $el.empty();
         var $input = $("<input type='text'>").attr('id', 'newName' + myID).val(currentName);
-        var $cancel = $("<i class='fa fa-times' aria-hidden='true' style='cursor:pointer;color:red;font-size:1.2em'></i>").on('click', function() { cancelName(myID); });
-        var $apply = $("<i class='fa fa-check' aria-hidden='true' style='cursor:pointer;color:green;font-size:1.2em'></i>").on('click', function() { applyName(myID); });
+        var $cancel = $("<i class='fa fa-times' aria-hidden='true' style='cursor:pointer;color:red;font-size:1.2em'></i>").on('click', function() {
+            cancelName(myID);
+        });
+        var $apply = $("<i class='fa fa-check' aria-hidden='true' style='cursor:pointer;color:green;font-size:1.2em'></i>").on('click', function() {
+            applyName(myID);
+        });
         $el.append($input).append($("<br>")).append($cancel).append("&nbsp;&nbsp;").append($apply);
         $el.tooltipster("close");
         $el.tooltipster("disable");
@@ -1586,8 +1610,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var $el = $("#" + myID);
         $el.empty();
         var $textarea = $("<textarea cols='40' rows='5'></textarea>").attr('id', 'newDesc' + myID).val(currentDesc);
-        var $cancel = $("<i class='fa fa-times' aria-hidden='true' style='cursor:pointer;color:red;font-size:1.2em'></i>").on('click', function() { cancelDesc(myID); });
-        var $apply = $("<i class='fa fa-check' aria-hidden='true' style='cursor:pointer;color:green;font-size:1.2em'></i>").on('click', function() { applyDesc(myID); });
+        var $cancel = $("<i class='fa fa-times' aria-hidden='true' style='cursor:pointer;color:red;font-size:1.2em'></i>").on('click', function() {
+            cancelDesc(myID);
+        });
+        var $apply = $("<i class='fa fa-check' aria-hidden='true' style='cursor:pointer;color:green;font-size:1.2em'></i>").on('click', function() {
+            applyDesc(myID);
+        });
         $el.append($textarea).append($("<br>")).append($cancel).append("&nbsp;&nbsp;").append($apply);
         $("#" + origID).tooltipster("enable");
     }
@@ -2006,7 +2034,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         }
                     }
                 } catch (e) {
-                    composeClientDebug('[refreshStackRow] parse-error', { project: project, err: e.toString() }, 'daemon', 'error');
+                    composeClientDebug('[refreshStackRow] parse-error', {
+                        project: project,
+                        err: e.toString()
+                    }, 'daemon', 'error');
                     // Fallback: update from whatever cache we have
                     updateParentStackFromContainers(stackId, project);
                 }
@@ -3212,9 +3243,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     }, 1600);
                 }
             } else {
-                var errorText = saveErrors.length > 0
-                    ? saveErrors.join('\n')
-                    : 'Some items could not be saved. Please try again.';
+                var errorText = saveErrors.length > 0 ?
+                    saveErrors.join('\n') :
+                    'Some items could not be saved. Please try again.';
                 swal({
                     title: "Save Failed",
                     text: errorText,
