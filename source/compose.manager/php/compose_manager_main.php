@@ -2414,7 +2414,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
             containers.forEach(function(container, index) {
                 var containerName = container.Name || container.Service || 'Unknown';
-                var shortName = containerName.replace(/^[^-]+-/, '');
+                var shortName = container.Service || containerName.replace(/^[^-]+-/, '');
                 var image = container.Image || '';
                 var imageParts = image.split(':');
                 var imageName = imageParts[0].split('/').pop();
@@ -3700,7 +3700,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         containers.forEach(function(container, idx) {
             var containerName = container.Name || container.Service || 'Unknown';
-            var shortName = containerName.replace(/^[^-]+-/, ''); // Remove project prefix
+            var shortName = container.Service || containerName.replace(/^[^-]+-/, ''); // Prefer service name; fall back to stripping project prefix
             var image = container.Image || '';
 
             // Parse image - handle docker.io/ prefix and @sha256: digest
