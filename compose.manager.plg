@@ -28,9 +28,14 @@
 >
 
 <CHANGES>
-###2026.02.23b
-- Bug Fixes: improve project name handling in compose utility functions and tests
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.23a...v2026.02.23b)
+###2026.02.24
+- Features: add option to only expand running stacks
+- Bug Fixes: enhance logging by encoding array and object data in clientDebug function
+- Bug Fixes: streamline compose command file resolution and remove redundant requires
+- Refactoring: remove default expanded state for stack details in compose list and setup composeLoadList to return a promise so when it finishes we can expand all the stacks naturally
+- Chores: remove obsolete test for detail row structure in ComposeListHtmlTest
+- Add option to expand stacks by default
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.23b...v2026.02.24)
 
 </CHANGES>
 
@@ -77,11 +82,14 @@ if [ -f "$patch_script" ]; then
         #Grab the contents of our config file.
         source &lt;(grep = $config_file)
         patch_ui=${PATCH_UI:='false'}
+        # Parse /etc/unraid-version into numeric form: M*10000 + m*100 + p
+        # Handles formats like: 6.10.2 or "7.2.3" by extracting the first X.Y.Z
+        ver=$(grep -oE '[0-9]+(\.[0-9]+){0,2}' /etc/unraid-version | head -n1)
+        IFS=. read -r major minor patch &lt;&lt;&lt; "$ver"
+        major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
+        unraid_version=$((major*10000 + minor*100 + patch))
 
-        # Ensure any previously applied patches are removed first (cleanup)
-        $patch_script -r 2>/dev/null || true
-
-        if [ $patch_ui == 'true' ]; then
+        if [ $unraid_version -ge 61000 ] &amp;&amp; [ $unraid_version -le 69999 ] &amp;&amp; [ $patch_ui == 'true' ]; then
             echo ""
             echo "----------------------------------------------------"
             echo " Applying WebUI Patches because PATCH_UI=true"
@@ -92,7 +100,8 @@ if [ -f "$patch_script" ]; then
 
             #Apply Patches
             $patch_script apply || true
-        else
+        fi
+        if [ $unraid_version -ge 61000 ] &amp;&amp; [ $unraid_version -le 69999 ] &amp;&amp; [ $patch_ui != 'true' ]; then
             echo ""
             echo "----------------------------------------------------"
             echo " Removing WebUI Patches because PATCH_UI=false"
