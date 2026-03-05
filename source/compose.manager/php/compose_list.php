@@ -7,7 +7,6 @@
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
-// Note: helper functions removed; test suite provides any needed test-local helpers.
 
 $cfg = parse_plugin_cfg($sName);
 
@@ -68,7 +67,6 @@ foreach ($composeProjects as $project) {
         : "$compose_root/$project";
     $composeFile = findComposeFile($basePath) ?: "$basePath/" . COMPOSE_FILE_NAMES[0];
     // Resolve override via centralized helper (prefer correctly-named indirect override)
-    require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
     $overridePath = OverrideInfo::fromStack($compose_root, $project)->getOverridePath();
 
     // Use docker compose config --services to get accurate service count
@@ -99,8 +97,9 @@ foreach ($composeProjects as $project) {
     }
 
     // Get running container info from $containersByProject
-    $sanitizedProjectName = sanitizeStr($projectName);
-    $projectContainers = $containersByProject[$sanitizedProjectName] ?? [];
+    // Use directory basename (sanitized) as project key — this matches the -p flag in echoComposeCommand
+    $sanitizedProject = sanitizeStr($project);
+    $projectContainers = $containersByProject[$sanitizedProject] ?? [];
     $runningCount = 0;
     $stoppedCount = 0;
     $pausedCount = 0;

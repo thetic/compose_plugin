@@ -72,11 +72,9 @@ function sanitizeFolderName($stackName) {
 function buildComposeArgs(string $stack): array {
     global $compose_root;
 
-    $projectName = $stack;
-    if (is_file("$compose_root/$stack/name")) {
-        $projectName = trim(file_get_contents("$compose_root/$stack/name"));
-    }
-    $projectName = sanitizeStr($projectName);
+    // Project name is always the sanitized directory basename, matching the -p flag in echoComposeCommand
+    // The name file is the display name only and must not affect Docker project identity
+    $projectName = sanitizeStr($stack);
 
     $basePath = getPath("$compose_root/$stack");
     $composeFile = findComposeFile($basePath) ?: "$basePath/compose.yaml";

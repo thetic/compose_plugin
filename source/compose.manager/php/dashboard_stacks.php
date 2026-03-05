@@ -73,7 +73,8 @@ foreach ($projects as $project) {
         $projectName = trim(file_get_contents("$compose_root/$project/name"));
     }
     
-    $sanitizedName = sanitizeStr($projectName);
+    // Key containers by the sanitized directory name — this matches the -p flag in echoComposeCommand
+    $sanitizedName = sanitizeStr($project);
     $projectContainers = $containersByProject[$sanitizedName] ?? [];
     
     $runningCount = 0;
