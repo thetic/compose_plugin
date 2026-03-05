@@ -174,13 +174,14 @@ function echoComposeCommandMultiple($action, $paths)
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
         $projectName = basename($path);
+        $project = basename($path);
         if (is_file("$path/name")) {
             $projectName = trim(file_get_contents("$path/name"));
         }
         $stackNames[] = $projectName;
 
         $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . sanitizeStr($projectName);
+        $composeCommand[] = "-p" . sanitizeStr($project);
 
         if (isIndirect($path)) {
             // For indirect paths, resolve the target path and then locate the compose file
