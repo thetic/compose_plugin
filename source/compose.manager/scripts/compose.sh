@@ -2,12 +2,9 @@
 export HOME=/root
 
 # Compose Manager - Docker Compose wrapper script
-# Provides retry logic, error handling, result tracking, and operation locking
+# Provides error handling, result tracking, and operation locking
 
 # Configuration - can be overridden via environment
-MAX_RETRIES=${COMPOSE_MAX_RETRIES:-3}
-RETRY_DELAY=${COMPOSE_RETRY_DELAY:-5}
-PULL_TIMEOUT=${COMPOSE_PULL_TIMEOUT:-600}
 LOCK_TIMEOUT=${COMPOSE_LOCK_TIMEOUT:-30}
 LOCK_DIR="/var/run/compose.manager"
 
@@ -94,60 +91,6 @@ save_result() {
     fi
 }
 
-# Run command with retry logic for transient failures
-# Usage: run_with_retry "description" command [args...]
-run_with_retry() {
-    local desc="$1"
-    shift
-    local retry_pattern="error|timeout|connection refused|no such host|temporary failure"
-    local attempt=1
-    local exit_code=0
-    local output=""
-    local temp_file=$(mktemp)
-    
-    # Build a properly quoted command string for script -c
-    local cmd_string
-    cmd_string=$(printf '%q ' "$@")
-    
-    while [ $attempt -le $MAX_RETRIES ]; do
-        if [ "$debug" = true ]; then
-            log_msg "DEBUG" "Attempt $attempt/$MAX_RETRIES: $desc"
-        fi
-        
-        # Run command via script to preserve TTY escape sequences for progress bars
-        script -q -c "$cmd_string" "$temp_file" 2>&1
-        exit_code=$?
-        output=$(cat "$temp_file" | tr -d '\r')
-        
-        if [ $exit_code -eq 0 ]; then
-            rm -f "$temp_file"
-            return 0
-        fi
-        
-        # Check if error is retryable (network/transient issues)
-        if echo "$output" | grep -qiE "$retry_pattern" && [ $attempt -lt $MAX_RETRIES ]; then
-            log_msg "WARN" "Transient error detected, retrying in ${RETRY_DELAY}s... (attempt $attempt/$MAX_RETRIES)"
-            echo ""
-            echo "⚠ Transient error detected, retrying in ${RETRY_DELAY}s... (attempt $attempt/$MAX_RETRIES)"
-            echo ""
-            sleep $RETRY_DELAY
-            attempt=$((attempt + 1))
-        else
-            # Non-retryable error or max retries reached
-            rm -f "$temp_file"
-            if [ $attempt -ge $MAX_RETRIES ]; then
-                log_msg "ERROR" "Command failed after $MAX_RETRIES attempts: $desc"
-                echo ""
-                echo "✗ Command failed after $MAX_RETRIES attempts"
-            fi
-            return $exit_code
-        fi
-    done
-    
-    rm -f "$temp_file"
-    return $exit_code
-}
-
 while :
 do
   case "$1" in
@@ -232,7 +175,7 @@ case $command in
       log_msg "DEBUG" "${compose_base[*]} -p $name up ${cmd_args[*]} -d"
     fi
     
-    run_with_retry "start stack $name" "${compose_base[@]}" -p "$name" up "${cmd_args[@]}" -d
+    "${compose_base[@]}" -p "$name" up "${cmd_args[@]}" -d
     exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
@@ -276,7 +219,7 @@ case $command in
       log_msg "DEBUG" "${compose_base[*]} -p $name pull"
     fi
     
-    run_with_retry "pull images for $name" "${compose_base[@]}" -p "$name" pull
+    "${compose_base[@]}" -p "$name" pull
     exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
@@ -320,9 +263,9 @@ case $command in
       images=( ${images[*]##sha256:} )
     fi
     
-    # Pull with retry logic (most likely to have transient network failures)
+    # Pull latest images
     echo "Pulling latest images..."
-    run_with_retry "pull images for $name" "${compose_base[@]}" -p "$name" pull
+    "${compose_base[@]}" -p "$name" pull
     pull_exit=$?
     
     if [ $pull_exit -ne 0 ]; then
@@ -336,7 +279,7 @@ case $command in
     # Recreate containers with new images
     echo ""
     echo "Recreating containers..."
-    run_with_retry "recreate containers for $name" "${compose_base[@]}" -p "$name" up -d --build
+    "${compose_base[@]}" -p "$name" up -d --build
     up_exit=$?
 
     if [ $up_exit -eq 0 ]; then
