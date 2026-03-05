@@ -242,9 +242,7 @@ function echoComposeCommandMultiple($action, $paths)
         $bashScript .= "'";
 
         execComposeCommandInTTY($bashScript, $debug);
-        if ($debug) {
-            logger("Multi-stack command: " . $bashScript);
-        }
+        clientDebug("Multi-stack command: " . $bashScript, null, 'daemon', 'debug');
         echo "/plugins/compose.manager/php/show_ttyd.php?done=1";
     } else {
         // For nchan/traditional output, create a temporary bash script that runs all commands
@@ -273,9 +271,7 @@ function echoComposeCommandMultiple($action, $paths)
         file_put_contents($tmpScript, $scriptContent);
         chmod($tmpScript, 0755);
 
-        if ($debug) {
-            logger("Multi-stack nchan script created: $tmpScript");
-        }
+        clientDebug("Multi-stack script created: $tmpScript", null, 'daemon', 'debug');
 
         echo $tmpScript;
     }
