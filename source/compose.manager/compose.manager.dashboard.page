@@ -803,8 +803,8 @@ $script = <<<'EOT'
             });
             $toggle.data('switchbutton-initialized', true);
         }
-        // Bind change handler once using delegated binding on the container
-        $('#compose_dash_content').off('change', '#compose_stacks_toggle').on('change', '#compose_stacks_toggle', function() {
+        // Bind change handler directly on the toggle (it lives in the tile header, not inside #compose_dash_content)
+        $('#compose_stacks_toggle').off('change.composedash').on('change.composedash', function() {
             $('.compose-dash-stack.stopped').finish().toggle('fast', function() { noStacks(); });
             var cookie = (typeof $.cookie === 'function' && $.cookie('unraid_settings')) ? JSON.parse($.cookie('unraid_settings')) : {};
             if ($('#compose_stacks_toggle').is(':checked')) {
