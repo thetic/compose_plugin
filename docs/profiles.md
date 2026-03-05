@@ -4,9 +4,9 @@ Compose Manager provides full support for [Docker Compose profiles](https://docs
 
 ## What are Profiles?
 
-Profiles let you define groups of services in your `docker-compose.yml` that can be started together. Services without a profile are always started, while profiled services only start when their profile is explicitly activated.
+Profiles let you define groups of services in your `compose.yaml` that can be started together. Services without a profile are always started, while profiled services only start when their profile is explicitly activated.
 
-## Example docker-compose.yml with Profiles
+## Example compose.yaml with Profiles
 
 ```yaml
 services:

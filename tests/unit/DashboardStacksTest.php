@@ -80,8 +80,8 @@ class DashboardStacksTest extends TestCase
         $stackPath = $this->testComposeRoot . '/' . $name;
         mkdir($stackPath, 0755, true);
         
-        if (!isset($files['docker-compose.yml'])) {
-            file_put_contents($stackPath . '/docker-compose.yml', "services:\n  web:\n    image: nginx\n");
+        if (!isset($files['compose.yaml'])) {
+            file_put_contents($stackPath . '/compose.yaml', "services:\n  web:\n    image: nginx\n");
         }
         
         foreach ($files as $filename => $content) {
@@ -140,7 +140,7 @@ class DashboardStacksTest extends TestCase
     // ===========================================
 
     /**
-     * Test counting stacks with docker-compose.yml
+     * Test counting stacks with compose.yaml
      */
     public function testCountStacksWithComposeYml(): void
     {
@@ -152,7 +152,7 @@ class DashboardStacksTest extends TestCase
         
         foreach ($projects as $project) {
             $path = $this->testComposeRoot . '/' . $project;
-            if (is_file($path . '/docker-compose.yml') || is_file($path . '/indirect')) {
+            if (is_file($path . '/compose.yaml') || is_file($path . '/indirect')) {
                 $count++;
             }
         }
@@ -177,7 +177,7 @@ class DashboardStacksTest extends TestCase
         
         foreach ($projects as $project) {
             $path = $this->testComposeRoot . '/' . $project;
-            if (is_file($path . '/docker-compose.yml') || is_file($path . '/indirect')) {
+            if (is_file($path . '/compose.yaml') || is_file($path . '/indirect')) {
                 $count++;
             }
         }

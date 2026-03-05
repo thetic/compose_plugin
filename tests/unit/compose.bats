@@ -88,7 +88,7 @@ test_setup() {
     stack_dir=$(create_test_stack "teststack")
     
     assert_dir_exists "$stack_dir"
-    assert_file_exists "$stack_dir/docker-compose.yml"
+    assert_file_exists "$stack_dir/compose.yaml"
 }
 
 @test "compose file contains valid YAML structure" {

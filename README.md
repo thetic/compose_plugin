@@ -64,16 +64,17 @@ Access **Settings → Compose** in the unRAID web UI. Key options:
 1. Navigate to **Docker → Compose** (or **Docker Compose** if header menu option is enabled)
 2. Click **Add Stack**
 3. Enter a name and optionally a description
-4. Edit the docker-compose.yml file using the built-in editor
+4. Edit the compose.yaml file using the built-in editor
 5. Click **Compose Up** to start the stack
 
 ### Managing Stacks
 
 Each stack provides the following actions:
+
 - **Compose Up** - Start the stack (with optional profile selection)
 - **Compose Down** - Stop and remove containers
 - **Update Stack** - Pull latest images and recreate containers
-- **Edit Stack** - Modify the docker-compose.yml file
+- **Edit Stack** - Modify the compose.yaml file
 - **Remove Stack** - Delete the stack configuration
 
 ### Autostart
@@ -83,6 +84,7 @@ Enable autostart for a stack by clicking the autostart toggle. Stacks will autom
 ## Documentation
 
 For detailed guides, see the [docs](docs/) folder:
+
 - [Getting Started](docs/getting-started.md)
 - [User Guide](docs/user-guide.md)
 - [Configuration](docs/configuration.md)

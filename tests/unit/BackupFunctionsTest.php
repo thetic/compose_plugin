@@ -85,8 +85,8 @@ class BackupFunctionsTest extends TestCase
             mkdir($stackPath, 0755, true);
         }
 
-        if (!isset($files['docker-compose.yml'])) {
-            file_put_contents($stackPath . '/docker-compose.yml', "services:\n  web:\n    image: nginx\n");
+        if (!isset($files['compose.yaml'])) {
+            file_put_contents($stackPath . '/compose.yaml', "services:\n  web:\n    image: nginx\n");
         }
 
         foreach ($files as $filename => $content) {
@@ -484,7 +484,7 @@ class BackupFunctionsTest extends TestCase
     {
         // Create and backup a stack
         $this->createTestStack('restore-test', [
-            'docker-compose.yml' => "services:\n  app:\n    image: alpine\n",
+            'compose.yaml' => "services:\n  app:\n    image: alpine\n",
             '.env' => "FOO=bar\n",
         ]);
 
@@ -502,7 +502,7 @@ class BackupFunctionsTest extends TestCase
         $this->assertContains('restore-test', $result['restored']);
 
         // Verify files are back
-        $this->assertFileExists($this->testComposeRoot . '/restore-test/docker-compose.yml');
+        $this->assertFileExists($this->testComposeRoot . '/restore-test/compose.yaml');
         $this->assertFileExists($this->testComposeRoot . '/restore-test/.env');
     }
 

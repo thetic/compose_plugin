@@ -27,6 +27,18 @@ find_compose_file() {
     return 1
 }
 
+
+find_compose_override_file() {
+    local dir="$1"
+    for name in compose.override.yaml compose.override.yml docker-compose.override.yaml docker-compose.override.yml; do
+        if [ -f "$dir/$name" ]; then
+            echo "$dir/$name"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Check if a directory has any compose file
 has_compose_file() {
     find_compose_file "$1" > /dev/null 2>&1

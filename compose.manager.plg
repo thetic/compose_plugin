@@ -52,8 +52,8 @@ if [[ ! -f "&pluginLOC;/projects/version" ]]; then
     #Upgrade projects to latest format
     for dir in &pluginLOC;/projects/*; do
         if [[ -d $dir ]]; then
-            if [[ -f $dir/compose.yml ]]; then
-                mv $dir/compose.yml $dir/docker-compose.yml
+            if [[ -f $dir/docker-compose.yml &amp;&amp; ! -f $dir/compose.yaml ]]; then
+                mv $dir/docker-compose.yml $dir/compose.yaml
             fi
         fi
     done

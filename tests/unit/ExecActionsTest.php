@@ -100,7 +100,7 @@ class ExecActionsTest extends TestCase
         $stackPath = $this->testComposeRoot . '/' . $name;
         mkdir($stackPath, 0755, true);
         
-        // Create docker-compose.yml by default
+        // Create compose.yaml by default
         if (!isset($files[COMPOSE_FILE_NAMES[0]])) {
             file_put_contents($stackPath . '/' . COMPOSE_FILE_NAMES[0], "services:\n");
         }

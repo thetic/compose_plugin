@@ -37,21 +37,25 @@ stop_stack() {
         indirect=$(< "$dir/indirect")
         local compose_file
         if ! compose_file=$(find_compose_file "$indirect"); then
-            compose_file="$indirect/docker-compose.yml"
+            compose_file="$indirect/compose.yaml"
         fi
         file_args=("-f" "$compose_file")
     else
         local compose_file
         if ! compose_file=$(find_compose_file "$dir"); then
-            compose_file="$dir/docker-compose.yml"
+            compose_file="$dir/compose.yaml"
         fi
         file_args=("-f" "$compose_file")
     fi
     
     local -a override_args=()
-    if [ -f "$dir/docker-compose.override.yml" ]; then
-        override_args=("-f" "$dir/docker-compose.override.yml")
+
+    
+    local compose_override_file
+    if ! compose_override_file=$(find_compose_override_file "$dir"); then
+        compose_override_file="$dir/compose.override.yaml"
     fi
+    override_args=(-f "$compose_override_file")
     
     local -a env_args=()
     if [ -f "$dir/envpath" ]; then

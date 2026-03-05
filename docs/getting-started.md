@@ -29,7 +29,7 @@ After installation:
 1. Navigate to **Docker → Compose** in the Unraid web UI
 2. Click **Add Stack** to create your first compose stack
 3. Enter a name for your stack
-4. Edit the `docker-compose.yml` file using the built-in editor
+4. Edit the `compose.yaml` file using the built-in editor
 5. Click **Compose Up** to start your stack
 
 ![Compose Manager Interface](images/compose.png)

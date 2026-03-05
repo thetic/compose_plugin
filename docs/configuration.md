@@ -74,11 +74,12 @@ Restore options are available in the UI to restore stacks from backup archives o
 The default location stores all compose configurations on the USB flash drive, ensuring they persist across reboots.
 
 **Structure:**
-```
+
+``` text
 /boot/config/plugins/compose.manager/projects/
 ├── stack-name/
-│   ├── docker-compose.yml
-│   ├── docker-compose.override.yml (optional)
+│   ├── compose.yaml
+│   ├── compose.override.yaml (optional)
 │   ├── .env (optional)
 │   ├── profiles (auto-generated)
 │   └── default_profile (optional)
