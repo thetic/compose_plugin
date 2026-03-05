@@ -74,7 +74,7 @@ function echoComposeCommand($action, $recreate = false)
             $projectName = trim(file_get_contents("$path/name"));
         }
         $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . sanitizeStr($projectName);
+        $composeCommand[] = "-p" . sanitizeStr($project);
 
         if (isIndirect($path)) {
             $indirectPath = getPath($path);
