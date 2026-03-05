@@ -210,7 +210,7 @@ switch ($_POST['action']) {
         $script = getPostScript();
         $scriptContents = isset($_POST['scriptContents']) ? $_POST['scriptContents'] : "";
         $basePath = getPath("$compose_root/$script");
-        $composeFilePath = findComposeFile($basePath) ?: "$basePath/docker-compose.yml";
+        $composeFilePath = findComposeFile($basePath) ?: "$basePath/" . COMPOSE_FILE_NAMES[0];
 
         file_put_contents($composeFilePath, $scriptContents);
         echo "$composeFilePath saved";

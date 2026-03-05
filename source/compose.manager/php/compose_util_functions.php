@@ -79,11 +79,11 @@ function echoComposeCommand($action, $recreate = false)
         if (isIndirect($path)) {
             $indirectPath = getPath($path);
             $found = findComposeFile($indirectPath);
-            $composeFile = $found ?: "$indirectPath/compose.yaml";
+            $composeFile = $found ?: "$indirectPath/" . COMPOSE_FILE_NAMES[0];
             $composeCommand[] = "-f$composeFile";
         } else {
             $found = findComposeFile($path);
-            $composeFile = $found ?: "$path/compose.yaml";
+            $composeFile = $found ?: "$path/" . COMPOSE_FILE_NAMES[0];
             $composeCommand[] = "-f$composeFile";
         }
 

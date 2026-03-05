@@ -66,7 +66,7 @@ foreach ($composeProjects as $project) {
     $basePath = is_file("$compose_root/$project/indirect")
         ? trim(file_get_contents("$compose_root/$project/indirect"))
         : "$compose_root/$project";
-    $composeFile = findComposeFile($basePath) ?: "$basePath/docker-compose.yml";
+    $composeFile = findComposeFile($basePath) ?: "$basePath/" . COMPOSE_FILE_NAMES[0];
     // Resolve override via centralized helper (prefer correctly-named indirect override)
     require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
     $overridePath = OverrideInfo::fromStack($compose_root, $project)->getOverridePath();
