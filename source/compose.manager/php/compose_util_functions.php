@@ -69,6 +69,7 @@ function echoComposeCommand($action, $recreate = false)
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
         $projectName = basename($path);
+        $project = basename($path);
         if (is_file("$path/name")) {
             $projectName = trim(file_get_contents("$path/name"));
         }
@@ -87,7 +88,7 @@ function echoComposeCommand($action, $recreate = false)
         }
 
         // Resolve override using centralized helper
-        $overridePath = OverrideInfo::fromStack($compose_root, $projectName)->getOverridePath();
+        $overridePath = OverrideInfo::fromStack($compose_root, $project)->getOverridePath();
         $composeCommand[] = "-f" . $overridePath;
 
         if (is_file("$path/envpath")) {
