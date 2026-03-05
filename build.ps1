@@ -14,9 +14,6 @@
 .PARAMETER ComposeVersion
     Docker Compose version to include. Default: 2.40.3
 
-.PARAMETER ComposeSwitchVersion
-    Compose Switch version to include. Default: 1.0.5
-
 .PARAMETER AceVersion
     Ace Editor version to include. Default: 1.4.14
 
@@ -29,7 +26,6 @@
 param(
     [string]$Version,
     [string]$ComposeVersion = "5.0.2",
-    [string]$ComposeSwitchVersion = "1.0.5",
     [string]$AceVersion = "1.43.5"
 )
 
@@ -57,7 +53,6 @@ if (-not (Test-Path $OutputPath)) {
 
 Write-Host "Building compose.manager package v$Version" -ForegroundColor Green
 Write-Host "  Docker Compose: v$ComposeVersion" -ForegroundColor Gray
-Write-Host "  Compose Switch: v$ComposeSwitchVersion" -ForegroundColor Gray
 Write-Host "  Ace Editor: v$AceVersion" -ForegroundColor Gray
 Write-Host ""
 
@@ -103,7 +98,6 @@ if (Test-Path $PackagePath) {
         PackageName = $PackageName
         MD5 = $md5
         ComposeVersion = $ComposeVersion
-        ComposeSwitchVersion = $ComposeSwitchVersion
         AceVersion = $AceVersion
     }
 } else {
