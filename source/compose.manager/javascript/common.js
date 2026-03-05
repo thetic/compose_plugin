@@ -16,8 +16,7 @@ function getConfig() {
                     resp = JSON.parse(resp);
                 } catch (e) {
                     _configPromise = null;
-                    console.log('compose.manager: getConfig response (raw):', response);
-                    console.error('compose.manager: getConfig returned non-JSON response; using empty config');
+                    composeClientDebug('getConfig returned non-JSON response; using empty config', { response: response, error: e }, 'daemon', 'error');
                     resolve({});
                     return;
                 }
@@ -29,13 +28,12 @@ function getConfig() {
                 resolve(_configCache);
             } else {
                 _configPromise = null;
-                console.log('compose.manager: getConfig response:', resp);
-                console.error('compose.manager: getConfig returned non-success response; using empty config');
+                composeClientDebug('getConfig returned non-success response; using empty config', resp, 'daemon', 'error');
                 resolve({});
             }
         }).fail(function () {
             _configPromise = null;
-            console.error('compose.manager: Network error while fetching config; using empty config');
+            composeClientDebug('Network error while fetching config; using empty config', null, 'daemon', 'error');
             resolve({});
         });
     });
