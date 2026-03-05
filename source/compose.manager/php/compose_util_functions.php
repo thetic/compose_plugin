@@ -68,11 +68,7 @@ function echoComposeCommand($action, $recreate = false)
     } else {
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
-        $projectName = basename($path);
         $project = basename($path);
-        if (is_file("$path/name")) {
-            $projectName = trim(file_get_contents("$path/name"));
-        }
         $composeCommand[] = "-c" . $action;
         $composeCommand[] = "-p" . sanitizeStr($project);
 
