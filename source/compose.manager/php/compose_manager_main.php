@@ -2029,6 +2029,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         }
                         // Update cache with fresh data
                         stackContainersCache[stackId] = containers;
+                        stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
                         // Now update the row using the fresh cache
                         updateParentStackFromContainers(stackId, project);
                         // If details are expanded, refresh them too
@@ -2530,6 +2531,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     var currentStackId = null;
     var expandedStacks = {};
     var stackContainersCache = {};
+    var stackDefinedServicesCache = {}; // Cache for defined service counts
     // Track stacks currently loading details to prevent concurrent reloads
     var stackDetailsLoading = {};
     // Suppress immediate refresh after a render to avoid loops
@@ -3636,6 +3638,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     }
 
                     stackContainersCache[stackId] = containers;
+                    stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
                     composeClientDebug('[loadStackContainerDetails] success', {
                         stackId: stackId,
                         project: project,
@@ -3925,11 +3928,13 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     // Build a condensed stackInfo object from the stackContainersCache for a stack
     function buildStackInfoFromCache(stackId, project) {
         var containers = stackContainersCache[stackId] || [];
+        var definedServices = stackDefinedServicesCache[stackId] || containers.length;
         var stackInfo = {
             projectName: project,
             containers: [],
             isRunning: false,
-            hasUpdate: false
+            hasUpdate: false,
+            totalServices: definedServices  // Track total defined services for accurate status
         };
         containers.forEach(function(c) {
             var name = c.Name || c.Service || '';
@@ -4006,7 +4011,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             var runningCount = stackInfo.containers.filter(function(c) {
                 return c.isRunning;
             }).length;
-            var totalCount = stackInfo.containers.length;
+            // Use totalServices (defined services) if available, otherwise fall back to actual container count
+            var totalCount = stackInfo.totalServices || stackInfo.containers.length;
             var anyRunning = runningCount > 0;
             var anyPaused = stackInfo.containers.some(function(c) {
                 return !c.isRunning && (c.updateStatus === 'paused' || c.updateStatus === 'paused');

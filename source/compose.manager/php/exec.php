@@ -561,6 +561,16 @@ switch ($_POST['action']) {
             $updateStatus = json_decode(file_get_contents($updateStatusFile), true) ?: [];
         }
 
+        // Get defined service count (like compose_list.php does)
+        // This ensures the client shows the correct total even if not all services are running
+        $definedServices = 0;
+        $configCmd = "docker compose {$args['files']} {$args['envFile']} config --services 2>/dev/null";
+        $configOutput = shell_exec($configCmd);
+        if ($configOutput) {
+            $services = array_filter(explode("\n", trim($configOutput)));
+            $definedServices = count($services);
+        }
+
         if ($output) {
             // docker compose ps --format json outputs one JSON object per line
             $lines = explode("\n", trim($output));
@@ -724,7 +734,7 @@ switch ($_POST['action']) {
             }
         }
 
-        echo json_encode(['result' => 'success', 'containers' => $containers, 'projectName' => $projectName]);
+        echo json_encode(['result' => 'success', 'containers' => $containers, 'definedServices' => $definedServices, 'projectName' => $projectName]);
         break;
     case 'containerAction':
         $containerName = isset($_POST['container']) ? trim($_POST['container']) : "";
