@@ -28,14 +28,21 @@
 >
 
 <CHANGES>
-###2026.02.24
-- Features: add option to only expand running stacks
-- Bug Fixes: enhance logging by encoding array and object data in clientDebug function
-- Bug Fixes: streamline compose command file resolution and remove redundant requires
-- Refactoring: remove default expanded state for stack details in compose list and setup composeLoadList to return a promise so when it finishes we can expand all the stacks naturally
-- Chores: remove obsolete test for detail row structure in ComposeListHtmlTest
-- Add option to expand stacks by default
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.23b...v2026.02.24)
+###2026.03.06
+- Bug Fixes: update documentation and code references from docker-compose.yml to compose.yaml as default/fallback
+- Bug Fixes: standardize project name handling to use sanitized directory basename across compose scripts
+- Bug Fixes: update change handler binding for compose stacks toggle to improve event delegation
+- Bug Fixes: replace logger calls with clientDebug for multi-stack command logging in echoComposeCommandMultiple
+- Bug Fixes: update project name variable in echoComposeCommandMultiple to use folder name to match echoComposeCommand func
+- Bug Fixes: remove unused projectName var from echoComposeCommand
+- Bug Fixes: remove retry logic from command execution in compose script
+- Bug Fixes: update fallback compose file name to use COMPOSE_FILE_NAMES constant
+- Bug Fixes: replace console logging with composeClientDebug for error handling in getConfig
+- Bug Fixes: remove Compose Switch version parameter from build script
+- Bug Fixes: correct project variable in echoComposeCommand function
+- Bug Fixes: correct project name variable in echoComposeCommand function
+- Bug Fixes: Container names wrong when dashes used
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.24...v2026.03.06)
 
 </CHANGES>
 
