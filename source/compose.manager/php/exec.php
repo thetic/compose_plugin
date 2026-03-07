@@ -524,8 +524,9 @@ switch ($_POST['action']) {
             break;
         }
 
-        // Build compose CLI arguments (project name, file flags, env-file flag)
-        $args = buildComposeArgs($script);
+        // Resolve stack identity and compose CLI arguments via StackInfo
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $args = $stackInfo->buildComposeArgs();
         $projectName = $args['projectName'];
 
         // Get container details in JSON format
@@ -556,40 +557,34 @@ switch ($_POST['action']) {
         $containers = [];
         // Load update status once before the loop (static data, doesn't change per-container)
         $updateStatusFile = UNRAID_UPDATE_STATUS_FILE;
-        $updateStatus = [];
+        $updateStatusData = [];
         if (is_file($updateStatusFile)) {
-            $updateStatus = json_decode(file_get_contents($updateStatusFile), true) ?: [];
+            $updateStatusData = json_decode(file_get_contents($updateStatusFile), true) ?: [];
         }
 
-        // Get defined service count (like compose_list.php does)
-        // This ensures the client shows the correct total even if not all services are running
-        $definedServices = 0;
-        $configCmd = "docker compose {$args['files']} {$args['envFile']} config --services 2>/dev/null";
-        $configOutput = shell_exec($configCmd);
-        if ($configOutput) {
-            $services = array_filter(explode("\n", trim($configOutput)));
-            $definedServices = count($services);
-        }
+        // Get defined service count via StackInfo
+        $definedServicesList = $stackInfo->getDefinedServices();
+        $definedServices = count($definedServicesList);
 
         if ($output) {
             // docker compose ps --format json outputs one JSON object per line
             $lines = explode("\n", trim($output));
             foreach ($lines as $line) {
                 if (!empty($line)) {
-                    $container = json_decode($line, true);
-                    if ($container) {
+                    $rawContainer = json_decode($line, true);
+                    if ($rawContainer) {
                         // Get additional details using docker inspect
-                        $containerName = $container['Name'] ?? '';
-                        if ($containerName) {
-                            $inspectCmd = "docker inspect " . escapeshellarg($containerName) . " --format '{{json .}}' 2>/dev/null";
+                        $ctName = $rawContainer['Name'] ?? '';
+                        if ($ctName) {
+                            $inspectCmd = "docker inspect " . escapeshellarg($ctName) . " --format '{{json .}}' 2>/dev/null";
                             $inspectOutput = shell_exec($inspectCmd);
                             if ($inspectOutput) {
                                 $inspect = json_decode($inspectOutput, true);
                                 if ($inspect) {
                                     // Extract useful info from inspect
-                                    $container['Image'] = $inspect['Config']['Image'] ?? '';
-                                    $container['Created'] = $inspect['Created'] ?? '';
-                                    $container['StartedAt'] = $inspect['State']['StartedAt'] ?? '';
+                                    $rawContainer['Image'] = $inspect['Config']['Image'] ?? '';
+                                    $rawContainer['Created'] = $inspect['Created'] ?? '';
+                                    $rawContainer['StartedAt'] = $inspect['State']['StartedAt'] ?? '';
 
                                     // Get ports (raw bindings - IP resolved below after network detection)
                                     $ports = [];
@@ -616,7 +611,7 @@ switch ($_POST['action']) {
                                             $volumes[] = ['source' => $src, 'destination' => $dst, 'type' => $type];
                                         }
                                     }
-                                    $container['Volumes'] = $volumes;
+                                    $rawContainer['Volumes'] = $volumes;
 
                                     // Get network info (include driver for IP resolution)
                                     $networks = [];
@@ -628,13 +623,13 @@ switch ($_POST['action']) {
                                             'driver' => $networkDrivers[$netName] ?? ''
                                         ];
                                     }
-                                    $container['Networks'] = $networks;
+                                    $rawContainer['Networks'] = $networks;
 
                                     // Get labels for WebUI
                                     $labels = $inspect['Config']['Labels'] ?? [];
                                     $webUITemplate = $labels[$docker_label_webui] ?? '';
-                                    $container['Icon'] = $labels[$docker_label_icon] ?? '';
-                                    $container['Shell'] = $labels[$docker_label_shell] ?? '/bin/bash';
+                                    $rawContainer['Icon'] = $labels[$docker_label_icon] ?? '';
+                                    $rawContainer['Shell'] = $labels[$docker_label_shell] ?? '/bin/bash';
 
                                     // Resolve WebUI URL server-side (matching Unraid's DockerClient logic)
                                     // Determine the NetworkMode
@@ -644,7 +639,7 @@ switch ($_POST['action']) {
                                         [$networkMode] = explode(':', $networkMode);
                                     }
 
-                                    $container['WebUI'] = '';
+                                    $rawContainer['WebUI'] = '';
                                     // Resolve IP — Unraid logic:
                                     // host mode → host IP
                                     // macvlan/ipvlan → container IP
@@ -670,7 +665,7 @@ switch ($_POST['action']) {
                                         $lanIp = $resolvedIP ?: $hostIP;
                                         $portStrings[] = "$lanIp:{$p['hostPort']}->{$p['containerPort']}";
                                     }
-                                    $container['Ports'] = $portStrings;
+                                    $rawContainer['Ports'] = $portStrings;
 
                                     if (!empty($webUITemplate) && $hostIP) {
                                         $resolvedURL = preg_replace('%\[IP\]%i', $resolvedIP, $webUITemplate);
@@ -692,11 +687,11 @@ switch ($_POST['action']) {
                                             }
                                             $resolvedURL = preg_replace('%\[PORT:\d+\]%i', $configPort, $resolvedURL);
                                         }
-                                        $container['WebUI'] = $resolvedURL;
+                                        $rawContainer['WebUI'] = $resolvedURL;
                                     }
 
                                     // Get update status from saved status file (read once before loop)
-                                    $imageName = $container['Image'];
+                                    $imageName = $rawContainer['Image'];
                                     // Ensure image has a tag for lookup
                                     if (strpos($imageName, ':') === false) {
                                         $imageName .= ':latest';
@@ -704,22 +699,22 @@ switch ($_POST['action']) {
                                     // Also try without registry prefix
                                     $imageNameShort = preg_replace('/^[^\/]+\//', '', $imageName);
 
-                                    $container['UpdateStatus'] = 'unknown';
-                                    $container['LocalSha'] = '';
-                                    $container['RemoteSha'] = '';
+                                    $rawContainer['updateStatus'] = 'unknown';
+                                    $rawContainer['localSha'] = '';
+                                    $rawContainer['remoteSha'] = '';
 
                                     // Check both full name and short name
                                     $checkNames = [$imageName, $imageNameShort];
-                                    foreach ($updateStatus as $key => $status) {
+                                    foreach ($updateStatusData as $key => $status) {
                                         foreach ($checkNames as $checkName) {
                                             if ($key === $checkName || strpos($key, $checkName) !== false || strpos($checkName, $key) !== false) {
                                                 // Strip sha256: prefix before truncating to 12 hex chars
                                                 $localRaw = $status['local'] ?? '';
                                                 $remoteRaw = $status['remote'] ?? '';
-                                                $container['LocalSha'] = substr(str_replace('sha256:', '', $localRaw), 0, 8);
-                                                $container['RemoteSha'] = substr(str_replace('sha256:', '', $remoteRaw), 0, 8);
+                                                $rawContainer['localSha'] = substr(str_replace('sha256:', '', $localRaw), 0, 8);
+                                                $rawContainer['remoteSha'] = substr(str_replace('sha256:', '', $remoteRaw), 0, 8);
                                                 if (!empty($status['local']) && !empty($status['remote'])) {
-                                                    $container['UpdateStatus'] = ($status['local'] === $status['remote']) ? 'up-to-date' : 'update-available';
+                                                    $rawContainer['updateStatus'] = ($status['local'] === $status['remote']) ? 'up-to-date' : 'update-available';
                                                 }
                                                 break 2;
                                             }
@@ -728,7 +723,8 @@ switch ($_POST['action']) {
                                 }
                             }
                         }
-                        $containers[] = $container;
+                        // Normalize through ContainerInfo for consistent camelCase output
+                        $containers[] = ContainerInfo::fromDockerInspect($rawContainer)->toArray();
                     }
                 }
             }
@@ -767,8 +763,9 @@ switch ($_POST['action']) {
         // Include Docker manager classes for update checking
         require_once("/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php");
 
-        // Build compose CLI arguments (project name, file flags, env-file flag)
-        $args = buildComposeArgs($script);
+        // Resolve stack identity and compose CLI arguments via StackInfo
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $args = $stackInfo->buildComposeArgs();
         $projectName = $args['projectName'];
 
         // Get container images
@@ -850,14 +847,14 @@ switch ($_POST['action']) {
                             $hasUpdate = ($updateStatus === false);
                             $statusText = ($updateStatus === null) ? 'unknown' : ($updateStatus ? 'up-to-date' : 'update-available');
 
-                            $updateResults[] = [
+                            $updateResults[] = ContainerInfo::fromUpdateResponse([
                                 'container' => $containerName,
                                 'image' => $image,
                                 'hasUpdate' => $hasUpdate,
                                 'status' => $statusText,
                                 'localSha' => $localSha,
                                 'remoteSha' => $remoteSha
-                            ];
+                            ])->toUpdateArray();
                         }
                     }
                 }
@@ -937,8 +934,9 @@ switch ($_POST['action']) {
                 }
             }
 
-            // Build compose CLI arguments (includes env-file, override, etc.)
-            $args = buildComposeArgs($stackName);
+            // Resolve stack identity and compose CLI arguments via StackInfo
+            $stackInfoItem = StackInfo::fromProject($compose_root, $stackName);
+            $args = $stackInfoItem->buildComposeArgs();
             $projectName = $args['projectName'];
 
             // Include --all so we can detect stacks that have stopped containers
@@ -1021,14 +1019,14 @@ switch ($_POST['action']) {
                                 if ($hasUpdate)
                                     $hasStackUpdate = true;
 
-                                $stackUpdates[] = [
+                                $stackUpdates[] = ContainerInfo::fromUpdateResponse([
                                     'container' => $containerName,
                                     'image' => $image,
                                     'hasUpdate' => $hasUpdate,
                                     'status' => ($updateStatus === null) ? 'unknown' : ($updateStatus ? 'up-to-date' : 'update-available'),
                                     'localSha' => $localSha,
                                     'remoteSha' => $remoteSha
-                                ];
+                                ])->toUpdateArray();
                             }
                         }
                     }

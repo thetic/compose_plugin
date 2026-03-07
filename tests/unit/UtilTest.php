@@ -197,6 +197,52 @@ class UtilTest extends TestCase
         $this->assertNull($result);
     }
 
+    public function testPruneOverrideContentServicesRemovesOrphanedServices(): void
+    {
+        $override = "services:\n" .
+            "  app:\n" .
+            "    labels:\n" .
+            "      test: \"1\"\n" .
+            "  old-service:\n" .
+            "    labels:\n" .
+            "      test: \"2\"\n";
+
+        $result = pruneOverrideContentServices($override, ['app']);
+
+        $this->assertTrue($result['changed']);
+        $this->assertEquals(['old-service'], $result['removed']);
+        $this->assertStringContainsString("  app:\n", $result['content']);
+        $this->assertStringNotContainsString("  old-service:\n", $result['content']);
+    }
+
+    public function testPruneOverrideContentServicesSetsEmptyServicesMapWhenAllOrphaned(): void
+    {
+        $override = "services:\n" .
+            "  old-service:\n" .
+            "    labels:\n" .
+            "      test: \"2\"\n";
+
+        $result = pruneOverrideContentServices($override, ['app']);
+
+        $this->assertTrue($result['changed']);
+        $this->assertEquals(['old-service'], $result['removed']);
+        $this->assertStringContainsString('services: {}', $result['content']);
+    }
+
+    public function testPruneOverrideContentServicesNoChangeWhenServicesMatch(): void
+    {
+        $override = "services:\n" .
+            "  app:\n" .
+            "    labels:\n" .
+            "      test: \"1\"\n";
+
+        $result = pruneOverrideContentServices($override, ['app']);
+
+        $this->assertFalse($result['changed']);
+        $this->assertEquals([], $result['removed']);
+        $this->assertEquals($override, $result['content']);
+    }
+
     // ===========================================
     // Stack Locking Tests
     // ===========================================

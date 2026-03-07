@@ -69,27 +69,26 @@ function echoComposeCommand($action, $recreate = false)
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
         $project = basename($path);
-        $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . sanitizeStr($project);
 
-        if (isIndirect($path)) {
-            $indirectPath = getPath($path);
-            $found = findComposeFile($indirectPath);
-            $composeFile = $found ?: "$indirectPath/" . COMPOSE_FILE_NAMES[0];
-            $composeCommand[] = "-f$composeFile";
-        } else {
-            $found = findComposeFile($path);
-            $composeFile = $found ?: "$path/" . COMPOSE_FILE_NAMES[0];
-            $composeCommand[] = "-f$composeFile";
+        // Resolve stack identity via StackInfo
+        $stackInfo = StackInfo::fromProject($compose_root, $project);
+
+        $composeCommand[] = "-c" . $action;
+        $composeCommand[] = "-p" . $stackInfo->sanitizedName;
+
+        $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
+        $composeCommand[] = "-f$composeFile";
+
+        // Prune orphaned services from override before compose up
+        if ($action === 'up') {
+            $stackInfo->pruneOrphanOverrideServices();
         }
 
-        // Resolve override using centralized helper
-        $overridePath = OverrideInfo::fromStack($compose_root, $project)->getOverridePath();
-        $composeCommand[] = "-f" . $overridePath;
+        $composeCommand[] = "-f" . $stackInfo->getOverridePath();
 
-        if (is_file("$path/envpath")) {
-            $envPath = "-e" . trim(file_get_contents("$path/envpath"));
-            $composeCommand[] = $envPath;
+        $envFilePath = $stackInfo->getEnvFilePath();
+        if ($envFilePath !== null) {
+            $composeCommand[] = "-e" . $envFilePath;
         }
 
         // Support multiple profiles (comma-separated)
@@ -173,50 +172,35 @@ function echoComposeCommandMultiple($action, $paths)
     foreach ($paths as $path) {
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
-        $projectName = basename($path);
         $project = basename($path);
-        if (is_file("$path/name")) {
-            $projectName = trim(file_get_contents("$path/name"));
-        }
-        $stackNames[] = $projectName;
+
+        // Resolve stack identity via StackInfo
+        $stackInfo = StackInfo::fromProject($compose_root, $project);
+        $stackNames[] = $stackInfo->getName();
 
         $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . sanitizeStr($project);
+        $composeCommand[] = "-p" . $stackInfo->sanitizedName;
 
-        if (isIndirect($path)) {
-            // For indirect paths, resolve the target path and then locate the compose file
-            $indirectPath = getPath($path);
-            $found = findComposeFile($indirectPath);
-            $composeFile = $found ?: "$indirectPath/" . COMPOSE_FILE_NAMES[0];
-            $composeCommand[] = "-f$composeFile";
-        } else {
-            $found = findComposeFile($path);
-            $composeFile = $found ?: "$path/" . COMPOSE_FILE_NAMES[0];
-            $composeCommand[] = "-f$composeFile";
+        $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
+        $composeCommand[] = "-f$composeFile";
+
+        // Prune orphaned services from override before compose up
+        if ($action === 'up') {
+            $stackInfo->pruneOrphanOverrideServices();
         }
 
-        // Resolve override using centralized helper
-        $overridePath = OverrideInfo::fromStack($compose_root, $projectName)->getOverridePath();
-        $composeCommand[] = "-f" . $overridePath;
+        $composeCommand[] = "-f" . $stackInfo->getOverridePath();
 
         // Add env-file if available for this stack
-        if (is_file("$path/envpath")) {
-            $envPath = "-e" . trim(file_get_contents("$path/envpath"));
-            $composeCommand[] = $envPath;
+        $envFilePath = $stackInfo->getEnvFilePath();
+        if ($envFilePath !== null) {
+            $composeCommand[] = "-e" . $envFilePath;
         }
 
         // Add default profiles for multi-stack operations
-        if (is_file("$path/default_profile")) {
-            $defaultProfiles = trim(file_get_contents("$path/default_profile"));
-            if ($defaultProfiles) {
-                // Support comma-separated profiles
-                $profileList = array_map('trim', explode(',', $defaultProfiles));
-                foreach ($profileList as $p) {
-                    if ($p) {
-                        $composeCommand[] = "-g $p";
-                    }
-                }
-            }
+        $defaultProfiles = $stackInfo->getDefaultProfiles();
+        foreach ($defaultProfiles as $p) {
+            $composeCommand[] = "-g $p";
         }
 
         // Pass stack path for timestamp saving

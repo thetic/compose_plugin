@@ -137,4 +137,118 @@ class OverrideInfoTest extends TestCase
         $this->assertFileDoesNotExist($legacyPath);
         $this->assertFileExists($legacyPath . '.bak');
     }
+
+    // ===========================================
+    // composeFilePath Tests
+    // ===========================================
+
+    public function testComposeFilePathIsNullWhenNoComposeFile(): void
+    {
+        $stack = 'no-compose';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
+        $this->assertNull($info->composeFilePath);
+    }
+
+    public function testComposeFilePathIsSetWhenComposeFileExists(): void
+    {
+        $stack = 'has-compose';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
+        $this->assertEquals("$stackDir/compose.yaml", $info->composeFilePath);
+    }
+
+    public function testComposeFilePathResolvesIndirect(): void
+    {
+        $stack = 'indirect-compose';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        $indirectTarget = $this->tempRoot . '/indirect_compose_target';
+        mkdir($indirectTarget);
+        file_put_contents("$stackDir/indirect", $indirectTarget);
+        file_put_contents("$indirectTarget/docker-compose.yml", "services:\n  app:\n    image: redis\n");
+        $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
+        $this->assertEquals("$indirectTarget/docker-compose.yml", $info->composeFilePath);
+    }
+
+    // ===========================================
+    // pruneOrphanServices Tests
+    // ===========================================
+
+    public function testPruneOrphanServicesReturnsUnchangedWhenNoOverride(): void
+    {
+        $stack = 'prune-no-override';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        // Delete the auto-created override so there's nothing to prune
+        $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
+        $overridePath = $info->getOverridePath();
+        if ($overridePath && is_file($overridePath)) {
+            unlink($overridePath);
+        }
+        // Re-create info without the override file existing
+        $info2 = new \ReflectionClass(\OverrideInfo::class);
+        // Just test via the public API by removing the override file
+        $result = $info->pruneOrphanServices();
+        $this->assertFalse($result['changed']);
+        $this->assertEquals([], $result['removed']);
+    }
+
+    public function testPruneOrphanServicesRemovesStaleEntries(): void
+    {
+        $stack = 'prune-stale';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
+        $overridePath = $info->getOverridePath();
+
+        // Write an override with an orphaned service
+        $overrideContent = "services:\n" .
+            "  web:\n" .
+            "    labels:\n" .
+            "      test: \"1\"\n" .
+            "  deleted-svc:\n" .
+            "    labels:\n" .
+            "      test: \"2\"\n";
+        file_put_contents($overridePath, $overrideContent);
+
+        $result = $info->pruneOrphanServices();
+
+        $this->assertTrue($result['changed']);
+        $this->assertEquals(['deleted-svc'], $result['removed']);
+
+        // Verify override file was updated
+        $newContent = file_get_contents($overridePath);
+        $this->assertStringContainsString("  web:\n", $newContent);
+        $this->assertStringNotContainsString("  deleted-svc:\n", $newContent);
+    }
+
+    public function testPruneOrphanServicesNoChangeWhenAllValid(): void
+    {
+        $stack = 'prune-valid';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n  api:\n    image: node\n");
+        $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
+        $overridePath = $info->getOverridePath();
+
+        $overrideContent = "services:\n" .
+            "  web:\n" .
+            "    labels:\n" .
+            "      test: \"1\"\n" .
+            "  api:\n" .
+            "    labels:\n" .
+            "      test: \"2\"\n";
+        file_put_contents($overridePath, $overrideContent);
+
+        $result = $info->pruneOrphanServices();
+
+        $this->assertFalse($result['changed']);
+        $this->assertEquals([], $result['removed']);
+    }
 }

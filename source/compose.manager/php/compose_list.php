@@ -54,47 +54,20 @@ foreach ($composeProjects as $project) {
 
     $stackCount++;
 
-    $projectName = $project;
-    if (is_file("$compose_root/$project/name")) {
-        $projectName = trim(file_get_contents("$compose_root/$project/name"));
-    }
+    // Resolve stack identity and metadata via StackInfo
+    $stackInfo = StackInfo::fromProject($compose_root, $project);
+
+    $projectName = $stackInfo->getName();
     $id = str_replace(".", "-", $project);
     $id = str_replace(" ", "", $id);
 
-    // Get the compose file path
-    $basePath = is_file("$compose_root/$project/indirect")
-        ? trim(file_get_contents("$compose_root/$project/indirect"))
-        : "$compose_root/$project";
-    $composeFile = findComposeFile($basePath) ?: "$basePath/" . COMPOSE_FILE_NAMES[0];
-    // Resolve override via centralized helper (prefer correctly-named indirect override)
-    $overridePath = OverrideInfo::fromStack($compose_root, $project)->getOverridePath();
+    // Get the compose file path and override via StackInfo
+    $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
+    $overridePath = $stackInfo->getOverridePath();
 
-    // Use docker compose config --services to get accurate service count
-    // This properly parses YAML, handles overrides, extends, etc.
-    $definedServices = 0;
-    if (is_file($composeFile)) {
-        $files = "-f " . escapeshellarg($composeFile);
-        if (is_file($overridePath)) {
-            $files .= " -f " . escapeshellarg($overridePath);
-        }
-
-        // Get env file if specified
-        $envFile = "";
-        if (is_file("$compose_root/$project/envpath")) {
-            $envPath = trim(file_get_contents("$compose_root/$project/envpath"));
-            if (is_file($envPath)) {
-                $envFile = "--env-file " . escapeshellarg($envPath);
-            }
-        }
-
-        // Use docker compose config --services to list all service names
-        $cmd = "docker compose $files $envFile config --services 2>/dev/null";
-        $output = shell_exec($cmd);
-        if ($output) {
-            $services = array_filter(explode("\n", trim($output)));
-            $definedServices = count($services);
-        }
-    }
+    // Use StackInfo's getDefinedServices for accurate service count
+    $definedServicesList = $stackInfo->getDefinedServices();
+    $definedServices = count($definedServicesList);
 
     // Get running container info from $containersByProject
     // Use directory basename (sanitized) as project key — this matches the -p flag in echoComposeCommand
@@ -137,48 +110,23 @@ foreach ($composeProjects as $project) {
     $isrestarting = $restartingCount > 0;
     $isup = $actualContainerCount > 0;
 
-    if (is_file("$compose_root/$project/description")) {
-        $description = @file_get_contents("$compose_root/$project/description");
-        $description = str_replace("\r", "", $description);
-        // Escape HTML first to prevent XSS, then convert newlines to <br>
-        $description = htmlspecialchars($description, ENT_QUOTES, 'UTF-8');
+    // Read metadata via StackInfo lazy getters
+    $descriptionRaw = $stackInfo->getDescription();
+    if ($descriptionRaw) {
+        $descriptionRaw = str_replace("\r", "", $descriptionRaw);
+        $description = htmlspecialchars($descriptionRaw, ENT_QUOTES, 'UTF-8');
         $description = str_replace("\n", "<br>", $description);
     } else {
         $description = "";
     }
 
-    $autostart = '';
-    if (is_file("$compose_root/$project/autostart")) {
-        $autostarttext = @file_get_contents("$compose_root/$project/autostart");
-        if (strpos($autostarttext, 'true') !== false) {
-            $autostart = 'checked';
-        }
-    }
+    $autostart = $stackInfo->getAutostart() ? 'checked' : '';
 
-    // Check for custom project icon (URL-based only via icon_url file)
-    $projectIcon = '';
-    if (is_file("$compose_root/$project/icon_url")) {
-        $iconUrl = trim(@file_get_contents("$compose_root/$project/icon_url"));
-        if (filter_var($iconUrl, FILTER_VALIDATE_URL) && (strpos($iconUrl, 'http://') === 0 || strpos($iconUrl, 'https://') === 0)) {
-            $projectIcon = $iconUrl;
-        }
-    }
+    $projectIcon = $stackInfo->getIconUrl();
+    $webuiUrl = $stackInfo->getWebUIUrl();
 
-    // Check for stack-level WebUI URL
-    $webuiUrl = '';
-    if (is_file("$compose_root/$project/webui_url")) {
-        $webuiUrlTmp = trim(@file_get_contents("$compose_root/$project/webui_url"));
-        if (filter_var($webuiUrlTmp, FILTER_VALIDATE_URL) && (strpos($webuiUrlTmp, 'http://') === 0 || strpos($webuiUrlTmp, 'https://') === 0)) {
-            $webuiUrl = $webuiUrlTmp;
-        }
-    }
-
-    $profiles = array();
-    if (is_file("$compose_root/$project/profiles")) {
-        $profilestext = @file_get_contents("$compose_root/$project/profiles");
-        $profiles = json_decode($profilestext, false);
-    }
-    $profilesJson = htmlspecialchars(json_encode($profiles ? $profiles : []), ENT_QUOTES, 'UTF-8');
+    $profiles = $stackInfo->getProfiles();
+    $profilesJson = htmlspecialchars(json_encode($profiles ?: []), ENT_QUOTES, 'UTF-8');
 
     // Determine status text and class for badge
     $statusText = "Stopped";
@@ -231,11 +179,8 @@ foreach ($composeProjects as $project) {
         $statusLabel = "partial ($runningCount/$containerCount)";
     }
 
-    // Get stack started_at timestamp from file for uptime calculation
-    $stackStartedAt = '';
-    if (is_file("$compose_root/$project/started_at")) {
-        $stackStartedAt = trim(file_get_contents("$compose_root/$project/started_at"));
-    }
+    // Get stack started_at timestamp via StackInfo
+    $stackStartedAt = $stackInfo->getStartedAt();
 
     // Calculate uptime display from started_at timestamp
     $stackUptime = '';

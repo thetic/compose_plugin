@@ -68,23 +68,19 @@ foreach ($projects as $project) {
     
     $summary['total']++;
     
-    $projectName = $project;
-    if (is_file("$compose_root/$project/name")) {
-        $projectName = trim(file_get_contents("$compose_root/$project/name"));
-    }
+    // Resolve stack identity and metadata via StackInfo
+    $stackInfo = StackInfo::fromProject($compose_root, $project);
+    $projectName = $stackInfo->getName();
     
     // Key containers by the sanitized directory name — this matches the -p flag in echoComposeCommand
-    $sanitizedName = sanitizeStr($project);
+    $sanitizedName = $stackInfo->sanitizedName;
     $projectContainers = $containersByProject[$sanitizedName] ?? [];
     
     $runningCount = 0;
     $totalContainers = count($projectContainers);
-    $startedAt = '';
     
-    // Read stack started_at timestamp from file
-    if (is_file("$compose_root/$project/started_at")) {
-        $startedAt = trim(file_get_contents("$compose_root/$project/started_at"));
-    }
+    // Read stack started_at timestamp via StackInfo
+    $startedAt = $stackInfo->getStartedAt();
     
     foreach ($projectContainers as $ct) {
         if (($ct['State'] ?? '') === 'running') {
@@ -107,23 +103,9 @@ foreach ($projects as $project) {
         $summary['stopped']++;
     }
     
-    // Check for custom project icon (URL-based via icon_url file)
-    $icon = '';
-    if (is_file("$compose_root/$project/icon_url")) {
-        $iconUrl = trim(@file_get_contents("$compose_root/$project/icon_url"));
-        if (filter_var($iconUrl, FILTER_VALIDATE_URL) && (strpos($iconUrl, 'http://') === 0 || strpos($iconUrl, 'https://') === 0)) {
-            $icon = $iconUrl;
-        }
-    }
-    
-    // Check for stack webui URL
-    $webui = '';
-    if (is_file("$compose_root/$project/webui_url")) {
-        $webuiUrl = trim(@file_get_contents("$compose_root/$project/webui_url"));
-        if (!empty($webuiUrl)) {
-            $webui = $webuiUrl;
-        }
-    }
+    // Get custom project icon and webui URL via StackInfo
+    $icon = $stackInfo->getIconUrl();
+    $webui = $stackInfo->getWebUIUrl();
     
     // Check update status from central update-status.json file (set by "Check for Updates" button)
     $updateStatus = 'unknown';

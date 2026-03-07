@@ -158,6 +158,113 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     var hideComposeFromDocker = <?php echo json_encode($hideComposeFromDocker); ?>;
     var composeCliVersion = <?php echo json_encode($composeVersion); ?>;
 
+    // ═══════════════════════════════════════════════════════════════════
+    // Standard factory functions for container and stack identity objects
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Create a normalized container info object from any raw source.
+     * Handles PascalCase→camelCase, resolves name from multiple field aliases,
+     * and derives hasUpdate/isPinned when not explicitly set.
+     *
+     * @param {Object} raw - Raw container object (from server, cache, or update response)
+     * @returns {Object} Normalized container info
+     */
+    function createContainerInfo(raw) {
+        if (!raw) return null;
+        var name = raw.name || raw.Name || raw.container || raw.Service || raw.service || '';
+        var service = raw.service || raw.Service || name;
+        var updateStatus = raw.updateStatus || raw.UpdateStatus || '';
+        var hasUpdate = (raw.hasUpdate !== undefined) ? !!raw.hasUpdate : (updateStatus === 'update-available');
+
+        return {
+            name: name,
+            service: service,
+            image: raw.image || raw.Image || '',
+            state: raw.state || raw.State || '',
+            isRunning: (raw.state || raw.State || '') === 'running',
+            hasUpdate: hasUpdate,
+            updateStatus: updateStatus,
+            localSha: raw.localSha || raw.LocalSha || '',
+            remoteSha: raw.remoteSha || raw.RemoteSha || '',
+            isPinned: (raw.isPinned !== undefined) ? !!raw.isPinned : false,
+            pinnedDigest: raw.pinnedDigest || raw.PinnedDigest || '',
+            icon: raw.icon || raw.Icon || '',
+            shell: raw.shell || raw.Shell || '',
+            webUI: raw.webUI || raw.WebUI || '',
+            ports: raw.ports || raw.Ports || '',
+            networks: raw.networks || raw.Networks || '',
+            volumes: raw.volumes || raw.Volumes || '',
+            id: raw.id || raw.Id || '',
+            created: raw.created || raw.Created || '',
+            startedAt: raw.startedAt || raw.StartedAt || ''
+        };
+    }
+
+    /**
+     * Create a normalized stack info object.
+     *
+     * @param {string} project - The project/stack folder name
+     * @param {Array} containers - Array of raw container objects (will be normalized)
+     * @param {Object} [opts] - Optional overrides (totalServices, lastChecked, etc.)
+     * @returns {Object} Normalized stack info
+     */
+    function createStackInfo(project, containers, opts) {
+        opts = opts || {};
+        var normalized = (containers || []).map(createContainerInfo).filter(Boolean);
+        var isRunning = normalized.some(function(c) { return c.isRunning; });
+        var hasUpdate = normalized.some(function(c) { return c.hasUpdate; });
+
+        return {
+            projectName: opts.projectName || project,
+            containers: normalized,
+            isRunning: (opts.isRunning !== undefined) ? opts.isRunning : isRunning,
+            hasUpdate: (opts.hasUpdate !== undefined) ? opts.hasUpdate : hasUpdate,
+            totalServices: opts.totalServices || normalized.length,
+            lastChecked: opts.lastChecked || null
+        };
+    }
+
+    /**
+     * Merge update status info from a previous stackInfo into a new one.
+     * Matches containers by name and copies update fields.
+     *
+     * @param {Object} stackInfo - The target stack info (mutated in place)
+     * @param {Object} prevStatus - Previously saved stack update status
+     * @returns {Object} The mutated stackInfo
+     */
+    function mergeStackUpdateStatus(stackInfo, prevStatus) {
+        if (!prevStatus) return stackInfo;
+
+        // Copy stack-level fields
+        ['lastChecked', 'updateAvailable', 'checking', 'checked'].forEach(function(k) {
+            if (typeof prevStatus[k] !== 'undefined') stackInfo[k] = prevStatus[k];
+        });
+
+        // Merge container-level update data
+        if (prevStatus.containers && stackInfo.containers) {
+            stackInfo.containers.forEach(function(c) {
+                var cName = c.name;
+                prevStatus.containers.forEach(function(pc) {
+                    var prev = (typeof pc.name === 'string') ? pc : createContainerInfo(pc);
+                    if (cName === prev.name) {
+                        if (prev.hasUpdate && !c.hasUpdate) c.hasUpdate = prev.hasUpdate;
+                        if (prev.updateStatus && !c.updateStatus) c.updateStatus = prev.updateStatus;
+                        if (prev.localSha && !c.localSha) c.localSha = prev.localSha;
+                        if (prev.remoteSha && !c.remoteSha) c.remoteSha = prev.remoteSha;
+                        if (prev.isPinned !== undefined) c.isPinned = prev.isPinned;
+                    }
+                });
+            });
+            // Recompute stack-level hasUpdate from merged containers
+            stackInfo.hasUpdate = stackInfo.containers.some(function(c) { return c.hasUpdate; });
+        }
+
+        return stackInfo;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+
     // Timers for async operations (plugin-specific to avoid collision with Unraid's global timers)
     var composeTimers = {};
 
@@ -1090,14 +1197,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 try {
                     var response = JSON.parse(data);
                     if (response.result === 'success') {
-                        var stackInfo = {
+                        var stackInfo = createStackInfo(stackName, response.updates, {
                             projectName: response.projectName,
-                            hasUpdate: false,
-                            containers: response.updates,
-                            isRunning: true // Stack was just updated, so it's running
-                        };
-                        response.updates.forEach(function(u) {
-                            if (u.hasUpdate) stackInfo.hasUpdate = true;
+                            isRunning: true
                         });
                         stackUpdateStatus[stackName] = stackInfo;
                         updateStackUpdateUI(stackName, stackInfo);
@@ -2011,30 +2113,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     var response = JSON.parse(data);
                     if (response.result === 'success') {
                         var containers = response.containers || [];
-                        // Normalize PascalCase keys
-                        containers.forEach(function(c) {
-                            if (c.UpdateStatus !== undefined && c.updateStatus === undefined) c.updateStatus = c.UpdateStatus;
-                            if (c.LocalSha !== undefined && c.localSha === undefined) c.localSha = c.LocalSha;
-                            if (c.RemoteSha !== undefined && c.remoteSha === undefined) c.remoteSha = c.RemoteSha;
-                            if (c.hasUpdate === undefined && c.updateStatus) {
-                                c.hasUpdate = (c.updateStatus === 'update-available');
-                            }
+                        // Normalize all containers via factory function (PascalCase→camelCase)
+                        containers = containers.map(function(c) {
+                            var info = createContainerInfo(c);
+                            // Preserve original keys for renderContainerDetails compatibility
+                            return Object.assign({}, c, info);
                         });
                         // Merge saved update status so we don't lose checked info
-                        if (stackUpdateStatus[project] && stackUpdateStatus[project].containers) {
-                            containers.forEach(function(container) {
-                                var cName = container.Name || container.Service;
-                                stackUpdateStatus[project].containers.forEach(function(update) {
-                                    if (cName === (update.container || update.name || update.service)) {
-                                        if (update.hasUpdate !== undefined) container.hasUpdate = update.hasUpdate;
-                                        if (update.updateStatus || update.status) container.updateStatus = update.status || update.updateStatus;
-                                        if (update.localSha) container.localSha = update.localSha;
-                                        if (update.remoteSha) container.remoteSha = update.remoteSha;
-                                        if (update.isPinned !== undefined) container.isPinned = update.isPinned;
-                                    }
-                                });
-                            });
-                        }
+                        mergeUpdateStatus(containers, project);
                         // Update cache with fresh data
                         stackContainersCache[stackId] = containers;
                         stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
@@ -2310,17 +2396,20 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     // Helper to merge update status into containers array
+    // Uses createContainerInfo for consistent name resolution
     function mergeUpdateStatus(containers, project) {
         if (!containers || !stackUpdateStatus[project] || !stackUpdateStatus[project].containers) {
             return containers;
         }
         containers.forEach(function(container) {
+            var cInfo = createContainerInfo(container);
             stackUpdateStatus[project].containers.forEach(function(update) {
-                if (container.Name === update.container) {
-                    container.hasUpdate = update.hasUpdate;
-                    container.updateStatus = update.status;
-                    container.localSha = update.localSha || '';
-                    container.remoteSha = update.remoteSha || '';
+                var uInfo = createContainerInfo(update);
+                if (cInfo.name === uInfo.name) {
+                    container.hasUpdate = uInfo.hasUpdate;
+                    container.updateStatus = uInfo.updateStatus;
+                    container.localSha = uInfo.localSha;
+                    container.remoteSha = uInfo.remoteSha;
                 }
             });
         });
@@ -3619,31 +3708,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (response.result === 'success') {
                     var containers = response.containers;
 
-                    // Normalize PascalCase keys from server to camelCase used by client
-                    containers.forEach(function(c) {
-                        if (c.UpdateStatus !== undefined && c.updateStatus === undefined) c.updateStatus = c.UpdateStatus;
-                        if (c.LocalSha !== undefined && c.localSha === undefined) c.localSha = c.LocalSha;
-                        if (c.RemoteSha !== undefined && c.remoteSha === undefined) c.remoteSha = c.RemoteSha;
-                        // Derive hasUpdate from updateStatus if not set
-                        if (c.hasUpdate === undefined && c.updateStatus) {
-                            c.hasUpdate = (c.updateStatus === 'update-available');
-                        }
+                    // Normalize all containers via factory function (PascalCase→camelCase)
+                    containers = containers.map(function(c) {
+                        var info = createContainerInfo(c);
+                        return Object.assign({}, c, info);
                     });
 
                     // Merge update status from stackUpdateStatus if available
-                    if (stackUpdateStatus[project] && stackUpdateStatus[project].containers) {
-                        containers.forEach(function(container) {
-                            var cName = container.Name || container.Service;
-                            stackUpdateStatus[project].containers.forEach(function(update) {
-                                if (cName === update.container) {
-                                    container.hasUpdate = update.hasUpdate;
-                                    container.updateStatus = update.status || update.updateStatus;
-                                    container.localSha = update.localSha || '';
-                                    container.remoteSha = update.remoteSha || '';
-                                }
-                            });
-                        });
-                    }
+                    mergeUpdateStatus(containers, project);
 
                     stackContainersCache[stackId] = containers;
                     stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
@@ -3937,29 +4009,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     function buildStackInfoFromCache(stackId, project) {
         var containers = stackContainersCache[stackId] || [];
         var definedServices = stackDefinedServicesCache[stackId] || containers.length;
-        var stackInfo = {
-            projectName: project,
-            containers: [],
-            isRunning: false,
-            hasUpdate: false,
-            totalServices: definedServices  // Track total defined services for accurate status
-        };
-        containers.forEach(function(c) {
-            var name = c.Name || c.Service || '';
-            var ct = {
-                container: name,
-                hasUpdate: !!c.hasUpdate,
-                updateStatus: c.updateStatus || '',
-                localSha: c.localSha || '',
-                remoteSha: c.remoteSha || '',
-                isPinned: !!c.isPinned,
-                isRunning: (c.State === 'running')
-            };
-            if (ct.hasUpdate) stackInfo.hasUpdate = true;
-            if (ct.isRunning) stackInfo.isRunning = true;
-            stackInfo.containers.push(ct);
-        });
-        return stackInfo;
+        return createStackInfo(project, containers, { totalServices: definedServices });
     }
 
     // Update only the parent stack row using cached container details
@@ -3979,31 +4029,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // Update the update-column using existing helper (expects stackInfo)
             var stackInfo = buildStackInfoFromCache(stackId, project);
             // Merge any previously saved update status so we don't lose 'checked' state
-            var prevStatus = stackUpdateStatus[project] || {};
-            ['lastChecked', 'updateAvailable', 'checking', 'updateStatus', 'checked'].forEach(function(k) {
-                if (typeof prevStatus[k] !== 'undefined') stackInfo[k] = prevStatus[k];
-            });
-
-            // Also merge container-level update data from previous status
-            if (prevStatus.containers && stackInfo.containers) {
-                stackInfo.containers.forEach(function(c) {
-                    var cName = c.name || c.service;
-                    prevStatus.containers.forEach(function(pc) {
-                        var pcName = pc.name || pc.service || pc.container;
-                        if (cName === pcName) {
-                            if (pc.hasUpdate !== undefined && !c.hasUpdate) c.hasUpdate = pc.hasUpdate;
-                            if (pc.updateStatus && !c.updateStatus) c.updateStatus = pc.updateStatus;
-                            if (pc.localSha && !c.localSha) c.localSha = pc.localSha;
-                            if (pc.remoteSha && !c.remoteSha) c.remoteSha = pc.remoteSha;
-                            if (pc.isPinned !== undefined) c.isPinned = pc.isPinned;
-                        }
-                    });
-                });
-                // Recompute hasUpdate from merged containers
-                stackInfo.hasUpdate = stackInfo.containers.some(function(c) {
-                    return c.hasUpdate;
-                });
-            }
+            mergeStackUpdateStatus(stackInfo, stackUpdateStatus[project] || {});
 
             // Cache the merged update status and apply UI update
             stackUpdateStatus[project] = stackInfo;
