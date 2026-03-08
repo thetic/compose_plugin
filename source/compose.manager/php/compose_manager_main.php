@@ -190,7 +190,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             isPinned: (raw.isPinned !== undefined) ? !!raw.isPinned : false,
             pinnedDigest: raw.pinnedDigest || raw.PinnedDigest || '',
             icon: raw.icon || raw.Icon || '',
-            shell: raw.shell || raw.Shell || '',
+            shell: raw.shell || raw.Shell || '/bin/bash',
             webUI: raw.webUI || raw.WebUI || '',
             ports: raw.ports || raw.Ports || '',
             networks: raw.networks || raw.Networks || '',
@@ -2114,11 +2114,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     if (response.result === 'success') {
                         var containers = response.containers || [];
                         // Normalize all containers via factory function (PascalCase→camelCase)
-                        containers = containers.map(function(c) {
-                            var info = createContainerInfo(c);
-                            // Preserve original keys for renderContainerDetails compatibility
-                            return Object.assign({}, c, info);
-                        });
+                        containers = containers.map(createContainerInfo).filter(Boolean);
                         // Merge saved update status so we don't lose checked info
                         mergeUpdateStatus(containers, project);
                         // Update cache with fresh data
@@ -3709,10 +3705,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     var containers = response.containers;
 
                     // Normalize all containers via factory function (PascalCase→camelCase)
-                    containers = containers.map(function(c) {
-                        var info = createContainerInfo(c);
-                        return Object.assign({}, c, info);
-                    });
+                    containers = containers.map(createContainerInfo).filter(Boolean);
 
                     // Merge update status from stackUpdateStatus if available
                     mergeUpdateStatus(containers, project);

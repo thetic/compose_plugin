@@ -295,8 +295,7 @@ class OverrideInfo
 
     /**
      * Resolve override information for a given stack and populate this instance.
-     * 
-     * 
+     *
      * @param string $stack
      * @return void
      */
@@ -354,15 +353,16 @@ class OverrideInfo
     }
 
     /**
-     * Get the list of services defined in the main compose file.
+     * Get the list of services defined in the main compose file (without override).
      *
-     * Uses `docker compose config --services` to accurately resolve
-     * services including extends, anchors, etc.
+     * Used internally by pruneOrphanServices() to determine which services
+     * are valid. External callers should use StackInfo::getDefinedServices()
+     * which includes the override file.
      *
      * @param string|null $envFilePath Optional path to env file
      * @return string[] List of service names
      */
-    public function getDefinedServices(?string $envFilePath = null): array
+    private function getDefinedServices(?string $envFilePath = null): array
     {
         if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
             return [];
@@ -695,7 +695,7 @@ class StackInfo
         // Resolve indirect
         $this->isIndirect = isIndirect($this->path);
         $this->composeSource = $this->isIndirect
-            ? (trim(file_get_contents($this->path . '/indirect')) ?: $this->path)
+            ? (trim(@file_get_contents($this->path . '/indirect')) ?: $this->path)
             : $this->path;
 
         // Resolve compose file

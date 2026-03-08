@@ -158,7 +158,7 @@ foreach ($composeProjects as $project) {
     $projectHtml = htmlspecialchars($project, ENT_QUOTES, 'UTF-8');
     $descriptionHtml = $description; // Already contains <br> tags from earlier processing
     $pathHtml = htmlspecialchars("$compose_root/$project", ENT_QUOTES, 'UTF-8');
-    $projectIconUrl = htmlspecialchars($projectIcon, ENT_QUOTES, 'UTF-8');
+    $projectIconUrl = htmlspecialchars($projectIcon ?? '', ENT_QUOTES, 'UTF-8');
 
     // Status like Docker tab (started/stopped with icon)
     $status = $isrunning ? ($runningCount == $containerCount ? 'started' : 'partial') : 'stopped';
