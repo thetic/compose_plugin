@@ -1050,11 +1050,29 @@ class StackInfo
     ): self {
         $composeRoot = rtrim($composeRoot, '/');
 
+        // 0. Validate stack name is not empty
+        if (trim($stackName) === '') {
+            throw new \RuntimeException("Stack name cannot be empty.");
+        }
+
         // 1. Generate a unique folder name
         $folderName = sanitizeFolderName($stackName);
+        if ($folderName === '') {
+            throw new \RuntimeException("Stack name produced an empty folder name after sanitization.");
+        }
         $folder = $composeRoot . '/' . $folderName;
-        while (is_dir($folder)) {
-            $folder .= mt_rand();
+        if (is_dir($folder)) {
+            // Append a random suffix to the base name to avoid collision;
+            // re-derive from the clean base each attempt so suffixes don't compound.
+            $attempts = 0;
+            do {
+                $candidate = $composeRoot . '/' . $folderName . mt_rand();
+                $attempts++;
+                if ($attempts > 100) {
+                    throw new \RuntimeException("Unable to find a unique folder name for stack: $stackName");
+                }
+            } while (is_dir($candidate));
+            $folder = $candidate;
         }
 
         // 2. Create the directory

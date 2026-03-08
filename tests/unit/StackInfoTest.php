@@ -600,4 +600,32 @@ class StackInfoTest extends TestCase
         $this->assertFileExists($stack->path . '/name');
         $this->assertSame('Display Name', file_get_contents($stack->path . '/name'));
     }
+
+    public function testCreateNewThrowsOnEmptyName(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Stack name cannot be empty');
+        \StackInfo::createNew($this->tempRoot, '');
+    }
+
+    public function testCreateNewThrowsOnWhitespaceName(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Stack name cannot be empty');
+        \StackInfo::createNew($this->tempRoot, '   ');
+    }
+
+    public function testCreateNewCollisionSuffixDoesNotCompound(): void
+    {
+        // Pre-create the base folder
+        $baseName = 'CompoundTest';
+        mkdir($this->tempRoot . '/' . $baseName, 0755, true);
+
+        $stack = \StackInfo::createNew($this->tempRoot, $baseName);
+
+        // The project name should be baseName + one random suffix, not compounded
+        $suffix = substr($stack->project, strlen($baseName));
+        // The suffix should be a single numeric string (from one mt_rand call)
+        $this->assertMatchesRegularExpression('/^\d+$/', $suffix);
+    }
 }
