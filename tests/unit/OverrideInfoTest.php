@@ -16,6 +16,7 @@ class OverrideInfoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        \StackInfo::clearCache();
         $this->tempRoot = $this->createTempDir();
     }
 
@@ -190,10 +191,8 @@ class OverrideInfoTest extends TestCase
         if ($overridePath && is_file($overridePath)) {
             unlink($overridePath);
         }
-        // Re-create info without the override file existing
-        $info2 = new \ReflectionClass(\OverrideInfo::class);
         // Just test via the public API by removing the override file
-        $result = $info->pruneOrphanServices();
+        $result = $info->pruneOrphanServices(['web']);
         $this->assertFalse($result['changed']);
         $this->assertEquals([], $result['removed']);
     }
@@ -217,7 +216,8 @@ class OverrideInfoTest extends TestCase
             "      test: \"2\"\n";
         file_put_contents($overridePath, $overrideContent);
 
-        $result = $info->pruneOrphanServices();
+        // Pass valid services — 'web' is valid, 'deleted-svc' is orphaned
+        $result = $info->pruneOrphanServices(['web']);
 
         $this->assertTrue($result['changed']);
         $this->assertEquals(['deleted-svc'], $result['removed']);
@@ -246,7 +246,8 @@ class OverrideInfoTest extends TestCase
             "      test: \"2\"\n";
         file_put_contents($overridePath, $overrideContent);
 
-        $result = $info->pruneOrphanServices();
+        // Both services are valid
+        $result = $info->pruneOrphanServices(['web', 'api']);
 
         $this->assertFalse($result['changed']);
         $this->assertEquals([], $result['removed']);

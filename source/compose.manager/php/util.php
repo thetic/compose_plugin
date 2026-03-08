@@ -266,81 +266,104 @@ class OverrideInfo
      */
     public ?string $composeFilePath = null;
 
-    /**
-     * @var string Compose root directory
-     */
-    private string $composeRoot;
+    private function __construct() {}
 
     /**
-     * Constructor
-     * @param string $composeRoot Compose root directory
+     * Create an OverrideInfo from a StackInfo instance.
+     *
+     * Primary factory — uses the pre-resolved identity fields from StackInfo
+     * (path, composeSource, composeFilePath, isIndirect) so that no duplicate
+     * filesystem resolution is needed.
+     *
+     * @param StackInfo $stackInfo The owning stack (must have identity fields populated)
+     * @return OverrideInfo
      */
-    private function __construct(string $composeRoot)
+    public static function fromStackInfo(StackInfo $stackInfo): self
     {
-        $this->composeRoot = rtrim($composeRoot, "/");
+        $indirectPath = $stackInfo->isIndirect ? $stackInfo->composeSource : null;
+        return self::resolveOverride($stackInfo->path, $indirectPath, $stackInfo->composeFilePath);
     }
 
     /**
-     * Static factory to create and resolve an OverrideInfo for a stack.
+     * Create an OverrideInfo by resolving paths from scratch.
+     *
+     * @deprecated Use StackInfo::fromProject() which provides OverrideInfo automatically
+     *             via fromStackInfo(), avoiding duplicate filesystem resolution.
+     *
      * @param string $composeRoot
      * @param string $stack
      * @return OverrideInfo
      */
-    public static function fromStack(string $composeRoot, string $stack): OverrideInfo
+    public static function fromStack(string $composeRoot, string $stack): self
     {
-        $info = new self($composeRoot);
-        $info->resolve($stack);
-        return $info;
+        $projectPath = rtrim($composeRoot, '/') . '/' . $stack;
+        $indirectPath = is_file("$projectPath/indirect")
+            ? trim(file_get_contents("$projectPath/indirect"))
+            : null;
+        if ($indirectPath === '') {
+            $indirectPath = null;
+        }
+
+        $composeSource = $indirectPath ?? $projectPath;
+        $foundCompose = findComposeFile($composeSource);
+        $composeFilePath = $foundCompose !== false ? $foundCompose : null;
+
+        return self::resolveOverride($projectPath, $indirectPath, $composeFilePath);
     }
 
     /**
-     * Resolve override information for a given stack and populate this instance.
+     * Core override resolution logic shared by both factories.
      *
-     * @param string $stack
-     * @return void
+     * Computes the override filename from the compose file, resolves project
+     * and indirect override paths, migrates/removes legacy overrides, and
+     * auto-creates a project override template if needed.
+     *
+     * @param string      $projectPath     Full path to the stack directory
+     * @param string|null $indirectPath     Indirect target directory, or null if not indirect
+     * @param string|null $composeFilePath  Resolved main compose file path, or null if none
+     * @return OverrideInfo
      */
-    private function resolve(string $stack): void
+    private static function resolveOverride(string $projectPath, ?string $indirectPath, ?string $composeFilePath): self
     {
-        $projectPath = $this->getProjectPath($stack);
-        $indirectPath = is_file("$projectPath/indirect") ? trim(file_get_contents("$projectPath/indirect")) : null;
-        $composeSource = $indirectPath == "" || $indirectPath === null ? $projectPath : $indirectPath;
+        $info = new self();
+        $info->composeFilePath = $composeFilePath;
 
-        $foundCompose = findComposeFile($composeSource);
-        $this->composeFilePath = $foundCompose !== false ? $foundCompose : null;
-        $composeBaseName = $foundCompose !== false ? basename($foundCompose) : COMPOSE_FILE_NAMES[0];
-        $this->computedName = preg_replace('/(\.[^.]+)$/', '.override$1', $composeBaseName);
+        $composeBaseName = $composeFilePath !== null ? basename($composeFilePath) : COMPOSE_FILE_NAMES[0];
+        $info->computedName = preg_replace('/(\.[^.]+)$/', '.override$1', $composeBaseName);
 
-        $this->projectOverride = $projectPath . '/' . $this->computedName;
-        $this->indirectOverride = $indirectPath !== "" && $indirectPath !== null ? ($indirectPath . '/' . $this->computedName) : null;
+        $info->projectOverride = $projectPath . '/' . $info->computedName;
+        $info->indirectOverride = $indirectPath !== null ? ($indirectPath . '/' . $info->computedName) : null;
 
         $legacyProject = $projectPath . '/docker-compose.override.yml';
-        $legacyIndirect = $indirectPath !== "" && $indirectPath !== null ? ($indirectPath . '/docker-compose.override.yml') : null;
+        $legacyIndirect = $indirectPath !== null ? ($indirectPath . '/docker-compose.override.yml') : null;
 
-        $this->useIndirect = ($this->indirectOverride && is_file($this->indirectOverride));
-        $this->mismatchIndirectLegacy = ($indirectPath !== "" && $legacyIndirect && is_file($legacyIndirect) && !($this->indirectOverride && is_file($this->indirectOverride)));
+        $info->useIndirect = ($info->indirectOverride && is_file($info->indirectOverride));
+        $info->mismatchIndirectLegacy = ($indirectPath !== null && $legacyIndirect && is_file($legacyIndirect) && !($info->indirectOverride && is_file($info->indirectOverride)));
 
         // Migrate legacy project override to computed project override (project-only migration)
-        if (!is_file($this->projectOverride) && is_file($legacyProject) && realpath($legacyProject) !== @realpath($this->projectOverride)) {
-            @rename($legacyProject, $this->projectOverride);
-            clientDebug("[override] Migrated legacy project override $legacyProject -> $this->projectOverride", null, 'daemon', 'info');
+        if (!is_file($info->projectOverride) && is_file($legacyProject) && realpath($legacyProject) !== @realpath($info->projectOverride)) {
+            @rename($legacyProject, $info->projectOverride);
+            clientDebug("[override] Migrated legacy project override $legacyProject -> $info->projectOverride", null, 'daemon', 'info');
         }
 
-        if (is_file($this->projectOverride) && is_file($legacyProject) && realpath($legacyProject) !== @realpath($this->projectOverride)) {
+        if (is_file($info->projectOverride) && is_file($legacyProject) && realpath($legacyProject) !== @realpath($info->projectOverride)) {
             @rename($legacyProject, $legacyProject . ".bak");
             clientDebug("[override] Removed stale legacy project override $legacyProject (mismatch with computed override)", null, 'daemon', 'info');
         }
 
-        if ($this->mismatchIndirectLegacy) {
+        if ($info->mismatchIndirectLegacy) {
             clientDebug("[override] Indirect override exists with non-matching name; using project fallback.", null, 'daemon', 'warning');
         }
 
-        if (!is_file($this->projectOverride) && !$this->useIndirect) {
+        if (!is_file($info->projectOverride) && !$info->useIndirect) {
             $overrideContent = "# Override file for UI labels (icon, webui, shell)\n";
             $overrideContent .= "# This file is managed by Compose Manager\n";
             $overrideContent .= "services: {}\n";
-            file_put_contents($this->projectOverride, $overrideContent);
-            clientDebug("[override] Created missing project override template at $this->projectOverride", null, 'daemon', 'info');
+            file_put_contents($info->projectOverride, $overrideContent);
+            clientDebug("[override] Created missing project override template at $info->projectOverride", null, 'daemon', 'info');
         }
+
+        return $info;
     }
 
     /**
@@ -353,59 +376,23 @@ class OverrideInfo
     }
 
     /**
-     * Get the list of services defined in the main compose file (without override).
-     *
-     * Used internally by pruneOrphanServices() to determine which services
-     * are valid. External callers should use StackInfo::getDefinedServices()
-     * which includes the override file.
-     *
-     * @param string|null $envFilePath Optional path to env file
-     * @return string[] List of service names
-     */
-    private function getDefinedServices(?string $envFilePath = null): array
-    {
-        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
-            return [];
-        }
-
-        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
-        if ($envFilePath !== null && $envFilePath !== '' && is_file($envFilePath)) {
-            $cmd .= " --env-file " . escapeshellarg($envFilePath);
-        }
-        $cmd .= " config --services 2>/dev/null";
-
-        $output = shell_exec($cmd);
-        if (!is_string($output) || trim($output) === '') {
-            return [];
-        }
-
-        return array_values(array_filter(array_map('trim', explode("\n", trim($output))), function ($service) {
-            return $service !== '';
-        }));
-    }
-
-    /**
      * Prune orphaned services from the override file.
      *
-     * Compares the services in the override file against the services
-     * defined in the main compose file. Any override service not present
-     * in the main file is removed. The override file is rewritten in place.
+     * Removes any services in the override that are not present in the
+     * provided list of valid service names. The override file is rewritten
+     * in place.
      *
-     * @param string|null $envFilePath Optional path to env file for service resolution
+     * @param string[] $validServices Service names that are defined in the main compose file
      * @return array{changed: bool, removed: string[]}
      */
-    public function pruneOrphanServices(?string $envFilePath = null): array
+    public function pruneOrphanServices(array $validServices): array
     {
         $overridePath = $this->getOverridePath();
         if ($overridePath === null || $overridePath === '' || !is_file($overridePath)) {
             return ['changed' => false, 'removed' => []];
         }
-        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
-            return ['changed' => false, 'removed' => []];
-        }
 
-        $mainServices = $this->getDefinedServices($envFilePath);
-        if (empty($mainServices)) {
+        if (empty($validServices)) {
             return ['changed' => false, 'removed' => []];
         }
 
@@ -414,7 +401,7 @@ class OverrideInfo
             return ['changed' => false, 'removed' => []];
         }
 
-        $result = pruneOverrideContentServices($overrideContent, $mainServices);
+        $result = pruneOverrideContentServices($overrideContent, $validServices);
         if (!($result['changed'] ?? false)) {
             return ['changed' => false, 'removed' => []];
         }
@@ -432,16 +419,6 @@ class OverrideInfo
         }
 
         return ['changed' => true, 'removed' => $removedServices];
-    }
-
-    /**
-     * Get the project path for a stack
-     * @param string $stack
-     * @return string
-     */
-    private function getProjectPath(string $stack): string
-    {
-        return $this->composeRoot . '/' . $stack;
     }
 }
 
@@ -705,8 +682,8 @@ class StackInfo
         $found = findComposeFile($this->composeSource);
         $this->composeFilePath = ($found !== false) ? $found : null;
 
-        // Eagerly resolve override info (preserves side effects: auto-create, migration)
-        $this->overrideInfo = OverrideInfo::fromStack($this->composeRoot, $project);
+        // Eagerly resolve override info using pre-resolved identity (no duplicate I/O)
+        $this->overrideInfo = OverrideInfo::fromStackInfo($this);
     }
 
     /**
@@ -914,14 +891,54 @@ class StackInfo
     /**
      * Prune orphaned services from the override file.
      *
-     * Convenience method: resolves defined services, then delegates to
-     * OverrideInfo::pruneOrphanServices().
+     * Resolves valid services from the main compose file (without override),
+     * then delegates to OverrideInfo::pruneOrphanServices().
      *
      * @return array{changed: bool, removed: string[]}
      */
     public function pruneOrphanOverrideServices(): array
     {
-        return $this->overrideInfo->pruneOrphanServices($this->getEnvFilePath());
+        $validServices = $this->getMainFileServices();
+        if (empty($validServices)) {
+            return ['changed' => false, 'removed' => []];
+        }
+        return $this->overrideInfo->pruneOrphanServices($validServices);
+    }
+
+    /**
+     * Get the list of services defined in the main compose file only (without override).
+     *
+     * Used internally by pruneOrphanOverrideServices() to determine which services
+     * are valid. Excludes the override file so orphaned override services are not
+     * counted as valid.
+     *
+     * External callers should typically use getDefinedServices() which includes
+     * the override file for a complete picture.
+     *
+     * @return string[] List of service names
+     */
+    private function getMainFileServices(): array
+    {
+        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
+            return [];
+        }
+
+        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
+
+        $envFilePath = $this->getEnvFilePath();
+        if ($envFilePath !== null && is_file($envFilePath)) {
+            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        }
+        $cmd .= " config --services 2>/dev/null";
+
+        $output = shell_exec($cmd);
+        if (!is_string($output) || trim($output) === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('trim', explode("\n", trim($output))), function ($service) {
+            return $service !== '';
+        }));
     }
 
     /**

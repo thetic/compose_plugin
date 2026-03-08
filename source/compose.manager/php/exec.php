@@ -81,7 +81,7 @@ switch ($_POST['action']) {
         }
 
         // Init override info to ensure override file is created for new stack (if not indirect) and to avoid errors when accessing settings before the override file is created
-        OverrideInfo::fromStack($compose_root, $stackName);
+        StackInfo::fromProject($compose_root, basename($folder));
 
         // Save stack name (which may differ from folder name) for display purposes
         file_put_contents("$folder/name", $stackName);
@@ -197,7 +197,7 @@ switch ($_POST['action']) {
         $projectPath = "$compose_root/$script";
 
         // Get Override file path and ensure project override exists (create blank if not)
-        $overridePath = OverrideInfo::fromStack($compose_root, $script)->getOverridePath();
+        $overridePath = StackInfo::fromProject($compose_root, $script)->getOverridePath();
 
         $scriptContents = is_file($overridePath) ? file_get_contents($overridePath) : "";
         $scriptContents = str_replace("\r", "", $scriptContents);
@@ -235,7 +235,7 @@ switch ($_POST['action']) {
         $projectPath = "$compose_root/$script";
 
         // Get Override file path and ensure project override exists (create blank if not)
-        $overridePath = OverrideInfo::fromStack($compose_root, $script)->getOverridePath();
+        $overridePath = StackInfo::fromProject($compose_root, $script)->getOverridePath();
 
         file_put_contents($overridePath, $scriptContents);
         echo "$overridePath saved";
