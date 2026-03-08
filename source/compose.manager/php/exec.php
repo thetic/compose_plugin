@@ -33,10 +33,9 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'config' => $cfg]);
         break;
     case 'addStack':
-        #Create indirect
-        $indirect = isset($_POST['stackPath']) ? trim($_POST['stackPath']) : "";
-        if ($indirect != "") {
-            // Validate stackPath is under an allowed root (/mnt/ or /boot/config/)
+        // Validate indirect path (HTTP-boundary security check)
+        $indirect = isset($_POST['stackPath']) ? trim($_POST['stackPath']) : '';
+        if ($indirect !== '') {
             $realIndirect = realpath(dirname($indirect)) ?: $indirect;
             if (strpos($realIndirect, '/mnt/') !== 0 && strpos($realIndirect, '/boot/config/') !== 0) {
                 clientDebug("[stack] Failed to create stack: Invalid indirect path: $indirect", null, 'daemon', 'error');
@@ -50,52 +49,19 @@ switch ($_POST['action']) {
             }
         }
 
-        #Create stack folder
-        $stackName = isset($_POST['stackName']) ? trim($_POST['stackName']) : "";
-        $folderName = sanitizeFolderName($stackName);
-        $folder = "$compose_root/$folderName";
-        while (true) {
-            if (is_dir($folder)) {
-                $folder .= mt_rand();
-            } else {
-                break;
-            }
-        }
-        exec("mkdir -p " . escapeshellarg($folder));
-        if (!is_dir($folder)) {
-            clientDebug("[stack] Failed to create stack: Unable to create directory: $folder", null, 'daemon', 'error');
-            echo json_encode(['result' => 'error', 'message' => 'Failed to create stack directory.']);
+        $stackName = isset($_POST['stackName']) ? trim($_POST['stackName']) : '';
+        $stackDesc = isset($_POST['stackDesc']) ? trim($_POST['stackDesc']) : '';
+
+        try {
+            $stack = StackInfo::createNew($compose_root, $stackName, $stackDesc, $indirect);
+        } catch (\RuntimeException $e) {
+            clientDebug('[stack] Failed to create stack: ' . $e->getMessage(), null, 'daemon', 'error');
+            echo json_encode(['result' => 'error', 'message' => $e->getMessage()]);
             break;
         }
 
-        #Create stack files
-        if ($indirect != "") {
-            file_put_contents("$folder/indirect", $indirect);
-            if (!findComposeFile($indirect)) {
-                file_put_contents("$indirect/" . COMPOSE_FILE_NAMES[0], "services:\n");
-                clientDebug("[stack] Indirect compose file not found at path: $indirect. Created stack with empty compose file.", null, 'daemon', 'warning');
-            }
-        } else {
-            file_put_contents("$folder/" . COMPOSE_FILE_NAMES[0], "services:\n");
-            clientDebug("[$stackName] Compose file not found at path: $folder. Created stack with empty compose file.", null, 'daemon', 'warning');
-        }
-
-        // Init override info to ensure override file is created for new stack (if not indirect) and to avoid errors when accessing settings before the override file is created
-        StackInfo::fromProject($compose_root, basename($folder));
-
-        // Save stack name (which may differ from folder name) for display purposes
-        file_put_contents("$folder/name", $stackName);
-
-        // Save description if provided
-        $stackDesc = isset($_POST['stackDesc']) ? trim($_POST['stackDesc']) : "";
-        if (!empty($stackDesc)) {
-            file_put_contents("$folder/description", trim($stackDesc));
-        }
-
-        // Return project info for opening the editor
-        $projectDir = basename($folder);
         clientDebug("[stack] Created stack: $stackName", null, 'daemon', 'info');
-        echo json_encode(['result' => 'success', 'message' => '', 'project' => $projectDir, 'projectName' => $stackName]);
+        echo json_encode(['result' => 'success', 'message' => '', 'project' => $stack->project, 'projectName' => $stack->getName()]);
         break;
     case 'deleteStack':
         $stackName = isset($_POST['stackName']) ? basename(trim($_POST['stackName'])) : "";

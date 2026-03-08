@@ -57,6 +57,25 @@ function sanitizeStr($a)
     return strtolower($a);
 }
 
+/**
+ * Sanitize a stack name to create a safe folder name.
+ * Removes special characters that could cause issues in paths.
+ *
+ * @param string $stackName The stack name to sanitize
+ * @return string The sanitized folder name
+ */
+function sanitizeFolderName(string $stackName): string
+{
+    $folderName = str_replace('"', '', $stackName);
+    $folderName = str_replace("'", '', $folderName);
+    $folderName = str_replace('&', '', $folderName);
+    $folderName = str_replace('(', '', $folderName);
+    $folderName = str_replace(')', '', $folderName);
+    $folderName = preg_replace('/ {2,}/', ' ', $folderName);
+    $folderName = preg_replace('/\s/', '_', $folderName);
+    return $folderName;
+}
+
 function isIndirect($path)
 {
     return is_file("$path/indirect");
@@ -998,6 +1017,69 @@ class StackInfo
         }
 
         return $this->metadataCache[$filename];
+    }
+
+    // ---------------------------------------------------------------
+    // Static factory: create a new stack on disk
+    // ---------------------------------------------------------------
+
+    /**
+     * Create a new stack directory with all required files.
+     *
+     * Handles folder naming (via sanitizeFolderName + collision avoidance),
+     * indirect wiring, default compose file creation, metadata files (name,
+     * description), and override initialization.
+     *
+     * Input validation (e.g. allowed indirect path roots) is the caller's
+     * responsibility — this method only deals with the filesystem structure.
+     *
+     * @param string $composeRoot  The compose projects root directory
+     * @param string $stackName    Human-readable stack name
+     * @param string $description  Optional description text
+     * @param string $indirectPath Optional indirect compose source directory
+     *
+     * @return self The newly created (and cached) StackInfo instance
+     *
+     * @throws \RuntimeException If the stack directory cannot be created
+     */
+    public static function createNew(
+        string $composeRoot,
+        string $stackName,
+        string $description = '',
+        string $indirectPath = ''
+    ): self {
+        $composeRoot = rtrim($composeRoot, '/');
+
+        // 1. Generate a unique folder name
+        $folderName = sanitizeFolderName($stackName);
+        $folder = $composeRoot . '/' . $folderName;
+        while (is_dir($folder)) {
+            $folder .= mt_rand();
+        }
+
+        // 2. Create the directory
+        if (!mkdir($folder, 0755, true) && !is_dir($folder)) {
+            throw new \RuntimeException("Failed to create stack directory: $folder");
+        }
+
+        // 3. Create compose / indirect files
+        if ($indirectPath !== '') {
+            file_put_contents("$folder/indirect", $indirectPath);
+            if (!findComposeFile($indirectPath)) {
+                file_put_contents("$indirectPath/" . COMPOSE_FILE_NAMES[0], "services:\n");
+            }
+        } else {
+            file_put_contents("$folder/" . COMPOSE_FILE_NAMES[0], "services:\n");
+        }
+
+        // 4. Write metadata
+        file_put_contents("$folder/name", $stackName);
+        if ($description !== '') {
+            file_put_contents("$folder/description", $description);
+        }
+
+        // 5. Build + cache the instance (resolves override, etc.)
+        return self::fromProject($composeRoot, basename($folder));
     }
 }
 

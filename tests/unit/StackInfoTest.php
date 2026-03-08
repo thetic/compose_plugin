@@ -488,4 +488,116 @@ class StackInfoTest extends TestCase
         $this->assertSame(2, substr_count($args['files'], '-f'));
         $this->assertStringContainsString('compose.override.yaml', $args['files']);
     }
+
+    // ===========================================
+    // createNew() Tests
+    // ===========================================
+
+    public function testCreateNewBasicStack(): void
+    {
+        $stack = \StackInfo::createNew($this->tempRoot, 'My Stack');
+
+        $this->assertInstanceOf(\StackInfo::class, $stack);
+        $this->assertDirectoryExists($stack->path);
+        $this->assertSame('My Stack', $stack->getName());
+        $this->assertNotNull($stack->composeFilePath);
+        $this->assertFileExists($stack->composeFilePath);
+        $this->assertSame("services:\n", file_get_contents($stack->composeFilePath));
+        $this->assertFalse($stack->isIndirect);
+    }
+
+    public function testCreateNewSanitizesFolderName(): void
+    {
+        $stack = \StackInfo::createNew($this->tempRoot, 'My "Stack" (v2)');
+
+        // sanitizeFolderName removes quotes and parens, replaces spaces
+        $this->assertSame('My_Stack_v2', $stack->project);
+        $this->assertSame('My "Stack" (v2)', $stack->getName());
+    }
+
+    public function testCreateNewWithDescription(): void
+    {
+        $stack = \StackInfo::createNew($this->tempRoot, 'Described', 'A test stack');
+
+        $this->assertSame('A test stack', $stack->getDescription());
+        $this->assertFileExists($stack->path . '/description');
+    }
+
+    public function testCreateNewWithoutDescription(): void
+    {
+        $stack = \StackInfo::createNew($this->tempRoot, 'NoDesc');
+
+        $this->assertSame('', $stack->getDescription());
+        $this->assertFileDoesNotExist($stack->path . '/description');
+    }
+
+    public function testCreateNewWithIndirectPath(): void
+    {
+        $indirectDir = $this->tempRoot . '/external';
+        mkdir($indirectDir, 0755, true);
+
+        $stack = \StackInfo::createNew($this->tempRoot, 'Indirect Stack', '', $indirectDir);
+
+        $this->assertTrue($stack->isIndirect);
+        $this->assertSame($indirectDir, $stack->composeSource);
+        $this->assertFileExists($stack->path . '/indirect');
+        $this->assertSame($indirectDir, trim(file_get_contents($stack->path . '/indirect')));
+        // Should have created compose.yaml at indirect target
+        $this->assertFileExists($indirectDir . '/compose.yaml');
+    }
+
+    public function testCreateNewIndirectExistingComposeFile(): void
+    {
+        $indirectDir = $this->tempRoot . '/existing';
+        mkdir($indirectDir, 0755, true);
+        file_put_contents("$indirectDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+
+        $stack = \StackInfo::createNew($this->tempRoot, 'Existing Indirect', '', $indirectDir);
+
+        $this->assertTrue($stack->isIndirect);
+        // Should NOT overwrite existing compose file
+        $this->assertSame("services:\n  web:\n    image: nginx\n", file_get_contents("$indirectDir/compose.yaml"));
+    }
+
+    public function testCreateNewHandlesFolderCollision(): void
+    {
+        // Pre-create the folder that sanitizeFolderName would produce
+        $existingDir = $this->tempRoot . '/Collide';
+        mkdir($existingDir, 0755, true);
+
+        $stack = \StackInfo::createNew($this->tempRoot, 'Collide');
+
+        // Should have created a different folder (with random suffix)
+        $this->assertNotSame('Collide', $stack->project);
+        $this->assertStringStartsWith('Collide', $stack->project);
+        $this->assertDirectoryExists($stack->path);
+    }
+
+    public function testCreateNewInitializesOverride(): void
+    {
+        $stack = \StackInfo::createNew($this->tempRoot, 'Override Init');
+
+        $this->assertInstanceOf(\OverrideInfo::class, $stack->overrideInfo);
+        // Override file should be created for non-indirect stacks
+        $overridePath = $stack->getOverridePath();
+        $this->assertNotNull($overridePath);
+        $this->assertFileExists($overridePath);
+    }
+
+    public function testCreateNewIsCached(): void
+    {
+        $stack = \StackInfo::createNew($this->tempRoot, 'Cached New');
+
+        // Fetching via fromProject should return the same cached instance
+        $fetched = \StackInfo::fromProject($this->tempRoot, $stack->project);
+        $this->assertSame($stack, $fetched);
+    }
+
+    public function testCreateNewWritesNameFile(): void
+    {
+        $stack = \StackInfo::createNew($this->tempRoot, 'Display Name');
+
+        $this->assertFileExists($stack->path . '/name');
+        $this->assertSame('Display Name', file_get_contents($stack->path . '/name'));
+    }
 }

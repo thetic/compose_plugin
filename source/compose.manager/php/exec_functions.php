@@ -45,18 +45,22 @@ function normalizeImageForUpdateCheck($image) {
  * Sanitize a stack name to create a safe folder name.
  * Removes special characters that could cause issues in paths.
  *
+ * @deprecated Moved to util.php. This stub remains for backward compatibility.
+ *
  * @param string $stackName The stack name to sanitize
  * @return string The sanitized folder name
  */
-function sanitizeFolderName($stackName) {
-    $folderName = str_replace('"', "", $stackName);
-    $folderName = str_replace("'", "", $folderName);
-    $folderName = str_replace("&", "", $folderName);
-    $folderName = str_replace("(", "", $folderName);
-    $folderName = str_replace(")", "", $folderName);
-    $folderName = preg_replace("/ {2,}/", " ", $folderName);
-    $folderName = preg_replace("/\s/", "_", $folderName);
-    return $folderName;
+if (!function_exists('sanitizeFolderName')) {
+    function sanitizeFolderName($stackName) {
+        $folderName = str_replace('"', "", $stackName);
+        $folderName = str_replace("'", "", $folderName);
+        $folderName = str_replace("&", "", $folderName);
+        $folderName = str_replace("(", "", $folderName);
+        $folderName = str_replace(")", "", $folderName);
+        $folderName = preg_replace("/ {2,}/", " ", $folderName);
+        $folderName = preg_replace("/\s/", "_", $folderName);
+        return $folderName;
+    }
 }
 
 /**
