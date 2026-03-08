@@ -15,6 +15,7 @@ class StackInfoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        \StackInfo::clearCache();
         $this->tempRoot = $this->createTempDir();
     }
 
@@ -410,6 +411,29 @@ class StackInfoTest extends TestCase
         // Mutate the file — should still return cached value
         file_put_contents("$stackDir/name", "Changed Name");
         $this->assertSame('Original Name', $info->getName());
+    }
+
+    public function testFromProjectReturnsCachedInstance(): void
+    {
+        $stack = 'cached-instance';
+        mkdir($this->tempRoot . '/' . $stack);
+
+        $first = \StackInfo::fromProject($this->tempRoot, $stack);
+        $second = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame($first, $second);
+    }
+
+    public function testClearCacheForcesFreshInstance(): void
+    {
+        $stack = 'clear-cache';
+        mkdir($this->tempRoot . '/' . $stack);
+
+        $first = \StackInfo::fromProject($this->tempRoot, $stack);
+        \StackInfo::clearCache();
+        $second = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertNotSame($first, $second);
     }
 
     // ===========================================

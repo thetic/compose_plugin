@@ -681,6 +681,9 @@ class StackInfo
     /** @var array Lazy-loaded metadata cache (field => value|null, unset = not loaded) */
     private array $metadataCache = [];
 
+    /** @var array<string, StackInfo> Static instance cache keyed by composeRoot/project */
+    private static array $instances = [];
+
     /**
      * @param string $composeRoot Compose root directory
      * @param string $project Directory basename of the stack
@@ -709,13 +712,36 @@ class StackInfo
     /**
      * Create a StackInfo for a project directory under the compose root.
      *
+     * Returns a cached instance if one already exists for this composeRoot/project
+     * combination, avoiding redundant filesystem and override resolution work.
+     *
      * @param string $composeRoot The compose projects root directory
      * @param string $project Directory basename of the stack
      * @return StackInfo
      */
     public static function fromProject(string $composeRoot, string $project): self
     {
-        return new self($composeRoot, $project);
+        $key = rtrim($composeRoot, '/') . '/' . $project;
+        if (!isset(self::$instances[$key])) {
+            self::$instances[$key] = new self($composeRoot, $project);
+        }
+        return self::$instances[$key];
+    }
+
+    /**
+     * Clear the static instance cache.
+     *
+     * Primarily useful in tests to ensure a clean state between test cases.
+     *
+     * @param string|null $key Optional specific key (composeRoot/project) to clear; null clears all.
+     */
+    public static function clearCache(?string $key = null): void
+    {
+        if ($key !== null) {
+            unset(self::$instances[$key]);
+        } else {
+            self::$instances = [];
+        }
     }
 
     // ---------------------------------------------------------------
