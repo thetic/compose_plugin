@@ -1634,7 +1634,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             script: project,
             newName: newName
         }, function(data) {
-            window.location.reload();
+            refreshStackByProject(project);
         });
     }
 
@@ -1643,7 +1643,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $("#" + myID).text(oldName);
         $("#" + myID).tooltipster("enable");
         $("#" + myID).tooltipster("close");
-        window.location.reload();
     }
 
     function cancelDesc(myID) {
@@ -1767,7 +1766,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                                     text: message,
                                     type: type
                                 }, function() {
-                                    location.reload();
+                                    refreshStackByProject(project);
                                 });
                             });
                         }
@@ -1875,7 +1874,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 text: "All changes have been saved. Container labels will take effect when you start the stack.",
                 type: "success"
             }, function() {
-                location.reload();
+                refreshStackByProject(project);
             });
             return;
         }
@@ -1910,7 +1909,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     timer: 2000,
                     showConfirmButton: false
                 }, function() {
-                    location.reload();
+                    refreshStackByProject(project);
                 });
             }
         });
@@ -1987,6 +1986,15 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }, 'daemon', 'error');
             }
         });
+    }
+
+    // Helper to refresh a single stack by project name (wrapper for refreshStackRow)
+    function refreshStackByProject(project) {
+        var $stackRow = $('#compose_stacks tr.compose-sortable[data-project="' + project + '"]');
+        if ($stackRow.length > 0) {
+            var stackId = $stackRow.attr('id').replace('stack-row-', '');
+            refreshStackRow(stackId, project);
+        }
     }
 
     // Fetch fresh container data from server and update the parent stack row.
@@ -3234,7 +3242,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (labelsWereModified) {
                     promptRecreateContainers();
                 } else {
-                    // Close editor and reload page
+                    // Close editor and refresh stack locally
                     doCloseEditorModal();
                     swal({
                         title: "Saved!",
@@ -3244,7 +3252,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         showConfirmButton: false
                     });
                     setTimeout(function() {
-                        location.reload();
+                        refreshStackByProject(editorModal.currentProject);
                     }, 1600);
                 }
             } else {
