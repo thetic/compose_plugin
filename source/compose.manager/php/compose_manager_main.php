@@ -1152,9 +1152,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         if (stackContainersCache[stackId] && stackInfo.containers) {
             stackContainersCache[stackId].forEach(function(cached) {
                 stackInfo.containers.forEach(function(updated) {
-                    if (cached.Name === updated.container) {
+                    if (cached.name === updated.name) {
                         cached.hasUpdate = updated.hasUpdate;
-                        cached.updateStatus = updated.status;
+                        cached.updateStatus = updated.updateStatus;
                         cached.localSha = updated.localSha || '';
                         cached.remoteSha = updated.remoteSha || '';
                         cached.isPinned = updated.isPinned || false;
@@ -2511,13 +2511,13 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             html += '<div style="font-weight:bold;margin-bottom:10px;font-size:0.9em;color:#999;"><i class="fa fa-cubes"></i> ' + cfg.listTitle + '</div>';
 
             containers.forEach(function(container, index) {
-                var containerName = container.Name || container.Service || 'Unknown';
-                var shortName = container.Service || containerName.replace(/^[^-]+-/, '');
-                var image = container.Image || '';
+                var containerName = container.name || container.service || 'Unknown';
+                var shortName = container.service || containerName.replace(/^[^-]+-/, '');
+                var image = container.image || '';
                 var imageParts = image.split(':');
                 var imageName = imageParts[0].split('/').pop();
                 var imageTag = imageParts[1] || 'latest';
-                var state = container.State || 'unknown';
+                var state = container.state || 'unknown';
                 var stateColor = state === 'running' ? '#3c3' : (state === 'paused' ? '#f80' : '#888');
                 var stateIcon = state === 'running' ? 'play' : (state === 'paused' ? 'pause' : 'square');
 
@@ -2527,8 +2527,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var localSha = container.localSha || '';
                 var remoteSha = container.remoteSha || '';
 
-                var iconSrc = (container.Icon && (container.Icon.indexOf('http://') === 0 || container.Icon.indexOf('https://') === 0 || container.Icon.indexOf('data:image/') === 0)) ?
-                    escapeAttr(container.Icon) :
+                var iconSrc = (container.icon && (container.icon.indexOf('http://') === 0 || container.icon.indexOf('https://') === 0 || container.icon.indexOf('data:image/') === 0)) ?
+                    escapeAttr(container.icon) :
                     '/plugins/dynamix.docker.manager/images/question.png';
 
                 // Grey out containers without updates when showing update dialog
@@ -3782,9 +3782,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         html += '<tbody>';
 
         containers.forEach(function(container, idx) {
-            var containerName = container.Name || container.Service || 'Unknown';
-            var shortName = container.Service || containerName.replace(/^[^-]+-/, ''); // Prefer service name; fall back to stripping project prefix
-            var image = container.Image || '';
+            var containerName = container.name || container.service || 'Unknown';
+            var shortName = container.service || containerName.replace(/^[^-]+-/, ''); // Prefer service name; fall back to stripping project prefix
+            var image = container.image || '';
 
             // Parse image - handle docker.io/ prefix and @sha256: digest
             // Format could be: docker.io/library/redis:6.2-alpine@sha256:abc123...
@@ -3805,8 +3805,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             var imageParts = imageForParsing.split(':');
             var imageSource = imageParts[0] || ''; // Image name without tag
             var imageTag = (imageParts[1] || 'latest') + digestSuffix; // Include digest suffix if present
-            var state = container.State || 'unknown';
-            var containerId = (container.Id || containerName).substring(0, 12);
+            var state = container.state || 'unknown';
+            var containerId = (container.id || containerName).substring(0, 12);
             var uniqueId = 'ct-' + stackId + '-' + idx;
 
             // Status like Docker tab
@@ -3818,8 +3818,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // Get networks and IPs
             var networkNames = [];
             var ipAddresses = [];
-            if (container.Networks && container.Networks.length > 0) {
-                container.Networks.forEach(function(net) {
+            if (container.networks && container.networks.length > 0) {
+                container.networks.forEach(function(net) {
                     networkNames.push(net.name || '-');
                     ipAddresses.push(net.ip || '-');
                 });
@@ -3832,8 +3832,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // Format ports - separate container ports and mapped ports
             var containerPorts = [];
             var lanPorts = [];
-            if (container.Ports && container.Ports.length > 0) {
-                container.Ports.forEach(function(p) {
+            if (container.ports && container.ports.length > 0) {
+                container.ports.forEach(function(p) {
                     // Format: "192.168.1.10:8080->80/tcp" or "80/tcp"
                     var parts = p.split('->');
                     if (parts.length === 2) {
@@ -3850,8 +3850,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // WebUI
             // WebUI — already resolved server-side by exec.php
             var webui = '';
-            if (container.WebUI) {
-                webui = container.WebUI;
+            if (container.webUI) {
+                webui = container.webUI;
                 if (!isValidWebUIUrl(webui)) webui = '';
             }
 
@@ -3860,11 +3860,11 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // Container name column - matches Docker tab exactly
             html += '<td class="ct-name">';
             html += '<span class="outer ' + outerClass + '">';
-            var containerShell = container.Shell || '/bin/sh';
+            var containerShell = container.shell || '/bin/sh';
             html += '<span id="' + uniqueId + '" class="hand" data-name="' + escapeAttr(containerName) + '" data-state="' + escapeAttr(state) + '" data-webui="' + escapeAttr(webui) + '" data-stackid="' + escapeAttr(stackId) + '" data-shell="' + escapeAttr(containerShell) + '">';
             // Use actual image like Docker tab - either container icon or default question.png
-            var iconSrc = (container.Icon && (isValidWebUIUrl(container.Icon) || container.Icon.startsWith('data:image/'))) ?
-                container.Icon :
+            var iconSrc = (container.icon && (isValidWebUIUrl(container.icon) || container.icon.startsWith('data:image/'))) ?
+                container.icon :
                 '/plugins/dynamix.docker.manager/images/question.png';
             html += '<img src="' + escapeAttr(iconSrc) + '" class="img" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
             html += '</span>';
