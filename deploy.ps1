@@ -1,0 +1,177 @@
+#Requires -Version 7.0
+<#!
+.SYNOPSIS
+	Build and deploy compose.manager package to a remote Unraid host.
+
+.DESCRIPTION
+	Builds (or reuses) a package, uploads it via SCP, installs it with installpkg,
+	and removes the temporary package file from the remote host.
+
+.PARAMETER Version
+	Package version to build. If omitted, build.ps1 resolves from compose.manager.plg.
+
+.PARAMETER Dev
+	Generate a development build with timestamp: YYYY.MM.DD-dev-HHMMSS
+
+.PARAMETER RemoteHost
+	Remote hostname or IP.
+
+.PARAMETER User
+	SSH username.
+
+.PARAMETER RemoteDir
+	Remote directory used for upload/install.
+
+.PARAMETER PackagePath
+	Existing package path to deploy. If not set, script builds by default.
+
+.PARAMETER SkipBuild
+	Skip build and deploy latest package from archive if PackagePath is not specified.
+
+.PARAMETER ComposeVersion
+	Docker Compose version to pass through to build.ps1.
+
+.PARAMETER AceVersion
+	Ace Editor version to pass through to build.ps1.
+
+.EXAMPLE
+	./deploy.ps1 -Version "2026.03.07-dev" -RemoteHost "saturn"
+
+.EXAMPLE
+	./deploy.ps1 -Dev -RemoteHost "saturn"
+
+.EXAMPLE
+	./deploy.ps1 -SkipBuild -RemoteHost "saturn"
+
+.EXAMPLE
+	./deploy.ps1 -PackagePath ".\archive\compose.manager-package-2026.03.07-dev.txz" -RemoteHost "saturn"
+#>
+
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+param(
+	[string]$Version,
+	[switch]$Dev,
+	[string]$RemoteHost = "",
+	[string]$User = "root",
+	[string]$RemoteDir = "/tmp",
+	[string]$PackagePath,
+	[switch]$SkipBuild,
+	[string]$ComposeVersion = "5.0.2",
+	[string]$AceVersion = "1.43.5"
+)
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$scriptDir = $PSScriptRoot
+$archiveDir = Join-Path $scriptDir "archive"
+
+# Generate dev version with timestamp if -Dev flag is used
+if ($Dev) {
+	$now = Get-Date
+	$Version = $now.ToString("yyyy.MM.dd") + "-dev-" + $now.ToString("HHmmss")
+	Write-Host "Generated dev version: $Version" -ForegroundColor Cyan
+}
+
+function Get-LatestPackagePath {
+	param([string]$Path)
+
+	$latest = Get-ChildItem -Path $Path -Filter 'compose.manager-package-*.txz' -File |
+		Sort-Object LastWriteTime -Descending |
+		Select-Object -First 1
+
+	if (-not $latest) {
+		throw "No package found in $Path"
+	}
+
+	return $latest.FullName
+}
+
+if (-not $PackagePath) {
+	if ($SkipBuild) {
+		Write-Host "Skipping build; using latest package from archive..." -ForegroundColor Yellow
+		$PackagePath = Get-LatestPackagePath -Path $archiveDir
+	} else {
+		$buildTarget = "local package"
+		$buildAction = "Build package via build.ps1"
+		if ($PSCmdlet.ShouldProcess($buildTarget, $buildAction)) {
+			Write-Host "Building package..." -ForegroundColor Yellow
+
+			$buildParams = @{
+				ComposeVersion = $ComposeVersion
+				AceVersion = $AceVersion
+			}
+
+			if ($Dev) {
+				$buildParams.Dev = $true
+			} elseif ($Version) {
+				$buildParams.Version = $Version
+			}
+
+			$buildResult = & (Join-Path $scriptDir "build.ps1") @buildParams
+			$buildInfo = if ($buildResult -is [array]) { $buildResult | Where-Object { $_ -is [hashtable] } | Select-Object -Last 1 } else { $buildResult }
+			$PackagePath = $buildInfo.PackagePath
+		} else {
+			if ($Dev) {
+				$now = Get-Date
+				$simulatedVersion = $now.ToString("yyyy.MM.dd") + "-dev-" + $now.ToString("HHmmss")
+			} elseif ($Version) {
+				$simulatedVersion = $Version
+			} else {
+				$simulatedVersion = "<version-from-plg>"
+			}
+			$PackagePath = Join-Path $archiveDir "compose.manager-package-$simulatedVersion.txz"
+			Write-Host "WhatIf: Simulating build output package path: $PackagePath" -ForegroundColor DarkYellow
+		}
+	}
+} else {
+	if (-not (Test-Path -Path $PackagePath -PathType Leaf)) {
+		if ($WhatIfPreference) {
+			Write-Host "WhatIf: PackagePath does not exist locally, continuing with simulated deploy target: $PackagePath" -ForegroundColor DarkYellow
+		} else {
+			throw "PackagePath does not exist: $PackagePath"
+		}
+	} else {
+		$PackagePath = (Resolve-Path $PackagePath).Path
+	}
+}
+
+$packageName = Split-Path -Leaf $PackagePath
+$remotePackage = "$RemoteDir/$packageName"
+$remoteTarget = "$User@$RemoteHost"
+
+Write-Host "Deploying package:" -ForegroundColor Green
+Write-Host "  Local : $PackagePath" -ForegroundColor Gray
+Write-Host "  Remote: ${remoteTarget}:$remotePackage" -ForegroundColor Gray
+
+$uploadAction = "Upload package via SCP"
+if ($PSCmdlet.ShouldProcess("${remoteTarget}:$RemoteDir/", $uploadAction)) {
+	Write-Host "Uploading package via SCP..." -ForegroundColor Yellow
+	scp -- "$PackagePath" "$remoteTarget`:$RemoteDir/"
+	if ($LASTEXITCODE -ne 0) {
+		throw "SCP upload failed with exit code $LASTEXITCODE"
+	}
+}
+
+$remoteCommand = "installpkg '$remotePackage' && rm -f '$remotePackage'"
+$installAction = "Install package and remove temporary file"
+if ($PSCmdlet.ShouldProcess($remoteTarget, "$installAction (command: $remoteCommand)")) {
+	Write-Host "Installing package on remote host..." -ForegroundColor Yellow
+	ssh -- "$remoteTarget" "$remoteCommand"
+	if ($LASTEXITCODE -ne 0) {
+		throw "Remote install failed with exit code $LASTEXITCODE"
+	}
+}
+
+if ($WhatIfPreference) {
+	Write-Host "WhatIf simulation complete." -ForegroundColor Green
+} else {
+	Write-Host "Deployment complete." -ForegroundColor Green
+}
+return @{
+	Host = $RemoteHost
+	User = $User
+	PackagePath = $PackagePath
+	RemotePackage = $remotePackage
+	WhatIf = [bool]$WhatIfPreference
+}

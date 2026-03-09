@@ -11,6 +11,9 @@
 .PARAMETER Version
     The version string for the package (e.g., "0.1.0"). Defaults to version in .plg file.
 
+.PARAMETER Dev
+    Generate a development build with timestamp: YYYY.MM.DD-dev-HHMMSS
+
 .PARAMETER ComposeVersion
     Docker Compose version to include. Default: 2.40.3
 
@@ -20,17 +23,26 @@
 .EXAMPLE
     ./build.ps1
     ./build.ps1 -Version "0.2.0"
+    ./build.ps1 -Dev
     ./build.ps1 -ComposeVersion "2.41.0"
 #>
 
 param(
     [string]$Version,
+    [switch]$Dev,
     [string]$ComposeVersion = "5.0.2",
     [string]$AceVersion = "1.43.5"
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
+
+# Generate dev version with timestamp if -Dev flag is used
+if ($Dev) {
+    $now = Get-Date
+    $Version = $now.ToString("yyyy.MM.dd") + "-dev-" + $now.ToString("HHmmss")
+    Write-Host "Generated dev version: $Version" -ForegroundColor Cyan
+}
 
 # If no version specified, read from .plg file
 if (-not $Version) {
