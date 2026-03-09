@@ -3799,7 +3799,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             var imageSource = imageParts[0] || ''; // Image name without tag
             var imageTag = (imageParts[1] || 'latest') + digestSuffix; // Include digest suffix if present
             var state = container.state || 'unknown';
-            var containerId = (container.id || containerName).substring(0, 12);
+            var containerId = String(container.id || containerName || '').substring(0, 12);
             var uniqueId = 'ct-' + stackId + '-' + idx;
 
             // Status like Docker tab
