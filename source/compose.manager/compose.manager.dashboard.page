@@ -457,24 +457,38 @@ $script = <<<'EOT'
                 if (response.containers && response.containers.length > 0) {
                     var html = '';
                     response.containers.forEach(function(ct) {
-                        // API returns capitalized property names: State, ID, Icon, Name, WebUI, Image, UpdateStatus, LocalSha, RemoteSha
-                        var isRunning = ct.State === 'running';
+                        // Tolerate PascalCase/camelCase field variants from different API paths.
+                        var ctName = ct.Name || ct.name || ct.Service || ct.service || 'unknown';
+                        var ctState = ct.State || ct.state || '';
+                        var ctIdRaw = ct.ID || ct.Id || ct.id || ctName;
+                        var ctId = String(ctIdRaw || ctName);
+                        var ctIdShort = ctId.substring(0, 12);
+                        var ctIcon = ct.Icon || ct.icon || '/plugins/dynamix.docker.manager/images/question.png';
+                        var ctShell = ct.Shell || ct.shell || '/bin/bash';
+                        var ctWebUI = ct.WebUI || ct.webUI || ct.webui || '';
+                        var ctImage = ct.Image || ct.image || '';
+                        var ctUpdateStatus = ct.UpdateStatus || ct.updateStatus || 'unknown';
+                        var ctLocalSha = ct.LocalSha || ct.localSha || '';
+                        var ctRemoteSha = ct.RemoteSha || ct.remoteSha || '';
+                        var ctStartedAt = ct.StartedAt || ct.startedAt || '';
+
+                        var isRunning = ctState === 'running';
                         var stateIcon = isRunning ? 'fa-play' : 'fa-square';
                         var stateColor = isRunning ? 'green-text' : 'red-text';
                         var stateText = isRunning ? 'started' : 'stopped';
-                        var ctElId = 'dash-ct-' + ct.ID.substring(0, 12);
-                        var imgSrc = ct.Icon || '/plugins/dynamix.docker.manager/images/question.png';
-                        var shell = ct.Shell || '/bin/bash';
-                        var shortId = ct.ID.substring(0, 12);
-                        var webui = resolveContainerWebUI(ct.WebUI);
+                        var ctElId = 'dash-ct-' + ctIdShort;
+                        var imgSrc = ctIcon;
+                        var shell = ctShell;
+                        var shortId = ctIdShort;
+                        var webui = resolveContainerWebUI(ctWebUI);
                         // Parse image to get repo and tag
-                        var image = ct.Image || '';
+                        var image = ctImage;
                         var imageDisplay = image.replace(/^.*\//, ''); // Remove registry prefix
 
                         // Update status
-                        var updateStatus = ct.UpdateStatus || 'unknown';
-                        var localSha = ct.LocalSha || '';
-                        var remoteSha = ct.RemoteSha || '';
+                        var updateStatus = ctUpdateStatus;
+                        var localSha = ctLocalSha;
+                        var remoteSha = ctRemoteSha;
                         var updateHtml = '';
                         if (updateStatus === 'up-to-date') {
                             updateHtml = '<span class="green-text"><i class="fa fa-check"></i> current</span>';
@@ -485,14 +499,14 @@ $script = <<<'EOT'
                         }
 
                         // Container uptime - use shared smart formatting
-                        var ctUptime = formatUptime(ct.StartedAt, isRunning);
+                        var ctUptime = formatUptime(ctStartedAt, isRunning);
 
                         html += '<div class="compose-dash-container">';
-                        html += '<span class="compose-dash-ct-icon" id="' + ctElId + '" data-ct-name="' + ct.Name + '" data-ct-id="' + shortId + '" data-ct-running="' + (isRunning ? '1' : '0') + '" data-ct-webui="' + escapeAttr(webui) + '" data-ct-shell="' + escapeAttr(shell) + '">';
+                        html += '<span class="compose-dash-ct-icon" id="' + ctElId + '" data-ct-name="' + escapeAttr(ctName) + '" data-ct-id="' + escapeAttr(shortId) + '" data-ct-running="' + (isRunning ? '1' : '0') + '" data-ct-webui="' + escapeAttr(webui) + '" data-ct-shell="' + escapeAttr(shell) + '">';
                         html += '<img src="' + escapeAttr(imgSrc) + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';">';
                         html += '</span>';
                         html += '<span class="compose-dash-ct-info">';
-                        html += '<div class="compose-dash-ct-name">' + ct.Name + '</div>';
+                        html += '<div class="compose-dash-ct-name">' + escapeHtml(ctName) + '</div>';
                         html += '<div class="compose-dash-ct-state ' + stateColor + '"><i class="fa ' + stateIcon + '"></i> ' + stateText + '</div>';
                         html += '</span>';
                         html += '<span class="compose-dash-ct-cols">';
