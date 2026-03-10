@@ -120,13 +120,12 @@ switch ($_POST['action']) {
         break;
     case 'getYml':
         $script = getPostScript();
-        $basePath = getPath("$compose_root/$script");
-        $foundComposeFile = findComposeFile($basePath);
-        $composeFilePath = $foundComposeFile !== false ? $foundComposeFile : "$basePath/compose.yaml";
-        $fileName = basename($composeFilePath);
+        // Resolve compose file path via StackInfo
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $composeFilePath = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/compose.yaml');
 
-        if ($foundComposeFile !== false) {
-            // findComposeFile() guarantees the file exists; detect unreadable files explicitly.
+        if ($stackInfo->composeFilePath !== null) {
+            // StackInfo resolved the file; read it
             $scriptContents = file_get_contents($composeFilePath);
             if ($scriptContents === false) {
                 echo json_encode(['result' => 'error', 'message' => "Unable to read compose file: $composeFilePath"]);
@@ -152,20 +151,16 @@ switch ($_POST['action']) {
         break;
     case 'getEnv':
         $script = getPostScript();
-        $projectPath = "$compose_root/$script";
-        $basePath = getPath($projectPath);
-        $fileName = "$basePath/.env";
-        if (is_file("$projectPath/envpath")) {
-            $fileName = file_get_contents("$projectPath/envpath");
-            $fileName = str_replace("\r", "", $fileName);
-        }
+        // Resolve env file path via StackInfo
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $fileName = $stackInfo->getEnvFilePath() ?? ($stackInfo->composeSource . '/.env');
 
-        $scriptContents = is_file("$fileName") ? file_get_contents("$fileName") : "";
+        $scriptContents = is_file($fileName) ? file_get_contents($fileName) : "";
         $scriptContents = str_replace("\r", "", $scriptContents);
         if (!$scriptContents) {
             $scriptContents = "\n";
         }
-        echo json_encode(['result' => 'success', 'fileName' => "$fileName", 'content' => $scriptContents]);
+        echo json_encode(['result' => 'success', 'fileName' => $fileName, 'content' => $scriptContents]);
         break;
     case 'getOverride':
         $script = getPostScript();
@@ -184,12 +179,11 @@ switch ($_POST['action']) {
     case 'saveYml':
         $script = getPostScript();
         $scriptContents = isset($_POST['scriptContents']) ? $_POST['scriptContents'] : "";
-        $basePath = getPath("$compose_root/$script");
-        $composeFilePath = findComposeFile($basePath) ?: "$basePath/" . COMPOSE_FILE_NAMES[0];
+        // Resolve compose file path via StackInfo
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $composeFilePath = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
 
         // Before saving, detect service renames and migrate override entries
-        $stackInfo = StackInfo::fromProject($compose_root, $script);
-
         if (is_file($composeFilePath)) {
             $oldContent = file_get_contents($composeFilePath);
             $stackInfo->overrideInfo->migrateOnRename($oldContent, $scriptContents);
@@ -201,15 +195,11 @@ switch ($_POST['action']) {
     case 'saveEnv':
         $script = getPostScript();
         $scriptContents = isset($_POST['scriptContents']) ? $_POST['scriptContents'] : "";
-        $projectPath = "$compose_root/$script";
-        $basePath = getPath($projectPath);
-        $fileName = "$basePath/.env";
-        if (is_file("$projectPath/envpath")) {
-            $fileName = file_get_contents("$projectPath/envpath");
-            $fileName = str_replace("\r", "", $fileName);
-        }
+        // Resolve env file path via StackInfo
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $fileName = $stackInfo->getEnvFilePath() ?? ($stackInfo->composeSource . '/.env');
 
-        file_put_contents("$fileName", $scriptContents);
+        file_put_contents($fileName, $scriptContents);
         echo "$fileName saved";
         break;
     case 'saveOverride':
@@ -877,49 +867,18 @@ switch ($_POST['action']) {
             'update-status' => UNRAID_UPDATE_STATUS_FILE
         ];
 
-        // Iterate through all stacks - find compose files with any supported name
-        $stacks = [];
-        $stackDirs = glob("$compose_root/*", GLOB_ONLYDIR | GLOB_NOSORT);
-        foreach ($stackDirs as $stackDir) {
-            $found = findComposeFile($stackDir);
-            if ($found) {
-                $stacks[] = $found;
-            }
-        }
-        $indirectStacks = glob("$compose_root/*/indirect", GLOB_NOSORT);
+        // Iterate through all compose stack projects
+        $projects = @array_diff(@scandir($compose_root), ['.', '..']) ?: [];
 
-        foreach ($indirectStacks as $indirect) {
-            $contents = file_get_contents($indirect);
-            if ($contents === false) {
-                // Skip unreadable indirect files
-                continue;
-            }
-            $indirectPath = trim($contents);
-            if ($indirectPath === '') {
-                // Skip empty indirect paths
+        foreach ($projects as $project) {
+            // Skip if not a valid compose project (no compose file or indirect reference)
+            if (!hasComposeFile("$compose_root/$project") && !is_file("$compose_root/$project/indirect")) {
                 continue;
             }
 
-            $found = findComposeFile($indirectPath);
-            if ($found) {
-                $stacks[] = $found;
-            }
-        }
-
-        foreach ($stacks as $composeFile) {
-            $stackDir = dirname($composeFile);
-            $stackName = basename(dirname($composeFile));
-
-            // For indirect stacks, find the actual stack folder
-            foreach (glob("$compose_root/*/indirect", GLOB_NOSORT) as $indirect) {
-                if (trim(file_get_contents($indirect)) == $stackDir) {
-                    $stackName = basename(dirname($indirect));
-                    break;
-                }
-            }
-
-            // Resolve stack identity and compose CLI arguments via StackInfo
-            $stackInfoItem = StackInfo::fromProject($compose_root, $stackName);
+            // Resolve stack identity via StackInfo
+            $stackInfoItem = StackInfo::fromProject($compose_root, $project);
+            $stackName = $project;
             $args = $stackInfoItem->buildComposeArgs();
             $projectName = $args['projectName'];
 
@@ -1445,5 +1404,26 @@ switch ($_POST['action']) {
         }
 
         echo json_encode(['result' => 'success', 'message' => 'Backup settings saved.']);
+        break;
+
+    case 'listProjects':
+        // Return list of compose projects for UI dropdowns/tables
+        $projects = @array_diff(@scandir($compose_root), ['.', '..']) ?: [];
+        $out = [];
+        foreach ($projects as $project) {
+            if (!hasComposeFile("$compose_root/$project") && !is_file("$compose_root/$project/indirect")) {
+                continue;
+            }
+            $stackInfo = StackInfo::fromProject($compose_root, $project);
+            $id = str_replace('.', '-', $project);
+            $id = str_replace(' ', '', $id);
+            $out[] = [
+                'id' => $id,
+                'project' => $stackInfo->project,
+                'name' => $stackInfo->getName(),
+                'path' => $stackInfo->composeSource
+            ];
+        }
+        echo json_encode($out);
         break;
 }
