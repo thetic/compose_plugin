@@ -59,7 +59,9 @@ function sanitizeStr($a)
 
 /**
  * Sanitize a stack name to create a safe folder name.
- * Removes special characters that could cause issues in paths.
+ * Removes special characters that could cause issues in paths,
+ * including path separators and traversal sequences to prevent
+ * directory escape attacks.
  *
  * @param string $stackName The stack name to sanitize
  * @return string The sanitized folder name
@@ -71,6 +73,8 @@ function sanitizeFolderName(string $stackName): string
     $folderName = str_replace('&', '', $folderName);
     $folderName = str_replace('(', '', $folderName);
     $folderName = str_replace(')', '', $folderName);
+    // Remove path separators and traversal sequences
+    $folderName = str_replace(['/', '\\', '..'], '', $folderName);
     $folderName = preg_replace('/ {2,}/', ' ', $folderName);
     $folderName = preg_replace('/\s/', '_', $folderName);
     return $folderName;
@@ -976,7 +980,7 @@ class StackInfo
      */
     public function buildComposeArgs(): array
     {
-        $composeFile = $this->composeFilePath ?? ($this->composeSource . '/compose.yaml');
+        $composeFile = $this->composeFilePath ?? ($this->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
 
         $files = "-f " . escapeshellarg($composeFile);
 
@@ -1058,7 +1062,7 @@ class StackInfo
 
         // 0. Validate stack name is not empty
         if (trim($stackName) === '') {
-            throw new \RuntimeException("Stack name cannot be empty.");
+            throw new \RuntimeException("Stack name cannot be empty");
         }
 
         // 1. Generate a unique folder name
@@ -1067,6 +1071,18 @@ class StackInfo
             throw new \RuntimeException("Stack name produced an empty folder name after sanitization.");
         }
         $folder = $composeRoot . '/' . $folderName;
+
+        // Verify the resolved path stays within composeRoot (defense-in-depth)
+        $realComposeRoot = realpath($composeRoot);
+        if ($realComposeRoot === false) {
+            throw new \RuntimeException("Invalid compose root directory.");
+        }
+        // For new folders, check that the parent resolves correctly
+        $resolvedParent = realpath(dirname($folder));
+        if ($resolvedParent === false || strpos($resolvedParent, $realComposeRoot) !== 0) {
+            throw new \RuntimeException("Invalid stack name: path would escape compose root.");
+        }
+
         if (is_dir($folder)) {
             // Append a random suffix to the base name to avoid collision;
             // re-derive from the clean base each attempt so suffixes don't compound.

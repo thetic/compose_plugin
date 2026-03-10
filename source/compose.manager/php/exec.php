@@ -56,7 +56,16 @@ switch ($_POST['action']) {
             $stack = StackInfo::createNew($compose_root, $stackName, $stackDesc, $indirect);
         } catch (\RuntimeException $e) {
             clientDebug('[stack] Failed to create stack: ' . $e->getMessage(), null, 'daemon', 'error');
-            echo json_encode(['result' => 'error', 'message' => $e->getMessage()]);
+            // Return user-safe messages; avoid exposing filesystem paths
+            $userMessage = match (true) {
+                str_contains($e->getMessage(), 'cannot be empty') => 'Stack name cannot be empty.',
+                str_contains($e->getMessage(), 'empty folder name') => 'Invalid stack name.',
+                str_contains($e->getMessage(), 'unique folder name') => 'Could not create a unique folder for this stack.',
+                str_contains($e->getMessage(), 'escape compose root') => 'Invalid stack name.',
+                str_contains($e->getMessage(), 'Invalid compose root') => 'Server configuration error.',
+                default => 'Failed to create stack. Check server logs for details.',
+            };
+            echo json_encode(['result' => 'error', 'message' => $userMessage]);
             break;
         }
 
