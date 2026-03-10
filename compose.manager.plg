@@ -28,21 +28,70 @@
 >
 
 <CHANGES>
-###2026.03.06
-- Bug Fixes: update documentation and code references from docker-compose.yml to compose.yaml as default/fallback
-- Bug Fixes: standardize project name handling to use sanitized directory basename across compose scripts
-- Bug Fixes: update change handler binding for compose stacks toggle to improve event delegation
-- Bug Fixes: replace logger calls with clientDebug for multi-stack command logging in echoComposeCommandMultiple
-- Bug Fixes: update project name variable in echoComposeCommandMultiple to use folder name to match echoComposeCommand func
-- Bug Fixes: remove unused projectName var from echoComposeCommand
-- Bug Fixes: remove retry logic from command execution in compose script
-- Bug Fixes: update fallback compose file name to use COMPOSE_FILE_NAMES constant
-- Bug Fixes: replace console logging with composeClientDebug for error handling in getConfig
-- Bug Fixes: remove Compose Switch version parameter from build script
-- Bug Fixes: correct project variable in echoComposeCommand function
-- Bug Fixes: correct project name variable in echoComposeCommand function
-- Bug Fixes: Container names wrong when dashes used
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.24...v2026.03.06)
+###2026.03.10-dev.1439
+- Features: enhance container data handling with flexible property access and improved HTML escaping
+- Features: implement caching for StackInfo instances and add cache management methods
+- Features: add ContainerInfo and StackInfo standard classes
+  - ContainerInfo: PascalCase-&gt;camelCase normalization, fromDockerInspect(),
+  - StackInfo: eager identity (project, sanitizedName, path, composeSource,
+  - exec.php: getStackContainers, checkStackUpdates, checkAllStacksUpdates
+  - exec_functions.php: buildComposeArgs() now thin deprecated wrapper
+  - compose_util_functions.php: echoComposeCommand, echoComposeCommandMultiple
+  - compose_list.php: all inline metadata reads replaced with StackInfo
+  - dashboard_stacks.php: metadata reads replaced with StackInfo
+  - Added createContainerInfo(), createStackInfo(), mergeStackUpdateStatus()
+  - Migrated buildStackInfoFromCache() to use createStackInfo()
+  - Migrated checkStackUpdates() inline construction to createStackInfo()
+  - Migrated updateParentStackFromContainers() to mergeStackUpdateStatus()
+  - Replaced both PascalCase normalization blocks with createContainerInfo()
+  - Updated mergeUpdateStatus() to use createContainerInfo() for name matching
+  - ContainerInfoTest: 22 tests covering both factories, merge, serialization
+  - StackInfoTest: 33 tests covering identity, compose resolution, metadata,
+  - All 304 existing tests pass (0 failures, 7 pre-existing skips)
+- Features: add workflow to sync pluginURL with current branch on push
+- Features: add deploy script for building and deploying compose.manager package
+- Bug Fixes: enhance release script to support beta tagging and update branch logic
+- Bug Fixes: update plugin URL to point to the dev branch for consistency
+- Bug Fixes: address Copilot PR review comments
+  - sanitizeFolderName: block path traversal (/, \, ..)
+  - StackInfo::createNew: add defense-in-depth path validation
+  - Fix error message trailing period mismatch with tests
+  - Use COMPOSE_FILE_NAMES[0] instead of hard-coded compose.yaml
+  - Sanitize exception messages returned to client (hide filesystem paths)
+- Bug Fixes: restore container discovery and pinned digest display after class refactor
+- Bug Fixes: ensure container ID is a string before substring operation
+- Bug Fixes: improve StackInfo::createNew() folder naming and input validation
+  - Prevent compounded random suffixes on folder name collisions by always appending a single random suffix to the base name
+  - Add safety cap to collision attempts to avoid infinite loops
+  - Validate empty and whitespace stack names, throwing clear exceptions
+  - Add tests for empty name, whitespace name, and collision suffix behavior
+- Bug Fixes: address code review findings for standard classes
+  - Remove unnecessary Object.assign merging of PascalCase originals
+  - Align JS createContainerInfo shell default to '/bin/bash'
+  - Add @ to file_get_contents in StackInfo constructor
+  - Make OverrideInfo::getDefinedServices() private
+  - Fix htmlspecialchars(null) deprecation in compose_list.php
+  - Remove extra blank doc-comment lines in OverrideInfo::resolve()
+- Bug Fixes: standardize container property names to lowercase
+- Bug Fixes: replace page reloads with targeted stack refresh for improved UX
+- Bug Fixes: add defined services count to improve client status accuracy
+- Bug Fixes: update subproject commit reference in tests/framework
+- Refactoring: internalize stack creation into StackInfo::createNew()
+  - Add StackInfo::createNew() with folder sanitization, collision handling,
+  - Move sanitizeFolderName() to util.php (backward-compat stub in
+  - Reduce addStack case to input validation + factory call + JSON response
+  - Add 10 unit tests covering createNew() scenarios (basic, indirect,
+- Refactoring: decouple OverrideInfo from stack identity resolution
+  - Add OverrideInfo::fromStackInfo() as primary factory that accepts
+  - Extract resolveOverride() as shared core for both factory paths
+  - Deprecate OverrideInfo::fromStack() (kept for backward compat)
+  - Remove $composeRoot, getProjectPath(), getDefinedServices() from
+  - Simplify pruneOrphanServices() to accept string[] instead of
+  - Add getMainFileServices() to StackInfo for pruning without override
+  - Replace remaining OverrideInfo::fromStack() calls in exec.php with
+  - Fix addStack passing display name instead of folder basename
+  - Add StackInfo::clearCache() to test setUp methods
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.10-dev.1439)
 
 </CHANGES>
 
