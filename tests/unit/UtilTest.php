@@ -215,18 +215,42 @@ class UtilTest extends TestCase
         $this->assertStringNotContainsString("  old-service:\n", $result['content']);
     }
 
-    public function testPruneOverrideContentServicesSetsEmptyServicesMapWhenAllOrphaned(): void
+    public function testPruneOverrideContentServicesPreservesContentWhenAllWouldBeOrphaned(): void
     {
+        // When ALL services in override would be removed (e.g., rename scenario),
+        // preserve the content to avoid data loss
         $override = "services:\n" .
             "  old-service:\n" .
             "    labels:\n" .
             "      test: \"2\"\n";
 
-        $result = pruneOverrideContentServices($override, ['app']);
+        $result = pruneOverrideContentServices($override, ['new-service']);
 
-        $this->assertTrue($result['changed']);
-        $this->assertEquals(['old-service'], $result['removed']);
-        $this->assertStringContainsString('services: {}', $result['content']);
+        // Should NOT change - all services being "orphaned" likely means rename
+        $this->assertFalse($result['changed']);
+        $this->assertEquals([], $result['removed']);
+        $this->assertEquals($override, $result['content']);
+    }
+
+    public function testPruneOverrideContentServicesPreservesOnMultipleRenames(): void
+    {
+        // Simulates renaming multiple services - none match anymore
+        $override = "services:\n" .
+            "  mariadb:\n" .
+            "    labels:\n" .
+            "      net.unraid.docker.icon: 'icon.png'\n" .
+            "  wordpress:\n" .
+            "    labels:\n" .
+            "      net.unraid.docker.webui: 'https://example.com'\n";
+
+        // User renamed both services
+        $result = pruneOverrideContentServices($override, ['mysql', 'wp']);
+
+        // Should preserve - don't wipe user's webui/icon configs
+        $this->assertFalse($result['changed']);
+        $this->assertEquals([], $result['removed']);
+        $this->assertStringContainsString('mariadb:', $result['content']);
+        $this->assertStringContainsString('wordpress:', $result['content']);
     }
 
     public function testPruneOverrideContentServicesNoChangeWhenServicesMatch(): void
@@ -241,6 +265,154 @@ class UtilTest extends TestCase
         $this->assertFalse($result['changed']);
         $this->assertEquals([], $result['removed']);
         $this->assertEquals($override, $result['content']);
+    }
+
+    // ===========================================
+    // Service Rename Migration Tests
+    // ===========================================
+
+    public function testParseServicesFromYamlExtractsServiceNames(): void
+    {
+        $yaml = "services:\n" .
+            "  mariadb:\n" .
+            "    image: mariadb:latest\n" .
+            "  wordpress:\n" .
+            "    image: wordpress:6.0\n";
+
+        $services = \OverrideInfo::parseServicesFromYaml($yaml);
+
+        $this->assertCount(2, $services);
+        $this->assertArrayHasKey('mariadb', $services);
+        $this->assertArrayHasKey('wordpress', $services);
+        $this->assertEquals('mariadb:latest', $services['mariadb']['image']);
+        $this->assertEquals('wordpress:6.0', $services['wordpress']['image']);
+    }
+
+    public function testMigrateOnRenameDetectsByImage(): void
+    {
+        $oldCompose = "services:\n" .
+            "  mariadb:\n" .
+            "    image: mariadb:latest\n" .
+            "  wordpress:\n" .
+            "    image: wordpress:6.0\n";
+
+        $newCompose = "services:\n" .
+            "  mysql:\n" .
+            "    image: mariadb:latest\n" .
+            "  wp:\n" .
+            "    image: wordpress:6.0\n";
+
+        $override = "services:\n" .
+            "  mariadb:\n" .
+            "    labels:\n" .
+            "      net.unraid.docker.icon: 'db-icon.png'\n" .
+            "  wordpress:\n" .
+            "    labels:\n" .
+            "      net.unraid.docker.webui: 'https://example.com'\n";
+
+        // Create temp stack directory
+        $tempDir = sys_get_temp_dir();
+        $stackName = 'test_stack_' . getmypid();
+        $stackDir = $tempDir . '/' . $stackName;
+        @mkdir($stackDir, 0755, true);
+        file_put_contents($stackDir . '/compose.yaml', $oldCompose);
+        file_put_contents($stackDir . '/compose.override.yaml', $override);
+
+        try {
+            $overrideInfo = \OverrideInfo::fromStack($tempDir, $stackName);
+            $result = $overrideInfo->migrateOnRename($oldCompose, $newCompose);
+
+            $this->assertTrue($result['migrated']);
+            $this->assertCount(2, $result['migrations']);
+
+            $newOverride = file_get_contents($stackDir . '/compose.override.yaml');
+            $this->assertStringContainsString('mysql:', $newOverride);
+            $this->assertStringContainsString('wp:', $newOverride);
+            $this->assertStringNotContainsString('mariadb:', $newOverride);
+            $this->assertStringNotContainsString('wordpress:', $newOverride);
+            // Labels should be preserved
+            $this->assertStringContainsString('db-icon.png', $newOverride);
+            $this->assertStringContainsString('https://example.com', $newOverride);
+        } finally {
+            @unlink($stackDir . '/compose.yaml');
+            @unlink($stackDir . '/compose.override.yaml');
+            @rmdir($stackDir);
+        }
+    }
+
+    public function testMigrateOnRenameNoChangeWhenNoRenames(): void
+    {
+        $compose = "services:\n" .
+            "  mariadb:\n" .
+            "    image: mariadb:latest\n";
+
+        $override = "services:\n" .
+            "  mariadb:\n" .
+            "    labels:\n" .
+            "      test: value\n";
+
+        // Create temp stack directory
+        $tempDir = sys_get_temp_dir();
+        $stackName = 'test_stack_' . getmypid();
+        $stackDir = $tempDir . '/' . $stackName;
+        @mkdir($stackDir, 0755, true);
+        file_put_contents($stackDir . '/compose.yaml', $compose);
+        file_put_contents($stackDir . '/compose.override.yaml', $override);
+
+        try {
+            $overrideInfo = \OverrideInfo::fromStack($tempDir, $stackName);
+            $result = $overrideInfo->migrateOnRename($compose, $compose);
+
+            $this->assertFalse($result['migrated']);
+            $this->assertEmpty($result['migrations']);
+        } finally {
+            @unlink($stackDir . '/compose.yaml');
+            @unlink($stackDir . '/compose.override.yaml');
+            @rmdir($stackDir);
+        }
+    }
+
+    public function testMigrateOnRenameFallsBackToPositionalMatch(): void
+    {
+        // Services with no image or different images - should match positionally
+        $oldCompose = "services:\n" .
+            "  old_service:\n" .
+            "    build: ./app\n";
+
+        $newCompose = "services:\n" .
+            "  new_service:\n" .
+            "    build: ./app\n";
+
+        $override = "services:\n" .
+            "  old_service:\n" .
+            "    labels:\n" .
+            "      net.unraid.docker.icon: 'icon.png'\n";
+
+        // Create temp stack directory
+        $tempDir = sys_get_temp_dir();
+        $stackName = 'test_stack_' . getmypid();
+        $stackDir = $tempDir . '/' . $stackName;
+        @mkdir($stackDir, 0755, true);
+        file_put_contents($stackDir . '/compose.yaml', $oldCompose);
+        file_put_contents($stackDir . '/compose.override.yaml', $override);
+
+        try {
+            $overrideInfo = \OverrideInfo::fromStack($tempDir, $stackName);
+            $result = $overrideInfo->migrateOnRename($oldCompose, $newCompose);
+
+            $this->assertTrue($result['migrated']);
+            $this->assertCount(1, $result['migrations']);
+            $this->assertEquals('old_service', $result['migrations'][0]['from']);
+            $this->assertEquals('new_service', $result['migrations'][0]['to']);
+
+            $newOverride = file_get_contents($stackDir . '/compose.override.yaml');
+            $this->assertStringContainsString('new_service:', $newOverride);
+            $this->assertStringNotContainsString('old_service:', $newOverride);
+        } finally {
+            @unlink($stackDir . '/compose.yaml');
+            @unlink($stackDir . '/compose.override.yaml');
+            @rmdir($stackDir);
+        }
     }
 
     // ===========================================

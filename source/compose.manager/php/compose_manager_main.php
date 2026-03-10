@@ -3071,7 +3071,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             html += '</div>';
         }
 
-        // Check for deleted services in override that aren't in main
+        // Check for orphaned services in override that aren't in main (e.g., after rename)
         for (var serviceKey in overrideDoc.services) {
             if (!(serviceKey in mainDoc.services)) {
                 hasDeletedServices = true;
@@ -3085,12 +3085,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 deletedHtml += '<div class="labels-service deleted" data-service="' + escapeAttr(serviceKey) + '" data-deleted="true">';
                 deletedHtml += '<div class="labels-service-header">';
                 deletedHtml += '<img class="labels-service-icon" src="' + escapeAttr(deletedIconSrc) + '" alt="" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
-                deletedHtml += '<span class="labels-service-name">' + escapeHtml(containerName) + ' <span style="color:#f44336;font-size:0.8em;">(will be removed)</span></span>';
+                deletedHtml += '<span class="labels-service-name">' + escapeHtml(containerName) + ' <span style="color:#f44336;font-size:0.8em;">(will be removed on save)</span></span>';
                 deletedHtml += '</div>';
                 deletedHtml += '<div class="labels-service-fields">';
-                deletedHtml += '<div class="labels-field"><label><i class="fa fa-picture-o"></i> Icon</label><input type="text" value="' + escapeAttr(iconValue) + '" disabled></div>';
-                deletedHtml += '<div class="labels-field"><label><i class="fa fa-globe"></i> WebUI</label><input type="text" value="' + escapeAttr(webuiValue) + '" disabled></div>';
-                deletedHtml += '<div class="labels-field"><label><i class="fa fa-terminal"></i> Shell</label><input type="text" value="' + escapeAttr(shellValue) + '" disabled></div>';
+                deletedHtml += '<div class="labels-field"><label><i class="fa fa-picture-o"></i> Icon</label><input type="text" id="orphan-' + escapeAttr(serviceKey) + '-icon" value="' + escapeAttr(iconValue) + '" readonly></div>';
+                deletedHtml += '<div class="labels-field"><label><i class="fa fa-globe"></i> WebUI</label><input type="text" id="orphan-' + escapeAttr(serviceKey) + '-webui" value="' + escapeAttr(webuiValue) + '" readonly></div>';
+                deletedHtml += '<div class="labels-field"><label><i class="fa fa-terminal"></i> Shell</label><input type="text" id="orphan-' + escapeAttr(serviceKey) + '-shell" value="' + escapeAttr(shellValue) + '" readonly></div>';
                 deletedHtml += '</div>';
                 deletedHtml += '</div>';
             }
@@ -3102,7 +3102,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         if (hasDeletedServices) {
             html += '<div class="labels-deleted-section">';
-            html += '<div class="labels-deleted-title" onclick="toggleDeletedServices(this)"><i class="fa fa-chevron-right"></i> Orphaned Services (will be removed on save)</div>';
+            html += '<div class="labels-deleted-title" onclick="toggleDeletedServices(this)"><i class="fa fa-chevron-right"></i> Orphaned Services (copy values before saving)</div>';
             html += '<div class="labels-deleted-services">' + deletedHtml + '</div>';
             html += '</div>';
         }
@@ -3494,7 +3494,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             overrideDoc.services[serviceKey].labels[shell_label] = shellValue;
         }
 
-        // Remove services from override that are no longer in main
+        // Remove services from override that are no longer in main.
+        // This is required because docker compose will fail if override has
+        // services that don't exist in the main compose file (no image defined).
         for (var serviceKey in overrideDoc.services) {
             if (!(serviceKey in mainDoc.services)) {
                 delete overrideDoc.services[serviceKey];

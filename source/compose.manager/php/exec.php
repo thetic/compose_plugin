@@ -187,6 +187,14 @@ switch ($_POST['action']) {
         $basePath = getPath("$compose_root/$script");
         $composeFilePath = findComposeFile($basePath) ?: "$basePath/" . COMPOSE_FILE_NAMES[0];
 
+        // Before saving, detect service renames and migrate override entries
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+
+        if (is_file($composeFilePath)) {
+            $oldContent = file_get_contents($composeFilePath);
+            $stackInfo->overrideInfo->migrateOnRename($oldContent, $scriptContents);
+        }
+
         file_put_contents($composeFilePath, $scriptContents);
         echo "$composeFilePath saved";
         break;

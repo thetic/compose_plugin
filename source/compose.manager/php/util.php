@@ -137,7 +137,6 @@ function hasComposeFile($dir)
 }
 
 
-
 function pruneOverrideContentServices(string $overrideContent, array $validServices): array
 {
     $validMap = [];
@@ -230,23 +229,25 @@ function pruneOverrideContentServices(string $overrideContent, array $validServi
         return ['content' => $overrideContent, 'removed' => [], 'changed' => false];
     }
 
+    // Safety check: if ALL services in the override would be removed, don't prune.
+    // This likely indicates a rename scenario rather than genuine orphans.
+    // Wiping to "services: {}" would destroy user data (icons, webui labels, etc).
     if (count($removedRanges) === count($serviceRanges)) {
-        $newLines = array_slice($lines, 0, $servicesStart);
-        $newLines[] = 'services: {}';
-        $newLines = array_merge($newLines, array_slice($lines, $servicesEnd));
-    } else {
-        $removeByLine = [];
-        foreach ($removedRanges as $range) {
-            for ($lineIndex = $range['start']; $lineIndex <= $range['end']; $lineIndex++) {
-                $removeByLine[$lineIndex] = true;
-            }
-        }
+        return ['content' => $overrideContent, 'removed' => [], 'changed' => false];
+    }
 
-        $newLines = [];
-        foreach ($lines as $lineIndex => $line) {
-            if (!isset($removeByLine[$lineIndex])) {
-                $newLines[] = $line;
-            }
+    // Only prune specific orphaned services while preserving others
+    $removeByLine = [];
+    foreach ($removedRanges as $range) {
+        for ($lineIndex = $range['start']; $lineIndex <= $range['end']; $lineIndex++) {
+            $removeByLine[$lineIndex] = true;
+        }
+    }
+
+    $newLines = [];
+    foreach ($lines as $lineIndex => $line) {
+        if (!isset($removeByLine[$lineIndex])) {
+            $newLines[] = $line;
         }
     }
 
@@ -442,6 +443,175 @@ class OverrideInfo
         }
 
         return ['changed' => true, 'removed' => $removedServices];
+    }
+
+    /**
+     * Migrate override entries when services are renamed.
+     *
+     * Compares old and new compose content to detect service renames and
+     * automatically updates the override file to match.
+     *
+     * @param string $oldComposeContent The old compose file content
+     * @param string $newComposeContent The new compose file content
+     * @return array{migrated: bool, migrations: array<array{from: string, to: string}>}
+     */
+    public function migrateOnRename(string $oldComposeContent, string $newComposeContent): array
+    {
+        $result = ['migrated' => false, 'migrations' => []];
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath === null || !is_file($overridePath)) {
+            return $result;
+        }
+
+        $overrideContent = file_get_contents($overridePath);
+        if ($overrideContent === false || trim($overrideContent) === '') {
+            return $result;
+        }
+
+        // Parse services from old and new compose content using simple YAML parsing
+        $oldServices = self::parseServicesFromYaml($oldComposeContent);
+        $newServices = self::parseServicesFromYaml($newComposeContent);
+        $overrideServices = self::parseServicesFromYaml($overrideContent);
+
+        if (empty($oldServices) || empty($newServices) || empty($overrideServices)) {
+            return $result;
+        }
+
+        // Find removed services (in old but not in new)
+        $removedServices = array_diff(array_keys($oldServices), array_keys($newServices));
+        // Find added services (in new but not in old)
+        $addedServices = array_diff(array_keys($newServices), array_keys($oldServices));
+
+        if (empty($removedServices) || empty($addedServices)) {
+            return $result;
+        }
+
+        // Build rename map: match by image, or if same count assume positional rename
+        $renameMap = [];
+
+        // First try to match by image
+        foreach ($removedServices as $oldName) {
+            $oldImage = $oldServices[$oldName]['image'] ?? '';
+            if ($oldImage === '') {
+                continue;
+            }
+
+            foreach ($addedServices as $newName) {
+                if (isset($renameMap[$oldName]) || in_array($newName, $renameMap)) {
+                    continue;
+                }
+                $newImage = $newServices[$newName]['image'] ?? '';
+                if ($oldImage === $newImage) {
+                    $renameMap[$oldName] = $newName;
+                    break;
+                }
+            }
+        }
+
+        // If counts match and we couldn't match by image, assume 1:1 positional rename
+        if (empty($renameMap) && count($removedServices) === count($addedServices)) {
+            $removedList = array_values($removedServices);
+            $addedList = array_values($addedServices);
+            for ($i = 0; $i < count($removedList); $i++) {
+                // Only map if the old name exists in override
+                if (isset($overrideServices[$removedList[$i]])) {
+                    $renameMap[$removedList[$i]] = $addedList[$i];
+                }
+            }
+        }
+
+        if (empty($renameMap)) {
+            return $result;
+        }
+
+        // Apply renames to override content
+        $newOverrideContent = $overrideContent;
+        foreach ($renameMap as $oldName => $newName) {
+            // Only migrate if old name exists in override and new name doesn't
+            if (!isset($overrideServices[$oldName]) || isset($overrideServices[$newName])) {
+                continue;
+            }
+
+            // Replace service name in override (careful YAML replacement)
+            // Match "  oldname:" at start of line (2 space indent under services:)
+            $pattern = '/^(  )' . preg_quote($oldName, '/') . '(\s*:)/m';
+            $replacement = '$1' . $newName . '$2';
+            $newOverrideContent = preg_replace($pattern, $replacement, $newOverrideContent, 1, $count);
+
+            if ($count > 0) {
+                $result['migrations'][] = ['from' => $oldName, 'to' => $newName];
+            }
+        }
+
+        if (!empty($result['migrations'])) {
+            file_put_contents($overridePath, $newOverrideContent);
+            $result['migrated'] = true;
+            
+            $migrationLog = array_map(fn($m) => "{$m['from']} -> {$m['to']}", $result['migrations']);
+            clientDebug(
+                "[override] Migrated renamed services: " . implode(', ', $migrationLog),
+                null,
+                'daemon',
+                'info'
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Parse service definitions from YAML content.
+     *
+     * Simple parser that extracts service names and their image values.
+     * Public static method for use in tests and other contexts.
+     *
+     * @param string $yamlContent The YAML content to parse
+     * @return array<string, array{image?: string}> Service name => service data
+     */
+    public static function parseServicesFromYaml(string $yamlContent): array
+    {
+        $services = [];
+        $lines = explode("\n", $yamlContent);
+        $inServices = false;
+        $currentService = null;
+
+        foreach ($lines as $line) {
+            // Skip empty lines and comments
+            if (trim($line) === '' || preg_match('/^\s*#/', $line)) {
+                continue;
+            }
+
+            // Check for services: section
+            if (preg_match('/^services\s*:/', $line)) {
+                $inServices = true;
+                continue;
+            }
+
+            // Check for end of services section (another top-level key)
+            if ($inServices && preg_match('/^[a-zA-Z_][a-zA-Z0-9_-]*\s*:/', $line) && !preg_match('/^services\s*:/', $line)) {
+                $inServices = false;
+                continue;
+            }
+
+            if (!$inServices) {
+                continue;
+            }
+
+            // Match service name (2 spaces indent)
+            if (preg_match('/^  (["\']?)([a-zA-Z0-9_-]+)\1\s*:/', $line, $matches)) {
+                $currentService = $matches[2];
+                $services[$currentService] = [];
+                continue;
+            }
+
+            // Match image under service (4+ spaces indent)
+            if ($currentService && preg_match('/^    image\s*:\s*["\']?([^"\'#\n]+)["\']?/', $line, $matches)) {
+                $services[$currentService]['image'] = trim($matches[1]);
+            }
+        }
+
+        return $services;
     }
 }
 
