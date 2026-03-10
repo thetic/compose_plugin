@@ -1172,6 +1172,56 @@ class StackInfo
         ];
     }
 
+    /**
+     * Check if any service in the stack has a build configuration.
+     *
+     * Uses `docker compose config` to parse the compose files and checks
+     * for services with build contexts, indicating they need to be built
+     * at startup rather than pulled from a registry.
+     *
+     * @return bool True if any service has a build configuration
+     */
+    public function hasBuildConfig(): bool
+    {
+        // Check cache first
+        if (array_key_exists('has_build', $this->metadataCache)) {
+            return (bool) $this->metadataCache['has_build'];
+        }
+
+        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
+            $this->metadataCache['has_build'] = false;
+            return false;
+        }
+
+        // Use docker compose config to get the resolved configuration
+        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null && is_file($overridePath)) {
+            $cmd .= " -f " . escapeshellarg($overridePath);
+        }
+
+        $envFilePath = $this->getEnvFilePath();
+        if ($envFilePath !== null && is_file($envFilePath)) {
+            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        }
+        $cmd .= " config 2>/dev/null";
+
+        $output = shell_exec($cmd);
+        if (!is_string($output) || trim($output) === '') {
+            $this->metadataCache['has_build'] = false;
+            return false;
+        }
+
+        // Parse the YAML output and check for build keys
+        // Look for "build:" at the start of a line (indented under services)
+        // This is a simple heuristic - build: can be a string (context) or object
+        $hasBuild = preg_match('/^\s+build:/m', $output) === 1;
+
+        $this->metadataCache['has_build'] = $hasBuild;
+        return $hasBuild;
+    }
+
     // ---------------------------------------------------------------
     // Internal helpers
     // ---------------------------------------------------------------

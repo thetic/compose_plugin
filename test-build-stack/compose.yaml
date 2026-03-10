@@ -1,0 +1,9 @@
+services:
+  test-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: test-build-app
+    ports:
+      - "8888:80"
+    restart: unless-stopped

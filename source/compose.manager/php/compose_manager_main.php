@@ -1901,7 +1901,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             profile: profile
         }, function(data) {
             if (data) {
-                openBox(data, "Stack " + basename(path) + " Up", height, width, true);
+                openBox(data, "Compose Up: " + basename(path), height, width, true);
             }
         })
     }
@@ -1917,7 +1917,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             profile: profile
         }, function(data) {
             if (data) {
-                openBox(data, "Recreate Stack " + basename(path), height, width, true);
+                openBox(data, "Compose Recreate: " + basename(path), height, width, true);
             }
         })
     }
@@ -1941,13 +1941,93 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             profile: profile
         }, function(data) {
             if (data) {
-                openBox(data, "Stack " + basename(path) + " Down", height, width, true);
+                openBox(data, "Compose Down: " + basename(path), height, width, true);
             }
         })
     }
 
     function ComposeDown(path, profile = "") {
         showStackActionDialog('down', path, profile);
+    }
+
+    // Stop stack without removing containers
+    function ComposeStopConfirmed(path, profile = "") {
+        var height = 800;
+        var width = 1200;
+
+        // Mark stack for local reload and show per-row spinner
+        var stackNameForStop = basename(path);
+        if (pendingComposeReloadStacks.indexOf(stackNameForStop) === -1) pendingComposeReloadStacks.push(stackNameForStop);
+        setStackActionInProgress(stackNameForStop, true);
+
+        $.post(compURL, {
+            action: 'composeStop',
+            path: path,
+            profile: profile
+        }, function(data) {
+            if (data) {
+                openBox(data, "Compose Stop: " + basename(path), height, width, true);
+            }
+        })
+    }
+
+    function ComposeStop(path, profile = "") {
+        showStackActionDialog('stop', path, profile);
+    }
+
+    // Restart stack (recreate containers without pulling)
+    function ComposeRestartConfirmed(path, profile = "") {
+        var height = 800;
+        var width = 1200;
+
+        // Mark stack for local reload and show per-row spinner
+        var stackNameForRestart = basename(path);
+        if (pendingComposeReloadStacks.indexOf(stackNameForRestart) === -1) pendingComposeReloadStacks.push(stackNameForRestart);
+        setStackActionInProgress(stackNameForRestart, true);
+
+        $.post(compURL, {
+            action: 'composeUpRecreate',
+            path: path,
+            profile: profile
+        }, function(data) {
+            if (data) {
+                openBox(data, "Compose Restart: " + basename(path), height, width, true);
+            }
+        })
+    }
+
+    function ComposeRestart(path, profile = "") {
+        showStackActionDialog('restart', path, profile);
+    }
+
+    // Force update stack (pull and rebuild even without detected updates)
+    function ForceUpdateStackConfirmed(path, profile = "") {
+        var height = 800;
+        var width = 1200;
+
+        var stackName = basename(path);
+        if (pendingUpdateCheckStacks.indexOf(stackName) === -1) {
+            pendingUpdateCheckStacks.push(stackName);
+        }
+
+        $.post(caURL, {
+            action: 'markStackForRecheck',
+            stacks: JSON.stringify([stackName])
+        }, function() {
+            $.post(compURL, {
+                action: 'composeUpPullBuild',
+                path: path,
+                profile: profile
+            }, function(data) {
+                if (data) {
+                    openBox(data, "Force Update: " + basename(path), height, width, true);
+                }
+            });
+        });
+    }
+
+    function ForceUpdateStack(path, profile = "") {
+        showStackActionDialog('forceUpdate', path, profile);
     }
 
     // Prompt user to recreate containers after label changes
@@ -2203,7 +2283,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 profile: profile
             }, function(data) {
                 if (data) {
-                    openBox(data, "Update Stack " + basename(path), height, width, true);
+                    openBox(data, "Update: " + basename(path), height, width, true);
                 }
             });
         });
@@ -2420,15 +2500,20 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         // Find the stack row (scoped to compose_stacks)
         var $stackRow = $('#compose_stacks tr.compose-sortable[data-project="' + project + '"]');
         var stackId = '';
+        var displayName = stackName; // Default to folder name
+        var hasBuild = false;
         if ($stackRow.length > 0) {
             stackId = $stackRow.attr('id').replace('stack-row-', '');
+            // Get display name from data attribute
+            displayName = $stackRow.data('projectname') || stackName;
+            hasBuild = $stackRow.data('hasbuild') == "1";
         }
 
         // Check if we have cached container data
         if (stackId && stackContainersCache[stackId] && stackContainersCache[stackId].length > 0) {
             // Merge update status into cached data before rendering
             var containers = mergeUpdateStatus(stackContainersCache[stackId], project);
-            renderStackActionDialog(action, stackName, path, profile, containers);
+            renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
         } else {
             // Fetch container details first
             $.post(caURL, {
@@ -2449,48 +2534,94 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }
                 // Merge update status into freshly fetched data
                 containers = mergeUpdateStatus(containers, project);
-                renderStackActionDialog(action, stackName, path, profile, containers);
+                renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
             }).fail(function() {
-                renderStackActionDialog(action, stackName, path, profile, []);
+                renderStackActionDialog(action, displayName, path, profile, [], hasBuild);
             });
         }
     }
 
-    function renderStackActionDialog(action, stackName, path, profile, containers) {
+    function renderStackActionDialog(action, displayName, path, profile, containers, hasBuild) {
+        hasBuild = hasBuild || false;
         // Action-specific configuration
+        var pullLabel = hasBuild ? 'Build' : 'Pull';
         var config = {
             'up': {
-                title: 'Start ' + escapeHtml(stackName) + '?',
-                description: 'This will start all containers in <b>' + escapeHtml(stackName) + '</b>.',
-                listTitle: 'CONTAINERS TO START',
+                title: 'Compose Up: ' + escapeHtml(displayName),
+                description: 'This will create and start all containers in <b>' + escapeHtml(displayName) + '</b>.',
+                listTitle: 'CONTAINERS',
                 warning: 'Images will be pulled if not present locally.',
                 warningIcon: 'info-circle',
                 warningColor: '#08f',
-                confirmText: 'Start Stack',
+                confirmText: 'Compose Up',
                 showVersionArrow: false,
                 confirmedFn: ComposeUpConfirmed
             },
             'down': {
-                title: 'Stop ' + escapeHtml(stackName) + '?',
-                description: 'This will shut down all containers in <b>' + escapeHtml(stackName) + '</b>.',
-                listTitle: 'CONTAINERS TO STOP',
+                title: 'Compose Down: ' + escapeHtml(displayName),
+                description: 'This will stop and remove all containers in <b>' + escapeHtml(displayName) + '</b>.',
+                listTitle: 'CONTAINERS',
                 warning: 'Containers will be removed but data in volumes is preserved.',
                 warningIcon: 'exclamation-triangle',
                 warningColor: '#f80',
-                confirmText: 'Stop Stack',
+                confirmText: 'Compose Down',
                 showVersionArrow: false,
                 confirmedFn: ComposeDownConfirmed
             },
+            'stop': {
+                title: 'Compose Stop: ' + escapeHtml(displayName),
+                description: 'This will stop all containers in <b>' + escapeHtml(displayName) + '</b> without removing them.',
+                listTitle: 'CONTAINERS',
+                warning: 'Containers will be stopped but not removed. Use Compose Up to start them again.',
+                warningIcon: 'info-circle',
+                warningColor: '#08f',
+                confirmText: 'Compose Stop',
+                showVersionArrow: false,
+                confirmedFn: ComposeStopConfirmed
+            },
+            'restart': {
+                title: 'Compose Restart: ' + escapeHtml(displayName),
+                description: 'This will restart all containers in <b>' + escapeHtml(displayName) + '</b>.',
+                listTitle: 'CONTAINERS',
+                warning: 'Containers will be recreated. Data in volumes is preserved.',
+                warningIcon: 'info-circle',
+                warningColor: '#08f',
+                confirmText: 'Compose Restart',
+                showVersionArrow: false,
+                confirmedFn: ComposeRestartConfirmed
+            },
+            'pull': {
+                title: pullLabel + ': ' + escapeHtml(displayName),
+                description: 'This will ' + (hasBuild ? 'build images for' : 'pull the latest images for') + ' <b>' + escapeHtml(displayName) + '</b> without starting containers.',
+                listTitle: 'CONTAINERS',
+                warning: hasBuild ? 'Images will be built from Dockerfile.' : 'Images will be pulled from the registry.',
+                warningIcon: 'info-circle',
+                warningColor: '#08f',
+                confirmText: pullLabel,
+                showVersionArrow: false,
+                confirmedFn: ComposePullConfirmed
+            },
             'update': {
-                title: 'Update ' + escapeHtml(stackName) + '?',
-                description: 'This will pull the latest images and recreate containers in <b>' + escapeHtml(stackName) + '</b>.',
-                listTitle: 'CONTAINERS TO UPDATE',
+                title: 'Update: ' + escapeHtml(displayName),
+                description: 'This will pull the latest images and recreate containers in <b>' + escapeHtml(displayName) + '</b>.',
+                listTitle: 'CONTAINERS',
                 warning: 'Running containers will be recreated with the latest images.',
                 warningIcon: 'exclamation-triangle',
                 warningColor: '#f80',
-                confirmText: 'Update Stack',
+                confirmText: 'Update',
                 showVersionArrow: true,
                 confirmedFn: UpdateStackConfirmed
+            },
+            'forceUpdate': {
+                title: 'Force Update: ' + escapeHtml(displayName),
+                description: 'This will pull the latest images and rebuild containers in <b>' + escapeHtml(displayName) + '</b>, even if no updates are detected.',
+                listTitle: 'CONTAINERS',
+                warning: 'All containers will be recreated with freshly pulled images.',
+                warningIcon: 'exclamation-triangle',
+                warningColor: '#f80',
+                confirmText: 'Force Update',
+                showVersionArrow: false,
+                confirmedFn: ForceUpdateStackConfirmed
             }
         };
 
@@ -2587,7 +2718,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
     }
 
-    function ComposePull(path, profile = "") {
+    function ComposePullConfirmed(path, profile = "") {
         var height = 800;
         var width = 1200;
         $.post(compURL, {
@@ -2596,9 +2727,13 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             profile: profile
         }, function(data) {
             if (data) {
-                openBox(data, "Stack " + basename(path) + " Pull", height, width, true);
+                openBox(data, "Compose Pull: " + basename(path), height, width, true);
             }
         })
+    }
+
+    function ComposePull(path, profile = "") {
+        showStackActionDialog('pull', path, profile);
     }
 
     function ComposeLogs(pathOrProject, profile = "") {
@@ -2725,9 +2860,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var actionNames = {
             'up': 'Compose Up',
             'down': 'Compose Down',
-            'update': 'Update Stack',
-            'pull': 'Pull Images',
-            'logs': 'View Logs'
+            'stop': 'Compose Stop',
+            'restart': 'Compose Restart',
+            'update': 'Update',
+            'forceUpdate': 'Force Update',
+            'pull': 'Compose Pull',
+            'logs': 'Compose Logs'
         };
 
         // Build profile selection HTML with checkboxes for multi-select
@@ -2767,8 +2905,17 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     case 'down':
                         ComposeDown(path, profileStr);
                         break;
+                    case 'stop':
+                        ComposeStop(path, profileStr);
+                        break;
+                    case 'restart':
+                        ComposeRestart(path, profileStr);
+                        break;
                     case 'update':
                         UpdateStack(path, profileStr);
+                        break;
+                    case 'forceUpdate':
+                        ForceUpdateStack(path, profileStr);
                         break;
                     case 'pull':
                         ComposePull(path, profileStr);
@@ -4435,6 +4582,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var path = $row.data('path');
         var profiles = $row.data('profiles') || [];
         var webuiUrl = $row.data('webui') || '';
+        var hasBuild = $row.data('hasbuild') == "1";
 
         // Check if updates are available for this stack
         var hasUpdates = false;
@@ -4448,40 +4596,25 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             above: false
         });
 
-        // WebUI link (if configured and stack is running)
-        if (webuiUrl && isUp) {
-            opts.push({
-                text: 'WebUI',
-                icon: 'fa-globe',
-                action: function(e) {
-                    e.preventDefault();
-                    var url = processWebUIUrl(webuiUrl);
-                    if (isValidWebUIUrl(url)) {
-                        window.open(url, '_blank');
-                    }
-                }
-            });
-            opts.push({
-                divider: true
-            });
-        }
-
-        // Compose Up
-        opts.push({
-            text: isUp ? 'Compose Up (Recreate)' : 'Compose Up',
-            icon: 'fa-play',
-            action: function(e) {
-                e.preventDefault();
-                if (profiles.length > 0) {
-                    showProfileSelector('up', path, profiles);
-                } else {
-                    ComposeUp(path);
-                }
-            }
-        });
-
-        // Compose Down (only if up)
+        // ===== STACK IS RUNNING =====
         if (isUp) {
+            // WebUI link (if configured)
+            if (webuiUrl) {
+                opts.push({
+                    text: 'WebUI',
+                    icon: 'fa-globe',
+                    action: function(e) {
+                        e.preventDefault();
+                        var url = processWebUIUrl(webuiUrl);
+                        if (isValidWebUIUrl(url)) {
+                            window.open(url, '_blank');
+                        }
+                    }
+                });
+                opts.push({ divider: true });
+            }
+
+            // Compose Down (stop and remove containers)
             opts.push({
                 text: 'Compose Down',
                 icon: 'fa-stop',
@@ -4494,34 +4627,132 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     }
                 }
             });
+
+            // Compose Stop (stop without removing)
+            opts.push({
+                text: 'Compose Stop',
+                icon: 'fa-pause',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('stop', path, profiles);
+                    } else {
+                        ComposeStop(path);
+                    }
+                }
+            });
+
+            // Compose Restart
+            opts.push({
+                text: 'Compose Restart',
+                icon: 'fa-refresh',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('restart', path, profiles);
+                    } else {
+                        ComposeRestart(path);
+                    }
+                }
+            });
+
+            opts.push({ divider: true });
+
+            // Update options based on whether updates are available
+            if (hasUpdates) {
+                // Update (when updates are available)
+                var updateLabel = hasBuild ? 'Update & Rebuild' : 'Update';
+                opts.push({
+                    text: updateLabel,
+                    icon: 'fa-cloud-download',
+                    action: function(e) {
+                        e.preventDefault();
+                        if (profiles.length > 0) {
+                            showProfileSelector('update', path, profiles);
+                        } else {
+                            UpdateStack(path);
+                        }
+                    }
+                });
+            } else {
+                // Force Update (when no updates detected)
+                var forceLabel = hasBuild ? 'Force Update & Rebuild' : 'Force Update';
+                opts.push({
+                    text: forceLabel,
+                    icon: 'fa-cloud-download',
+                    action: function(e) {
+                        e.preventDefault();
+                        if (profiles.length > 0) {
+                            showProfileSelector('forceUpdate', path, profiles);
+                        } else {
+                            ForceUpdateStack(path);
+                        }
+                    }
+                });
+            }
+
+        // ===== STACK IS STOPPED =====
+        } else {
+            // Compose Up
+            opts.push({
+                text: 'Compose Up',
+                icon: 'fa-play',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('up', path, profiles);
+                    } else {
+                        ComposeUp(path);
+                    }
+                }
+            });
+
+            opts.push({ divider: true });
+
+            // Pull/Build only (without starting)
+            var pullOnlyLabel = hasBuild ? 'Build' : 'Pull';
+            opts.push({
+                text: pullOnlyLabel,
+                icon: 'fa-download',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('pull', path, profiles);
+                    } else {
+                        ComposePull(path);
+                    }
+                }
+            });
+
+            // Update (pull/build and start)
+            var updateLabel = hasBuild ? 'Build & Up' : 'Pull & Up';
+            opts.push({
+                text: updateLabel,
+                icon: 'fa-cloud-download',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('update', path, profiles);
+                    } else {
+                        UpdateStack(path);
+                    }
+                }
+            });
         }
 
-        opts.push({
-            divider: true
-        });
+        opts.push({ divider: true });
 
-        // Update Stack - disabled if no updates available
-        var updateText = hasUpdates ? 'Update Stack' : 'Update Stack (no updates)';
+        // Check for Updates (always available)
         opts.push({
-            text: updateText,
-            icon: 'fa-cloud-download',
-            disabled: !hasUpdates,
+            text: 'Check for Updates',
+            icon: 'fa-search',
             action: function(e) {
                 e.preventDefault();
-                if (!hasUpdates) return;
-                if (profiles.length > 0) {
-                    showProfileSelector('update', path, profiles);
-                } else {
-                    UpdateStack(path);
-                }
+                checkStackUpdates(project);
             }
         });
 
-        opts.push({
-            divider: true
-        });
-
-        // Edit Stack
+        // Edit Stack (always available)
         opts.push({
             text: 'Edit Stack',
             icon: 'fa-edit',
@@ -4531,11 +4762,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
         });
 
-        opts.push({
-            divider: true
-        });
+        opts.push({ divider: true });
 
-        // View Logs
+        // View Logs (always available)
         opts.push({
             text: 'View Logs',
             icon: 'fa-navicon',
@@ -4545,11 +4774,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
         });
 
-        opts.push({
-            divider: true
-        });
+        opts.push({ divider: true });
 
-        // Delete Stack (only if not running)
+        // Delete Stack
         if (!isUp) {
             opts.push({
                 text: 'Delete Stack',

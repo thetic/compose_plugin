@@ -219,8 +219,11 @@ foreach ($composeProjects as $project) {
     // Escape webui URL for HTML attribute
     $webuiUrlHtml = htmlspecialchars($webuiUrl, ENT_QUOTES, 'UTF-8');
 
+    // Check if stack has build configurations (needs rebuild on update)
+    $hasBuild = $stackInfo->hasBuildConfig() ? '1' : '0';
+
     // Main row - Docker tab structure with expand arrow on left
-    $o .= "<tr class='compose-sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson' data-webui='$webuiUrlHtml' data-containers='$containerNamesAttr'>";
+    $o .= "<tr class='compose-sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson' data-webui='$webuiUrlHtml' data-containers='$containerNamesAttr' data-hasbuild='$hasBuild'>";
 
     // Name column: expand arrow, then icon with context menu, then name
     $o .= "<td class='ct-name' style='padding:8px 8px 8px 20px'>";
