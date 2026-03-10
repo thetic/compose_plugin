@@ -5,10 +5,11 @@
 # - Builds TXZ package using Docker (Slackware)
 # - Calculates MD5 for integrity verification
 # - Creates GitHub releases with package attached
-# - Updates PLG file in dev branch
+# - Updates PLG file in the appropriate branch (main for stable, dev for beta)
 #
 # Triggers:
-# - New tag matching date pattern: vYYYY.MM.DD[a-z]
+# - Stable release: tag like vYYYY.MM.DD or vYYYY.MM.DDa
+# - Beta release: tag like vYYYY.MM.DD-dev
 # - Manual workflow_dispatch for testing builds
 
 name: Build & Release Plugin
@@ -20,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (e.g., 2026.02.01) - leave empty for test build"
+        description: "Version to build (e.g., 2026.02.01 or 2026.02.01-dev) - leave empty for test build"
         required: false
         default: ""
 
@@ -112,10 +113,26 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
+      - name: Determine release type
+        id: release_type
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          if [[ "$VERSION" == *"-dev"* ]]; then
+            echo "is_beta=true" >> $GITHUB_OUTPUT
+            echo "target_branch=dev" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "Release type: BETA (dev branch)"
+          else
+            echo "is_beta=false" >> $GITHUB_OUTPUT
+            echo "target_branch=main" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "Release type: STABLE (main branch)"
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ steps.release_type.outputs.target_branch }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download artifacts
@@ -128,6 +145,8 @@ jobs:
         id: notes
         run: |
           VERSION="${{ needs.build.outputs.version }}"
+          TARGET_BRANCH="${{ steps.release_type.outputs.target_branch }}"
+          IS_BETA="${{ steps.release_type.outputs.is_beta }}"
 
           # Read component versions from release_info
           if [[ -f artifacts/release_info ]]; then
@@ -136,15 +155,26 @@ jobs:
             COMPONENTS="Compose v${{ env.COMPOSE_VERSION }}"
           fi
 
+          # Set release title based on type
+          if [[ "$IS_BETA" == "true" ]]; then
+            TITLE="Compose Manager v${VERSION} (Beta)"
+            INSTALL_NOTE="**Beta Release** - Install from the beta channel for testing."
+          else
+            TITLE="Compose Manager v${VERSION}"
+            INSTALL_NOTE=""
+          fi
+
           # Create release body
           cat > release_body.md << EOF
-          ## Compose Manager v${VERSION}
+          ## ${TITLE}
+
+          ${INSTALL_NOTE}
 
           ### Installation
 
           **Via Plugin Manager:**
           \`\`\`
-          https://raw.githubusercontent.com/${{ github.repository }}/main/${{ env.PLUGIN_NAME }}.plg
+          https://raw.githubusercontent.com/${{ github.repository }}/${TARGET_BRANCH}/${{ env.PLUGIN_NAME }}.plg
           \`\`\`
 
           ### Package Details
@@ -157,20 +187,21 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Compose Manager v${{ needs.build.outputs.version }}"
+          name: "Compose Manager v${{ needs.build.outputs.version }}${{ steps.release_type.outputs.is_beta == 'true' && ' (Beta)' || '' }}"
           body_path: release_body.md
           files: |
             artifacts/*.txz
           fail_on_unmatched_files: true
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.release_type.outputs.prerelease == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update PLG in main branch
+      - name: Update PLG in target branch
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           MD5="${{ needs.build.outputs.md5 }}"
+          TARGET_BRANCH="${{ steps.release_type.outputs.target_branch }}"
 
           # Configure git
           git config user.name "github-actions[bot]"
@@ -188,4 +219,4 @@ jobs:
           # Commit and push
           git add ${{ env.PLUGIN_NAME }}.plg
           git commit -m "Release v${VERSION}" || echo "No changes to commit"
-          git push origin main
+          git push origin ${TARGET_BRANCH}

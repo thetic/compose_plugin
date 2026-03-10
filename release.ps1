@@ -7,9 +7,13 @@
     This script creates and pushes a version tag which triggers GitHub Actions
     to build the package and create a release. Uses date-based versioning (YYYY.MM.DD).
     
-    Multiple releases on the same day get suffixes: v2026.02.01, v2026.02.01a, v2026.02.01b
+    Stable releases: v2026.02.01, v2026.02.01a, v2026.02.01b
+    Beta releases:   v2026.02.01-dev (use -Beta flag)
     
     Automatically generates release notes from git commits and updates the PLG file.
+
+.PARAMETER Beta
+    Create a beta/dev release (adds -dev suffix, marks as prerelease on GitHub).
 
 .PARAMETER DryRun
     Show what would be done without making any changes.
@@ -18,12 +22,14 @@
     Skip all confirmation prompts.
 
 .EXAMPLE
-    ./release.ps1           # Creates v2026.02.01 (or next available)
+    ./release.ps1           # Creates v2026.02.01 (stable)
+    ./release.ps1 -Beta     # Creates v2026.02.01-dev (beta)
     ./release.ps1 -DryRun   # Preview without changes
     ./release.ps1 -Force    # Skip confirmations
 #>
 
 param(
+    [switch]$Beta,
     [switch]$DryRun,
     [switch]$Force
 )
@@ -34,47 +40,62 @@ $PlgFile = "compose.manager.plg"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Compose Manager Release Script" -ForegroundColor Cyan
+if ($Beta) {
+    Write-Host "  Compose Manager BETA Release" -ForegroundColor Yellow
+} else {
+    Write-Host "  Compose Manager Release Script" -ForegroundColor Cyan
+}
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Get today's date in version format
 $dateVersion = Get-Date -Format "yyyy.MM.dd"
-$baseTag = "v$dateVersion"
 
-# Fetch latest tags from remote
-Write-Host "Fetching latest from origin..." -ForegroundColor Yellow
-git fetch origin --tags
-
-# Get existing tags for today
-$existingTags = git tag -l "$baseTag*" 2>$null | Sort-Object
-
-if ($existingTags) {
-    Write-Host "Existing tags for today:" -ForegroundColor Yellow
-    $existingTags | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+if ($Beta) {
+    # Beta releases use -dev.HHMM suffix for uniqueness
+    $timeStamp = Get-Date -Format "HHmm"
+    $newTag = "v$dateVersion-dev.$timeStamp"
     
-    # Find the next suffix
-    $lastTag = $existingTags | Select-Object -Last 1
+    # No collision check needed - time-based tags are unique
+    git fetch origin --tags
+} else {
+    # Stable release logic
+    $baseTag = "v$dateVersion"
     
-    if ($lastTag -eq $baseTag) {
-        # First release was without suffix, next is 'a'
-        $newTag = "${baseTag}a"
-    } elseif ($lastTag -match "^v\d{4}\.\d{2}\.\d{2}([a-z])$") {
-        # Increment the suffix letter
-        $lastSuffix = $matches[1]
-        $nextSuffix = [char]([int][char]$lastSuffix + 1)
-        if ($nextSuffix -gt 'z') {
-            Write-Error "Too many releases today! (exceeded 'z' suffix)"
+    # Fetch latest tags from remote
+    Write-Host "Fetching latest from origin..." -ForegroundColor Yellow
+    git fetch origin --tags
+    
+    # Get existing tags for today (exclude -dev tags)
+    $existingTags = git tag -l "$baseTag*" 2>$null | Where-Object { $_ -notmatch '-dev' } | Sort-Object
+    
+    if ($existingTags) {
+        Write-Host "Existing tags for today:" -ForegroundColor Yellow
+        $existingTags | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+        
+        # Find the next suffix
+        $lastTag = $existingTags | Select-Object -Last 1
+        
+        if ($lastTag -eq $baseTag) {
+            # First release was without suffix, next is 'a'
+            $newTag = "${baseTag}a"
+        } elseif ($lastTag -match "^v\d{4}\.\d{2}\.\d{2}([a-z])$") {
+            # Increment the suffix letter
+            $lastSuffix = $matches[1]
+            $nextSuffix = [char]([int][char]$lastSuffix + 1)
+            if ($nextSuffix -gt 'z') {
+                Write-Error "Too many releases today! (exceeded 'z' suffix)"
+                exit 1
+            }
+            $newTag = "$baseTag$nextSuffix"
+        } else {
+            Write-Error "Unexpected tag format: $lastTag"
             exit 1
         }
-        $newTag = "$baseTag$nextSuffix"
     } else {
-        Write-Error "Unexpected tag format: $lastTag"
-        exit 1
+        # No releases today yet - use base tag without suffix
+        $newTag = $baseTag
     }
-} else {
-    # No releases today yet - use base tag without suffix
-    $newTag = $baseTag
 }
 
 # Get the last tag for generating changelog
@@ -83,7 +104,13 @@ $versionNumber = $newTag -replace '^v', ''
 
 Write-Host ""
 Write-Host "New release tag: " -NoNewline
-Write-Host $newTag -ForegroundColor Green
+if ($Beta) {
+    Write-Host $newTag -ForegroundColor Yellow
+    Write-Host "  Type: BETA (will update dev branch)" -ForegroundColor Yellow
+} else {
+    Write-Host $newTag -ForegroundColor Green
+    Write-Host "  Type: STABLE (will update main branch)" -ForegroundColor Green
+}
 Write-Host ""
 
 # Generate release notes from git commits
