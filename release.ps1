@@ -48,6 +48,32 @@ if ($Beta) {
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Check branch FIRST before doing anything else
+$currentBranch = git branch --show-current
+$requiredBranch = if ($Beta) { 'dev' } else { 'main' }
+
+if ($currentBranch -ne $requiredBranch) {
+    Write-Host "You're on '$currentBranch', but $($Beta ? 'beta' : 'stable') releases require '$requiredBranch'" -ForegroundColor Yellow
+    
+    if ($Force) {
+        Write-Host "Switching to $requiredBranch..." -ForegroundColor Cyan
+        git checkout $requiredBranch
+        $currentBranch = $requiredBranch
+    } else {
+        $response = Read-Host "Switch to '$requiredBranch' branch? (Y/n)"
+        if ($response -eq 'n' -or $response -eq 'N') {
+            Write-Host "Aborted." -ForegroundColor Red
+            exit 1
+        }
+        git checkout $requiredBranch
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to switch branch. Commit or stash your changes first." -ForegroundColor Red
+            exit 1
+        }
+        $currentBranch = $requiredBranch
+    }
+}
+
 # Get today's date in version format
 $dateVersion = Get-Date -Format "yyyy.MM.dd"
 
@@ -336,20 +362,6 @@ if ($status) {
     Write-Host "Warning: You have uncommitted changes:" -ForegroundColor Yellow
     $status | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
     Write-Host ""
-    
-    if (-not $Force) {
-        $response = Read-Host "Continue anyway? (y/N)"
-        if ($response -ne 'y' -and $response -ne 'Y') {
-            Write-Host "Aborted." -ForegroundColor Red
-            exit 1
-        }
-    }
-}
-
-# Check if we're on main branch
-$currentBranch = git branch --show-current
-if ($currentBranch -ne 'main') {
-    Write-Host "Warning: You're on branch '$currentBranch', not 'main'" -ForegroundColor Yellow
     
     if (-not $Force) {
         $response = Read-Host "Continue anyway? (y/N)"
