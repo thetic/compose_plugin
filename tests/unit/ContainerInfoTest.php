@@ -18,6 +18,7 @@ class ContainerInfoTest extends TestCase
     {
         $raw = [
             'Name' => 'my-container',
+            'ID' => 'abc123def4567890',
             'Service' => 'web',
             'Image' => 'nginx:latest',
             'State' => 'running',
@@ -34,6 +35,7 @@ class ContainerInfoTest extends TestCase
         $info = \ContainerInfo::fromDockerInspect($raw);
 
         $this->assertSame('my-container', $info->name);
+    $this->assertSame('abc123def4567890', $info->id);
         $this->assertSame('web', $info->service);
         $this->assertSame('nginx:latest', $info->image);
         $this->assertSame('running', $info->state);
@@ -52,6 +54,7 @@ class ContainerInfoTest extends TestCase
     {
         $raw = [
             'name' => 'my-container',
+            'id' => 'ffeeddccbbaa9988',
             'service' => 'api',
             'image' => 'node:18',
             'state' => 'exited',
@@ -60,6 +63,7 @@ class ContainerInfoTest extends TestCase
         $info = \ContainerInfo::fromDockerInspect($raw);
 
         $this->assertSame('my-container', $info->name);
+        $this->assertSame('ffeeddccbbaa9988', $info->id);
         $this->assertSame('api', $info->service);
         $this->assertSame('node:18', $info->image);
         $this->assertSame('exited', $info->state);
@@ -147,6 +151,7 @@ class ContainerInfoTest extends TestCase
     {
         $raw = [
             'container' => 'web-container',
+            'id' => '0011223344556677',
             'image' => 'nginx:alpine',
             'hasUpdate' => true,
             'status' => 'update-available',
@@ -157,6 +162,7 @@ class ContainerInfoTest extends TestCase
         $info = \ContainerInfo::fromUpdateResponse($raw);
 
         $this->assertSame('web-container', $info->name);
+    $this->assertSame('0011223344556677', $info->id);
         $this->assertSame('nginx:alpine', $info->image);
         $this->assertTrue($info->hasUpdate);
         $this->assertSame('update-available', $info->updateStatus);
@@ -246,6 +252,7 @@ class ContainerInfoTest extends TestCase
 
         // All keys should be camelCase
         $this->assertArrayHasKey('name', $arr);
+        $this->assertArrayHasKey('id', $arr);
         $this->assertArrayHasKey('service', $arr);
         $this->assertArrayHasKey('image', $arr);
         $this->assertArrayHasKey('state', $arr);
@@ -275,6 +282,7 @@ class ContainerInfoTest extends TestCase
     {
         $info = \ContainerInfo::fromDockerInspect([
             'Name' => 'web',
+            'ID' => '1234567890abcdef',
             'State' => 'running',
             'Image' => 'nginx:latest',
         ]);
@@ -282,6 +290,7 @@ class ContainerInfoTest extends TestCase
         $arr = $info->toArray();
 
         $this->assertSame('web', $arr['name']);
+    $this->assertSame('1234567890abcdef', $arr['id']);
         $this->assertSame('running', $arr['state']);
         $this->assertTrue($arr['isRunning']);
         $this->assertSame('nginx:latest', $arr['image']);
@@ -295,15 +304,16 @@ class ContainerInfoTest extends TestCase
     {
         $info = \ContainerInfo::fromDockerInspect([
             'Name' => 'test',
-            'Image' => 'nginx:latest',
+            'Image' => 'nginx@sha256:abcdef1234567890abcdef1234567890',
             'State' => 'running',
             'Icon' => 'icon.png',
         ]);
 
         $arr = $info->toUpdateArray();
 
-        $expected = ['name', 'image', 'hasUpdate', 'updateStatus', 'localSha', 'remoteSha', 'isPinned'];
+        $expected = ['name', 'image', 'hasUpdate', 'updateStatus', 'localSha', 'remoteSha', 'isPinned', 'pinnedDigest'];
         $this->assertSame($expected, array_keys($arr));
+        $this->assertSame('abcdef1234567890abcdef1234567890', $arr['pinnedDigest']);
 
         // Should NOT contain non-update fields
         $this->assertArrayNotHasKey('state', $arr);

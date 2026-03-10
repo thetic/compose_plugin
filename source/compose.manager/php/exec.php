@@ -548,6 +548,7 @@ switch ($_POST['action']) {
                                 $inspect = json_decode($inspectOutput, true);
                                 if ($inspect) {
                                     // Extract useful info from inspect
+                                    $rawContainer['ID'] = $inspect['Id'] ?? '';
                                     $rawContainer['Image'] = $inspect['Config']['Image'] ?? '';
                                     $rawContainer['Created'] = $inspect['Created'] ?? '';
                                     $rawContainer['StartedAt'] = $inspect['State']['StartedAt'] ?? '';

@@ -452,6 +452,8 @@ class ContainerInfo
 {
     /** @var string Canonical container name (from Name/Service/container) */
     public string $name = '';
+    /** @var string Docker container ID */
+    public string $id = '';
     /** @var string Compose service name */
     public string $service = '';
     /** @var string Full image reference (e.g. library/nginx:latest) */
@@ -504,6 +506,7 @@ class ContainerInfo
     {
         $info = new self();
         $info->name = $raw['Name'] ?? $raw['name'] ?? '';
+        $info->id = $raw['ID'] ?? $raw['Id'] ?? $raw['id'] ?? '';
         $info->service = $raw['Service'] ?? $raw['service'] ?? '';
         $info->image = $raw['Image'] ?? $raw['image'] ?? '';
         $info->state = strtolower($raw['State'] ?? $raw['state'] ?? '');
@@ -543,6 +546,7 @@ class ContainerInfo
     {
         $info = new self();
         $info->name = $raw['container'] ?? $raw['name'] ?? $raw['Name'] ?? '';
+        $info->id = $raw['ID'] ?? $raw['Id'] ?? $raw['id'] ?? '';
         $info->service = $raw['service'] ?? $raw['Service'] ?? '';
         $info->image = $raw['image'] ?? $raw['Image'] ?? '';
         $info->hasUpdate = $raw['hasUpdate'] ?? false;
@@ -590,6 +594,7 @@ class ContainerInfo
     {
         return [
             'name' => $this->name,
+            'id' => $this->id,
             'service' => $this->service,
             'image' => $this->image,
             'state' => $this->state,
@@ -626,6 +631,7 @@ class ContainerInfo
             'localSha' => $this->localSha,
             'remoteSha' => $this->remoteSha,
             'isPinned' => $this->isPinned,
+            'pinnedDigest' => $this->pinnedDigest,
         ];
     }
 

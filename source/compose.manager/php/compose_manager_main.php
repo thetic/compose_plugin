@@ -195,7 +195,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             ports: raw.ports || raw.Ports || '',
             networks: raw.networks || raw.Networks || '',
             volumes: raw.volumes || raw.Volumes || '',
-            id: raw.id || raw.Id || '',
+            id: raw.id || raw.Id || raw.ID || '',
             created: raw.created || raw.Created || '',
             startedAt: raw.startedAt || raw.StartedAt || ''
         };
@@ -3879,7 +3879,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 // Image is pinned with SHA256 digest - show pinned status
                 html += '<span class="cyan-text" style="white-space:nowrap;"><i class="fa fa-thumb-tack fa-fw"></i> pinned</span>';
                 if (ctPinnedDigest) {
-                    html += '<div style="font-family:monospace;font-size:0.85em;color:#17a2b8;margin-top:2px;">' + escapeHtml(ctPinnedDigest) + '</div>';
+                    html += '<div style="font-family:monospace;font-size:0.85em;color:#17a2b8;margin-top:2px;">' + escapeHtml(ctPinnedDigest.substring(0, 12)) + '</div>';
                 }
             } else if (ctHasUpdate) {
                 // Update available - orange "update ready" style with SHA diff
