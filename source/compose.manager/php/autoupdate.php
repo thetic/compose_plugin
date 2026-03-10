@@ -7,14 +7,28 @@ $autofile = $plugin_root . "autoupdate.json";
 
 header('Content-Type: application/json');
 
-if (!function_exists('get_compose_file')) {
-    function get_compose_file($path) {
-        $candidates = array('compose.yml', 'docker-compose.yml', 'compose.yaml', 'docker-compose.yaml');
-        foreach ($candidates as $c) {
-            if (is_file("$path/$c")) return "$path/$c";
-        }
-        return null;
+/**
+ * Validate that a path is allowed for auto-update operations.
+ * Must be under compose_root, /mnt/, or /boot/config/.
+ * @param string $path The path to validate
+ * @return bool True if path is allowed
+ */
+function isAllowedAutoUpdatePath($path) {
+    global $compose_root;
+    $realPath = realpath($path);
+    if ($realPath === false) {
+        return false;
     }
+    // Allow paths under compose_root
+    $realComposeRoot = realpath($compose_root);
+    if ($realComposeRoot !== false && strpos($realPath, $realComposeRoot) === 0) {
+        return true;
+    }
+    // Allow indirect paths under /mnt/ or /boot/config/
+    if (strpos($realPath, '/mnt/') === 0 || strpos($realPath, '/boot/config/') === 0) {
+        return true;
+    }
+    return false;
 }
 
 switch ($action) {
@@ -76,17 +90,32 @@ switch ($action) {
             echo json_encode(array('error' => 'Missing path'));
             break;
         }
-        $composeFile = get_compose_file($path);
+        // Security: validate path is under allowed directories
+        if (!isAllowedAutoUpdatePath($path)) {
+            clientDebug("[autoupdate] Rejected invalid path: $path", null, 'daemon', 'error');
+            http_response_code(403);
+            echo json_encode(array('error' => 'Path not allowed'));
+            break;
+        }
+        $composeFile = findComposeFile($path);
         if (!$composeFile) {
             http_response_code(404);
             echo json_encode(array('error' => 'Compose file not found'));
             break;
         }
-        $projectName = basename($path);
-        if (is_file("$path/name")) {
-            $projectName = trim(file_get_contents("$path/name"));
+        // Resolve project name - try to find the StackInfo, fall back to basename
+        $stackInfo = StackInfo::fromComposePath($compose_root, $path);
+        if ($stackInfo !== null) {
+            $projectName = $stackInfo->sanitizedName;
+        } else {
+            $projectName = basename($path);
+            if (is_file("$path/name")) {
+                $projectName = trim(file_get_contents("$path/name"));
+            }
+            $projectName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $projectName);
         }
-        $projectName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $projectName);
+
+        clientDebug("[autoupdate] Running manual auto-update for: $projectName", null, 'daemon', 'info');
 
         $script = $plugin_root . "scripts/compose_autoupdate.sh";
         // Allow overriding the shell command via environment for tests; default to sh

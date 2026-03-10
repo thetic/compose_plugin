@@ -1341,6 +1341,36 @@ class StackInfo
         // 5. Build + cache the instance (resolves override, etc.)
         return self::fromProject($composeRoot, basename($folder));
     }
+
+    /**
+     * Find a StackInfo by its compose source path.
+     *
+     * Searches all projects to find one whose composeSource matches the given path.
+     * Useful for auto-update feature where config stores compose source paths.
+     *
+     * @param string $composeRoot The compose projects root directory
+     * @param string $composePath The compose source path to search for
+     * @return self|null The matching StackInfo, or null if not found
+     */
+    public static function fromComposePath(string $composeRoot, string $composePath): ?self
+    {
+        $composeRoot = rtrim($composeRoot, '/');
+        $normalizedPath = rtrim($composePath, '/');
+
+        $projects = @array_diff(@scandir($composeRoot), ['.', '..']) ?: [];
+        foreach ($projects as $project) {
+            $projectPath = $composeRoot . '/' . $project;
+            if (!is_dir($projectPath)) {
+                continue;
+            }
+            // Check if this project's composeSource matches
+            $stackInfo = self::fromProject($composeRoot, $project);
+            if (rtrim($stackInfo->composeSource, '/') === $normalizedPath) {
+                return $stackInfo;
+            }
+        }
+        return null;
+    }
 }
 
 
