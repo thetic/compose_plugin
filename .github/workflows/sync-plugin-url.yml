@@ -1,0 +1,64 @@
+# .github/workflows/sync-plugin-url.yml
+# Ensures the PLG pluginURL entity always points to the current branch
+#
+# This prevents issues when merging between dev and main where the
+# pluginURL would reference the wrong branch for update checks.
+#
+# Triggers after pushes to main or dev (but not from other workflows)
+
+name: Sync Plugin URL
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'compose.manager.plg'
+
+jobs:
+  sync-url:
+    runs-on: ubuntu-latest
+    # Skip if this is already a bot commit (prevents infinite loops)
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check and fix pluginURL branch
+        id: check
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          PLG_FILE="compose.manager.plg"
+          
+          # Extract current branch from pluginURL entity
+          CURRENT_URL_BRANCH=$(grep -oP '<!ENTITY pluginURL.*github;/\K[^/]+' "$PLG_FILE" || echo "unknown")
+          
+          echo "Current branch: $BRANCH"
+          echo "PLG pluginURL branch: $CURRENT_URL_BRANCH"
+          
+          if [[ "$CURRENT_URL_BRANCH" != "$BRANCH" ]]; then
+            echo "Branch mismatch - fixing..."
+            
+            # Replace the branch in the pluginURL entity
+            sed -i "s|/&github;/[^/]*/|/\&github;/${BRANCH}/|" "$PLG_FILE"
+            
+            echo "Fixed pluginURL:"
+            grep "<!ENTITY pluginURL" "$PLG_FILE"
+            
+            echo "needs_commit=true" >> $GITHUB_OUTPUT
+          else
+            echo "pluginURL already correct"
+            echo "needs_commit=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit fix
+        if: steps.check.outputs.needs_commit == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add compose.manager.plg
+          git commit -m "chore: sync pluginURL to ${GITHUB_REF_NAME} branch [skip ci]"
+          git push
