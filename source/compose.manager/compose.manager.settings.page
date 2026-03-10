@@ -1185,7 +1185,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     // ========== Per-Stack Auto-Update Functions ==========
     function loadUpdatesUI() {
         $('#updates-tbody').html('<tr><td colspan="4" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>');
-        $.getJSON('/plugins/compose.manager/php/compose_projects.php', function(projects) {
+        $.post('/plugins/compose.manager/php/exec.php', {action: 'listProjects'}, function(projects) {
             $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getConfig'}, function(cfgdata) {
                 var cfg = {};
                 try { cfg = JSON.parse(cfgdata); } catch(e){ cfg = {}; }
@@ -1208,7 +1208,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     $last.find('.au-schedule').val(schedule);
                 });
             });
-        });
+        }, 'json');
     }
 
     function refreshCronStatus() {
