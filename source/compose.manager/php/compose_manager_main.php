@@ -5019,8 +5019,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                         if (composeNames[rowName.toLowerCase()]) {
                             $row.hide();
-                            // Also hide associated child/readmore rows
-                            $row.nextUntil('tr.sortable').hide();
                         }
                     });
                 }
