@@ -40,7 +40,7 @@ $ScriptDir = $PSScriptRoot
 # Generate dev version with timestamp if -Dev flag is used
 if ($Dev) {
     $now = Get-Date
-    $Version = $now.ToString("yyyy.MM.dd") + "-dev-" + $now.ToString("HHmmss")
+    $Version = $now.ToString("yyyy.MM.dd") + "-dev." + $now.ToString("HHmm")
     Write-Host "Generated dev version: $Version" -ForegroundColor Cyan
 }
 
