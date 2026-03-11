@@ -80,8 +80,8 @@ jobs:
             -v $PWD/archive:/mnt/output:rw \
             -v $PWD/source:/mnt/source:ro \
             -e TZ="America/New_York" \
-            -e COMPOSE_VERSION=${{ env.COMPOSE_VERSION }} \
-            -e ACE_VERSION=${{ env.ACE_VERSION }} \
+            -e COMPOSE_VERSION="$COMPOSE_VERSION" \
+            -e ACE_VERSION="$ACE_VERSION" \
             -e OUTPUT_FOLDER="/mnt/output" \
             -e PKG_VERSION="${VERSION}" \
             vbatts/slackware:latest /mnt/source/pkg_build.sh
