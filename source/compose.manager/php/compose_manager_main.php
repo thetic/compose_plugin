@@ -4261,22 +4261,22 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         // DOM updates (e.g. a full list reload) that may remove the row.
         try {
             setTimeout(function() {
-                try {
-                    updateParentStackFromContainers(stackId, project);
-                } catch (e) {
-                    composeClientDebug('[renderContainerDetails] update-parent-failed', {
-                        err: e.toString(),
-                        stackId: stackId,
-                        project: project
-                    }, 'daemon', 'error');
-                }
-                // Mark that we just rendered so immediate subsequent update-driven
-                // refreshes don't re-trigger another load (breaks the render -> update -> render loop)
+                // Mark as just rendered before any parent-row update so
+                // updateStackUpdateUI can suppress re-entrant detail reloads.
                 try {
                     stackDetailsJustRendered[stackId] = true;
                 } catch (ex) {
                     composeClientDebug('[renderContainerDetails] set-just-rendered-failed', {
                         err: ex.toString(),
+                        stackId: stackId,
+                        project: project
+                    }, 'daemon', 'error');
+                }
+                try {
+                    updateParentStackFromContainers(stackId, project);
+                } catch (e) {
+                    composeClientDebug('[renderContainerDetails] update-parent-failed', {
+                        err: e.toString(),
                         stackId: stackId,
                         project: project
                     }, 'daemon', 'error');
