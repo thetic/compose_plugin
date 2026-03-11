@@ -241,6 +241,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     #compose_updates th:nth-child(2) { width: 100px; text-align: center; }
     #compose_updates th:nth-child(3) { width: 130px; }
     #compose_updates th:nth-child(4) { width: 110px; }
+    #compose_updates th:nth-child(5) { width: 170px; }
 
     #compose_updates td {
         padding: 8px 10px;
@@ -260,6 +261,16 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     #compose_updates .au-time {
         width: 100%;
         padding: 4px 6px;
+    }
+
+    #compose_updates .au-weekday,
+    #compose_updates .au-monthday {
+        width: 100%;
+        padding: 4px 6px;
+    }
+
+    #compose_updates .au-monthday {
+        max-width: 90px;
     }
 
     #compose_updates tbody tr:hover {
@@ -1272,8 +1283,25 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     // ========== Per-Stack Auto-Update Functions ==========
+    function updateScheduleControls($row) {
+        var schedule = $row.find('.au-schedule').val();
+        var $weekday = $row.find('.au-weekday');
+        var $monthday = $row.find('.au-monthday');
+
+        if (schedule === 'weekly') {
+            $weekday.show().prop('disabled', false);
+            $monthday.hide().prop('disabled', true);
+        } else if (schedule === 'monthly') {
+            $weekday.hide().prop('disabled', true);
+            $monthday.show().prop('disabled', false);
+        } else {
+            $weekday.hide().prop('disabled', true);
+            $monthday.hide().prop('disabled', true);
+        }
+    }
+
     function loadUpdatesUI() {
-        $('#updates-tbody').html('<tr><td colspan="4" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>');
+        $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>');
         $.post('/plugins/compose.manager/php/exec.php', {action: 'listProjects'}, function(projects) {
             $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getConfig'}, function(cfg) {
                 // Response is already parsed as JSON by jQuery due to Content-Type header
@@ -1286,25 +1314,48 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     var enabled = entry.enabled ? 'checked' : '';
                     var schedule = entry.schedule || 'daily';
                     var time = entry.time || '02:00';
+                    var weekday = (entry.weekday !== undefined) ? entry.weekday : 0;
+                    var monthday = (entry.monthday !== undefined) ? entry.monthday : 1;
                     var row = '<tr class="sortable" data-path="'+escapeHtml(key)+'">';
                     row += '<td>'+escapeHtml(p.name)+'</td>';
                     row += '<td><input type="checkbox" class="au-enabled" '+enabled+'></td>';
                     row += '<td><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
                     row += '<td><input type="time" class="au-time" value="'+escapeHtml(time)+'"></td>';
+                    row += '<td>';
+                    row += '<select class="au-weekday">';
+                    row += '<option value="0">_(Sunday)_</option>';
+                    row += '<option value="1">_(Monday)_</option>';
+                    row += '<option value="2">_(Tuesday)_</option>';
+                    row += '<option value="3">_(Wednesday)_</option>';
+                    row += '<option value="4">_(Thursday)_</option>';
+                    row += '<option value="5">_(Friday)_</option>';
+                    row += '<option value="6">_(Saturday)_</option>';
+                    row += '</select>';
+                    row += '<input type="number" class="au-monthday" min="1" max="31" step="1" value="'+escapeHtml(String(monthday))+'">';
+                    row += '</td>';
                     row += '</tr>';
                     $('#updates-tbody').append(row);
                     var $last = $('#updates-tbody tr').last();
                     $last.find('.au-schedule').val(schedule);
+                    $last.find('.au-weekday').val(String(weekday));
+                    $last.find('.au-monthday').val(monthday);
+                    updateScheduleControls($last);
                 });
+            }, 'json').fail(function() {
+                $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#b33;padding:12px;">_(Failed to load auto-update settings.)_</td></tr>');
             });
-        }, 'json');
+        }, 'json').fail(function() {
+            $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#b33;padding:12px;">_(Failed to load stacks.)_</td></tr>');
+        });
     }
 
     function refreshCronStatus() {
         $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getCronStatus'}, function(r){
             // Response is already parsed as JSON by jQuery due to Content-Type header
             $('#cron-status').text(r && r.installed ? '_(Scheduler active)_' : '_(Scheduler not installed)_');
-        }, 'json');
+        }, 'json').fail(function() {
+            $('#cron-status').text('_(Scheduler status unavailable)_');
+        });
     }
 
     // Initialize Updates tab when it's shown
@@ -1316,7 +1367,12 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             $('#updates-tbody tr').each(function(){
                 $(this).find('.au-schedule').val(s);
                 $(this).find('.au-time').val(t);
+                updateScheduleControls($(this));
             });
+        });
+
+        $(document).on('change', '#updates-tbody .au-schedule', function(){
+            updateScheduleControls($(this).closest('tr'));
         });
 
         // Install cron job
@@ -1324,6 +1380,8 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'installCron'}, function(d){ 
                 refreshCronStatus(); 
                 swal('Installed','Scheduler installed (runs every 15 minutes).','success'); 
+            }, 'json').fail(function(){
+                swal('Error', 'Failed to install scheduler.', 'error');
             });
         });
 
@@ -1332,6 +1390,8 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'removeCron'}, function(d){ 
                 refreshCronStatus(); 
                 swal('Removed','Scheduler removed.','success'); 
+            }, 'json').fail(function(){
+                swal('Error', 'Failed to remove scheduler.', 'error');
             });
         });
 
@@ -1344,8 +1404,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 var enabled = $(this).find('.au-enabled').is(':checked');
                 var schedule = $(this).find('.au-schedule').val();
                 var time = $(this).find('.au-time').val();
-                var weekday = new Date().getDay();
-                var monthday = new Date().getDate();
+                var weekday = parseInt($(this).find('.au-weekday').val(), 10);
+                var monthday = parseInt($(this).find('.au-monthday').val(), 10);
+                if (isNaN(weekday) || weekday < 0 || weekday > 6) weekday = 0;
+                if (isNaN(monthday) || monthday < 1 || monthday > 31) monthday = 1;
                 cfg[path] = { enabled: enabled, schedule: schedule, time: time, weekday: weekday, monthday: monthday };
             });
             var defaults = { schedule: $('#default-schedule').val(), time: $('#default-time').val() };
@@ -1354,7 +1416,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'saveConfig', data: JSON.stringify(payload)}, function(resp){
                 if (resp && resp.ok) swal('Saved', 'Auto-update settings saved.', 'success');
                 else swal('Error', 'Failed to save settings', 'error');
-            }, 'json');
+            }, 'json').fail(function(){
+                swal('Error', 'Failed to save settings', 'error');
+            });
         });
 
         // Run auto-update now for enabled stacks
@@ -1363,9 +1427,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 var path = $(this).data('path');
                 var enabled = $(this).find('.au-enabled').is(':checked');
                 if (enabled) {
-                    $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'runNow', path: encodeURIComponent(path)}, function(data){
+                    $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'runNow', path: path}, function(data){
                         console.log(data);
-                    }, 'json');
+                    }, 'json').fail(function(){
+                        console.log('runNow failed for path', path);
+                    });
                 }
             });
             swal('Started', 'Triggered auto-update for enabled stacks. Check logs for details.', 'info');
@@ -1635,10 +1701,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     <th>_(Auto-Update)_</th>
                     <th>_(Schedule)_</th>
                     <th>_(Time)_</th>
+                    <th>_(On)_</th>
                 </tr>
             </thead>
             <tbody id="updates-tbody">
-                <tr><td colspan="4" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>
+                <tr><td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>
             </tbody>
         </table>
 

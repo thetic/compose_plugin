@@ -3,41 +3,17 @@ require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
 
 $action = isset($_POST['action']) ? $_POST['action'] : '';
-$autofile = $plugin_root . "autoupdate.json";
+$autofile = getAutoUpdateConfigFilePath();
+$legacyAutofile = rtrim($plugin_root ?? '', '/') . "/autoupdate.json";
+
+if ($autofile !== $legacyAutofile && !is_file($autofile) && is_file($legacyAutofile)) {
+    $targetDir = dirname($autofile);
+    if (is_dir($targetDir) || @mkdir($targetDir, 0755, true)) {
+        @copy($legacyAutofile, $autofile);
+    }
+}
 
 header('Content-Type: application/json');
-
-/**
- * Validate that a path is allowed for auto-update operations.
- * Must be under compose_root, /mnt/, or /boot/config/.
- * @param string $path The path to validate
- * @return bool True if path is allowed
- */
-if (!function_exists('isAllowedAutoUpdatePath')) {
-function isAllowedAutoUpdatePath($path) {
-    global $compose_root;
-    $realPath = realpath($path);
-    if ($realPath === false) {
-        return false;
-    }
-    // Allow paths under compose_root with proper boundary check
-    $realComposeRoot = realpath($compose_root);
-    if ($realComposeRoot !== false) {
-        $realComposeRoot = rtrim($realComposeRoot, DIRECTORY_SEPARATOR);
-        if ($realPath === $realComposeRoot || strpos($realPath, $realComposeRoot . DIRECTORY_SEPARATOR) === 0) {
-            return true;
-        }
-    }
-    // Allow indirect paths under /mnt/ or /boot/config/ with boundary checks
-    if ($realPath === '/mnt' || strpos($realPath, '/mnt/') === 0) {
-        return true;
-    }
-    if ($realPath === '/boot/config' || strpos($realPath, '/boot/config/') === 0) {
-        return true;
-    }
-    return false;
-}
-} // end function_exists check
 
 switch ($action) {
     case 'getConfig':

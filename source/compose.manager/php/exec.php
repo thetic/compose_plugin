@@ -1415,8 +1415,7 @@ switch ($_POST['action']) {
                 continue;
             }
             $stackInfo = StackInfo::fromProject($compose_root, $project);
-            $id = str_replace('.', '-', $project);
-            $id = str_replace(' ', '', $id);
+            $id = preg_replace('/[^A-Za-z0-9_\-]/', '-', $project);
             $out[] = [
                 'id' => $id,
                 'project' => $stackInfo->project,

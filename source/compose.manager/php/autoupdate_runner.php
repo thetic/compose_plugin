@@ -5,7 +5,7 @@
 require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
 
-$autofile = $plugin_root . "autoupdate.json";
+$autofile = getAutoUpdateConfigFilePath();
 if (!is_file($autofile)) exit(0);
 
 $data = json_decode(file_get_contents($autofile), true);

@@ -136,6 +136,67 @@ function hasComposeFile($dir)
     return findComposeFile($dir) !== false;
 }
 
+/**
+ * Resolve the config file path used by auto-update.
+ *
+ * Prefers a persistent path under /boot/config when available and writable,
+ * with environment override support for tests.
+ *
+ * @param string $pluginRoot The plugin root directory path
+ * @return string
+ */
+function getAutoUpdateConfigFilePath(): string
+{
+    global $plugin_root;
+
+    $override = getenv('COMPOSE_MANAGER_AUTOUPDATE_FILE');
+    if ($override !== false && $override !== '') {
+        return $override;
+    }
+
+    $persistentPath = '/boot/config/plugins/compose.manager/autoupdate.json';
+    $persistentDir = dirname($persistentPath);
+    if ((is_dir('/boot/config') || is_dir($persistentDir) || @mkdir($persistentDir, 0755, true)) && is_dir($persistentDir)) {
+        return $persistentPath;
+    }
+
+    return rtrim($plugin_root ?? '', '/') . '/autoupdate.json';
+}
+
+/**
+ * Validate that a path is allowed for auto-update operations.
+ * Must be under compose_root, /mnt/, or /boot/config/.
+ *
+ * @param string $path The path to validate
+ * @return bool
+ */
+function isAllowedAutoUpdatePath($path): bool
+{
+    global $compose_root;
+
+    $realPath = realpath($path);
+    if ($realPath === false) {
+        return false;
+    }
+
+    $realComposeRoot = realpath($compose_root);
+    if ($realComposeRoot !== false) {
+        $realComposeRoot = rtrim($realComposeRoot, DIRECTORY_SEPARATOR);
+        if ($realPath === $realComposeRoot || strpos($realPath, $realComposeRoot . DIRECTORY_SEPARATOR) === 0) {
+            return true;
+        }
+    }
+
+    if ($realPath === '/mnt' || strpos($realPath, '/mnt/') === 0) {
+        return true;
+    }
+    if ($realPath === '/boot/config' || strpos($realPath, '/boot/config/') === 0) {
+        return true;
+    }
+
+    return false;
+}
+
 
 function pruneOverrideContentServices(string $overrideContent, array $validServices): array
 {

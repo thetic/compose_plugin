@@ -2,8 +2,6 @@
 # Compose auto-update runner
 # Args: <compose_yml_path> <project_name>
 
-set -e
-
 COMPOSE_FILE="$1"
 PROJECT_NAME="$2"
 NOTIFY="/usr/local/emhttp/webGui/scripts/notify"
@@ -35,7 +33,11 @@ done
 # Write lock info
 echo "{\"pid\":$$,\"command\":\"autoupdate\",\"time\":\"$(date -Iseconds)\"}" >&9
 
-OUT=$(mktemp)
+OUT=$(mktemp 2>/dev/null || echo "")
+if [ -z "$OUT" ]; then
+  echo "Failed to create temporary output file" >&2
+  exit 1
+fi
 RC=0
 
 # Get current image digests before pull
@@ -48,7 +50,7 @@ get_image_digests() {
   done | sort
 }
 
-OLD_DIGESTS=$(get_image_digests)
+OLD_DIGESTS=$(get_image_digests || true)
 
 # Run pull and capture output
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull > "$OUT" 2>&1 || RC=$?
@@ -64,7 +66,7 @@ if [ "$RC" -ne 0 ]; then
 fi
 
 # Get new image digests after pull
-NEW_DIGESTS=$(get_image_digests)
+NEW_DIGESTS=$(get_image_digests || true)
 
 # Compare digests to determine if any images were updated
 if [ "$OLD_DIGESTS" != "$NEW_DIGESTS" ]; then
