@@ -1,4 +1,6 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+[ -f "${SCRIPT_DIR}/versions.env" ] && source "${SCRIPT_DIR}/versions.env"
 [ -z "$COMPOSE_VERSION" ] && COMPOSE_VERSION=5.0.2
 [ -z "$ACE_VERSION" ] && ACE_VERSION=1.43.5
 docker run --rm --tmpfs /tmp \

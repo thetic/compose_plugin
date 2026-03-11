@@ -30,12 +30,23 @@
 param(
     [string]$Version,
     [switch]$Dev,
-    [string]$ComposeVersion = "5.0.2",
-    [string]$AceVersion = "1.43.5"
+    [string]$ComposeVersion,
+    [string]$AceVersion
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
+
+# Read component versions from versions.env if not supplied as parameters
+$versionsFile = Join-Path $ScriptDir "versions.env"
+if (Test-Path $versionsFile) {
+    Get-Content $versionsFile | ForEach-Object {
+        if ($_ -match '^COMPOSE_VERSION=(.+)$' -and -not $ComposeVersion) { $ComposeVersion = $Matches[1].Trim() }
+        if ($_ -match '^ACE_VERSION=(.+)$' -and -not $AceVersion) { $AceVersion = $Matches[1].Trim() }
+    }
+}
+if (-not $ComposeVersion) { $ComposeVersion = "5.0.2" }
+if (-not $AceVersion) { $AceVersion = "1.43.5" }
 
 # Generate dev version with timestamp if -Dev flag is used
 if ($Dev) {
