@@ -4,7 +4,7 @@
 #
 
 # Load test framework (project-level bootstrap wraps the generic framework)
-load '../bats_setup'
+load '../bats_setup.bash'
 
 # Path to the script we're testing
 COMPOSE_SCRIPT="$BATS_TEST_DIRNAME/../../source/compose.manager/scripts/compose.sh"
