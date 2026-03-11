@@ -124,24 +124,16 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $composeFilePath = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/compose.yaml');
 
-        if ($stackInfo->composeFilePath !== null) {
-            // StackInfo resolved the file; read it
+        // Check file existence consistently regardless of how path was resolved
+        if (is_file($composeFilePath)) {
             $scriptContents = file_get_contents($composeFilePath);
             if ($scriptContents === false) {
                 echo json_encode(['result' => 'error', 'message' => "Unable to read compose file: $composeFilePath"]);
                 break;
             }
         } else {
-            // Fallback path may not exist yet for new stacks; only check existence here.
-            if (is_file($composeFilePath)) {
-                $scriptContents = file_get_contents($composeFilePath);
-                if ($scriptContents === false) {
-                    echo json_encode(['result' => 'error', 'message' => "Unable to read compose file: $composeFilePath"]);
-                    break;
-                }
-            } else {
-                $scriptContents = "";
-            }
+            // File doesn't exist yet (new stack) - return empty content
+            $scriptContents = "";
         }
         $scriptContents = str_replace("\r", "", $scriptContents);
         if (!$scriptContents) {
