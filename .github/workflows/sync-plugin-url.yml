@@ -14,6 +14,9 @@ on:
     paths:
       - 'compose.manager.plg'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   sync-url:
     permissions:
