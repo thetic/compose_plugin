@@ -427,31 +427,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     .backup-actions .spinner {
         display: none;
-        width: 16px;
-        height: 16px;
-        border: 2px solid rgba(128, 128, 128, 0.3);
-        border-top: 2px solid #ff8c2f;
-        border-radius: 50%;
-        animation: backup-spin 0.8s linear infinite;
-        flex-shrink: 0;
+        color: #ff8c2f;
     }
 
-    /* Use ID selector for higher specificity to override any global spinner styles */
-    #updates-spinner {
-        display: none;
-    }
-
-    #updates-spinner.visible {
+    .backup-actions .spinner.visible {
         display: inline-block;
-    }
-
-    @keyframes backup-spin {
-        0% {
-            transform: rotate(0deg);
-        }
-        100% {
-            transform: rotate(360deg);
-        }
     }
 
     .schedule-options {
@@ -963,10 +943,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var $spinner = $btn.siblings('.spinner');
         if (spinning) {
             $btn.prop('disabled', true);
-            $spinner.show();
+            $spinner.addClass('visible');
         } else {
             $btn.prop('disabled', false);
-            $spinner.hide();
+            $spinner.removeClass('visible');
         }
     }
 
@@ -1850,7 +1830,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 <div class="backup-actions">
                     <input type="button" id="save-updates" value="_(Save Settings)_" class="orange-button">
                     <input type="button" id="run-now" value="_(Update Now)_" title="_(Run auto-update now for all enabled stacks)_">
-                    <div class="spinner" id="updates-spinner"></div>
+                    <i class="fa fa-spinner fa-spin spinner" id="updates-spinner"></i>
                 </div>
                 <div id="updates-status" class="backup-status"></div>
             </dd>
@@ -1960,7 +1940,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 <div class="backup-actions">
                     <input type="button" id="btn-save-backup-settings" value="_(Save Settings)_" onclick="saveBackupSettings()" class="orange-button">
                     <input type="button" id="btn-create-backup" value="_(Backup Now)_" onclick="createBackupNow()">
-                    <div class="spinner"></div>
+                    <i class="fa fa-spinner fa-spin spinner"></i>
                 </div>
                 <div id="backup-create-status" class="backup-status"></div>
             </dd>
@@ -2014,7 +1994,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             <dd>
                 <div class="backup-actions">
                     <input type="button" id="btn-restore-stacks" value="_(Restore Selected)_" onclick="restoreSelectedStacks()" class="orange-button" disabled>
-                    <div class="spinner"></div>
+                    <i class="fa fa-spinner fa-spin spinner"></i>
                     <span id="restore-selected-count" style="color:#888;"></span>
                 </div>
                 <div id="restore-status" class="backup-status"></div>
