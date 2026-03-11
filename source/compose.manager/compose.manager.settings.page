@@ -198,6 +198,74 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         color: #888;
     }
 
+    /* Auto-Updates table styles */
+    #updates-ui {
+        max-width: 900px;
+    }
+
+    #updates-ui .default-settings {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 10px 12px;
+        background: rgba(128, 128, 128, 0.1);
+        border-radius: 4px;
+    }
+
+    #updates-ui .default-settings label {
+        margin: 0;
+        font-weight: 500;
+    }
+
+    #updates-ui .default-settings select,
+    #updates-ui .default-settings input[type="time"] {
+        padding: 4px 8px;
+    }
+
+    #compose_updates {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    #compose_updates th {
+        text-align: left;
+        padding: 8px 10px;
+        font-weight: 600;
+        border-bottom: 2px solid rgba(128, 128, 128, 0.3);
+    }
+
+    #compose_updates th:nth-child(1) { width: auto; }
+    #compose_updates th:nth-child(2) { width: 100px; text-align: center; }
+    #compose_updates th:nth-child(3) { width: 130px; }
+    #compose_updates th:nth-child(4) { width: 110px; }
+
+    #compose_updates td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+        vertical-align: middle;
+    }
+
+    #compose_updates td:nth-child(2) {
+        text-align: center;
+    }
+
+    #compose_updates .au-schedule {
+        width: 100%;
+        padding: 4px 6px;
+    }
+
+    #compose_updates .au-time {
+        width: 100%;
+        padding: 4px 6px;
+    }
+
+    #compose_updates tbody tr:hover {
+        background: rgba(128, 128, 128, 0.08);
+    }
+
     /* Alternating row colors for updates table to match compose stacks */
     #compose_updates tbody tr.sortable:nth-of-type(4n+1) {
         background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color, rgba(0,0,0,0.05));
@@ -209,6 +277,27 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     #compose_updates tbody tr.stack-details-row {
         background-color: rgba(0,0,0,0.08) !important;
+    }
+
+    #updates-ui .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+        align-items: center;
+    }
+
+    #updates-ui .cron-status-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+        align-items: center;
+    }
+
+    #cron-status {
+        margin-left: 8px;
+        font-size: 0.9em;
     }
 
     /* Backup / Restore tab styles */
@@ -1198,10 +1287,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     var schedule = entry.schedule || 'daily';
                     var time = entry.time || '02:00';
                     var row = '<tr class="sortable" data-path="'+escapeHtml(key)+'">';
-                    row += '<td style="padding:6px">'+escapeHtml(p.name)+'</td>';
-                    row += '<td style="padding:6px;text-align:center"><input type="checkbox" class="au-enabled" '+enabled+'></td>';
-                    row += '<td style="padding:6px"><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
-                    row += '<td style="padding:6px"><input type="time" class="au-time" value="'+time+'"></td>';
+                    row += '<td>'+escapeHtml(p.name)+'</td>';
+                    row += '<td><input type="checkbox" class="au-enabled" '+enabled+'></td>';
+                    row += '<td><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
+                    row += '<td><input type="time" class="au-time" value="'+time+'"></td>';
                     row += '</tr>';
                     $('#updates-tbody').append(row);
                     var $last = $('#updates-tbody tr').last();
@@ -1531,25 +1620,25 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 <div id="compose-tab-updates" class="compose-tab-content">
     <div class="title"><span class="left"><i class="fa fa-list icon"></i>_(Per-Stack Auto-Updates)_</span></div>
     <div id="updates-ui">
-        <div style="margin-bottom:12px;display:flex;gap:12px;align-items:center;">
-            <label style="margin:0;">_(Default Schedule)_:</label>
+        <div class="default-settings">
+            <label>_(Default Schedule)_:</label>
             <select id="default-schedule">
                 <option value="daily">_(Daily)_</option>
                 <option value="weekly">_(Weekly)_</option>
                 <option value="monthly">_(Monthly)_</option>
             </select>
-            <label style="margin:0 0 0 8px;">_(Time)_</label>
+            <label>_(Time)_:</label>
             <input type="time" id="default-time" value="02:00">
             <input type="button" id="apply-default" class="slim-button orange-button" value="_(Apply to All)_">
         </div>
 
-        <table id="compose_updates" class="tablesorter shift" style="width:100%;border-collapse:collapse;">
+        <table id="compose_updates" class="tablesorter shift">
             <thead>
                 <tr>
-                    <th style="text-align:left;padding:6px">_(Stack)_</th>
-                    <th style="padding:6px">_(Auto-Update)_</th>
-                    <th style="padding:6px">_(Schedule)_</th>
-                    <th style="padding:6px">_(Time)_</th>
+                    <th>_(Stack)_</th>
+                    <th>_(Auto-Update)_</th>
+                    <th>_(Schedule)_</th>
+                    <th>_(Time)_</th>
                 </tr>
             </thead>
             <tbody id="updates-tbody">
@@ -1557,15 +1646,15 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             </tbody>
         </table>
 
-        <div style="margin-top:12px;">
+        <div class="button-row">
             <input type="button" id="save-updates" value="_(Save Auto-Update Settings)_" class="orange-button">
             <input type="button" id="run-now" value="_(Run Now for Selected)_" class="slim-button">
         </div>
 
-        <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+        <div class="cron-status-row">
             <input type="button" id="install-cron" class="slim-button" value="_(Enable Scheduler)_">
             <input type="button" id="remove-cron" class="slim-button" value="_(Disable Scheduler)_">
-            <span id="cron-status" style="margin-left:12px;color:#888;"></span>
+            <span id="cron-status"></span>
         </div>
     </div>
 </div>
