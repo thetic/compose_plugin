@@ -248,10 +248,16 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     #compose_updates th:nth-child(1) { width: auto; }
-    #compose_updates th:nth-child(2) { width: 120px; text-align: center; }
+    #compose_updates th:nth-child(2) { width: 140px; text-align: center; }
     #compose_updates th:nth-child(3) { width: 130px; }
     #compose_updates th:nth-child(4) { width: 110px; }
     #compose_updates th:nth-child(5) { width: 170px; }
+
+    /* Toggle All switch in header */
+    #compose_updates th .switch-button-background {
+        margin: 0;
+        vertical-align: middle;
+    }
 
     #compose_updates td {
         padding: 8px 10px;
@@ -1312,6 +1318,17 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         }
     }
 
+    function updateToggleAllState() {
+        var $checkboxes = $('#updates-tbody .au-enabled');
+        var $toggleAll = $('#toggle-all-updates');
+        if ($checkboxes.length === 0) {
+            $toggleAll.prop('checked', false);
+            return;
+        }
+        var allChecked = $checkboxes.filter(':checked').length === $checkboxes.length;
+        $toggleAll.prop('checked', allChecked);
+    }
+
     function loadUpdatesUI() {
         $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>');
         $.post('/plugins/compose.manager/php/exec.php', {action: 'listProjects'}, function(projects) {
@@ -1361,6 +1378,8 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                         off_label: ''
                     });
                 });
+                // Sync toggle-all state
+                updateToggleAllState();
             }, 'json').fail(function() {
                 $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#b33;padding:12px;">_(Failed to load auto-update settings.)_</td></tr>');
             });
@@ -1402,20 +1421,28 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             updateScheduleControls($(this).closest('tr'));
         });
 
+        // Initialize toggle-all switch in header
+        $('#toggle-all-updates').switchButton({
+            labels_placement: 'right',
+            on_label: '',
+            off_label: ''
+        });
+
         // Toggle all auto-updates on/off
-        $('#toggle-all-updates').on('click', function(){
+        $('#toggle-all-updates').on('change', function(){
+            var checked = $(this).is(':checked');
             var $checkboxes = $('#updates-tbody .au-enabled');
-            if ($checkboxes.length === 0) return;
-            // Determine target state: if any are unchecked, turn all on; otherwise turn all off
-            var anyOff = $checkboxes.filter(function(){ return !$(this).is(':checked'); }).length > 0;
             $checkboxes.each(function(){
                 var $cb = $(this);
-                if (anyOff) {
-                    if (!$cb.is(':checked')) $cb.prop('checked', true).change();
-                } else {
-                    if ($cb.is(':checked')) $cb.prop('checked', false).change();
+                if ($cb.is(':checked') !== checked) {
+                    $cb.prop('checked', checked).change();
                 }
             });
+        });
+
+        // Sync toggle-all state when individual toggles change
+        $(document).on('change', '#updates-tbody .au-enabled', function(){
+            updateToggleAllState();
         });
 
         // Toggle scheduler (single button that shows state)
@@ -1758,7 +1785,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             <thead>
                 <tr>
                     <th>_(Stack)_</th>
-                    <th>_(Auto-Update)_ <input type="button" id="toggle-all-updates" class="slim-button" value="_(Toggle All)_" title="_(Toggle all auto-updates on/off)_" style="margin-left:8px;padding:2px 8px;font-size:0.85em;"></th>
+                    <th><input type="checkbox" id="toggle-all-updates" title="_(Toggle all auto-updates on/off)_"></th>
                     <th>_(Schedule)_</th>
                     <th>_(Time)_</th>
                     <th>_(On)_</th>
