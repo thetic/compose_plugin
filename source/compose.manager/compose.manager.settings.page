@@ -1421,20 +1421,34 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             });
         });
 
-        // Run auto-update now for enabled stacks
+        // Run auto-update now for enabled stacks (serialized to avoid overwhelming the server)
         $('#run-now').on('click', function(){
+            var paths = [];
             $('#updates-tbody tr').each(function(){
                 var path = $(this).data('path');
                 var enabled = $(this).find('.au-enabled').is(':checked');
-                if (enabled) {
-                    $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'runNow', path: path}, function(data){
-                        console.log(data);
-                    }, 'json').fail(function(){
-                        console.log('runNow failed for path', path);
-                    });
+                if (enabled && path) {
+                    paths.push(path);
                 }
             });
-            swal('Started', 'Triggered auto-update for enabled stacks. Check logs for details.', 'info');
+            if (paths.length === 0) {
+                swal('Info', 'No stacks are enabled for auto-update.', 'info');
+                return;
+            }
+            var idx = 0;
+            function runNext() {
+                if (idx >= paths.length) return;
+                var p = paths[idx++];
+                $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'runNow', path: p}, function(data){
+                    console.log(data);
+                    runNext();
+                }, 'json').fail(function(){
+                    console.log('runNow failed for path', p);
+                    runNext();
+                });
+            }
+            runNext();
+            swal('Started', 'Triggered auto-update for ' + paths.length + ' enabled stack(s). Check logs for details.', 'info');
         });
 
         // Load updates UI when tab is clicked
