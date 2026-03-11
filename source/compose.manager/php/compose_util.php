@@ -9,24 +9,26 @@
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/compose_util_functions.php");
 
+$background = isset($_POST['background']) && $_POST['background'] == '1';
+
 switch ($_POST['action']) {
     case 'composeUp':
-        echoComposeCommand('up');
+        echoComposeCommand('up', false, $background);
         break;
     case 'composeUpRecreate':
-        echoComposeCommand('up', true);
+        echoComposeCommand('up', true, $background);
         break;
     case 'composeDown':
-        echoComposeCommand('down');
+        echoComposeCommand('down', false, $background);
         break;
     case 'composeUpPullBuild':
-        echoComposeCommand('update');
+        echoComposeCommand('update', false, $background);
         break;
     case 'composePull':
-        echoComposeCommand('pull');
+        echoComposeCommand('pull', false, $background);
         break;
     case 'composeStop':
-        echoComposeCommand('stop');
+        echoComposeCommand('stop', false, $background);
         break;
     case 'composeLogs':
         echoComposeCommand('logs');

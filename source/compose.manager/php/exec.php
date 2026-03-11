@@ -1076,6 +1076,29 @@ switch ($_POST['action']) {
         ]);
         break;
 
+    case 'getLastCmdLog':
+        // Return the last command log file for a stack (background or foreground run)
+        $script = getPostScript();
+        if (!$script) {
+            echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
+            break;
+        }
+
+        $logFile = "$compose_root/$script/last_cmd.log";
+        if (!is_file($logFile)) {
+            echo json_encode(['result' => 'success', 'log' => null]);
+            break;
+        }
+
+        $logContent = @file_get_contents($logFile);
+        if ($logContent === false) {
+            echo json_encode(['result' => 'error', 'message' => 'Could not read log file.']);
+            break;
+        }
+
+        echo json_encode(['result' => 'success', 'log' => $logContent]);
+        break;
+
     case 'checkStackLock':
         // Check if a stack is currently locked (operation in progress)
         $script = getPostScript();

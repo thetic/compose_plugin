@@ -479,6 +479,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         return path.replace(/\\/g, '/').replace(/\/[^\/]*$/, '');
     }
 
+    // Safely attempt to parse a JSON string; returns null on failure
+    function tryParseJson(str) {
+        if (!str || typeof str !== 'string') return null;
+        try { return JSON.parse(str); } catch (e) { return null; }
+    }
+
     // Editor modal state
     var editorModal = {
         editors: {},
@@ -1885,8 +1891,71 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         UpdateStack(path, "");
     }
 
+    // Show a brief swal when a background command is dispatched
+    function notifyBackgroundStarted(label) {
+        swal({
+            title: 'Running in background',
+            text: label + ' has been started in the background.\nYou will receive a notification when it completes.',
+            type: 'info',
+            timer: 3000,
+            showConfirmButton: false
+        });
+    }
+
+    // Poll for background operation completion by checking if stack lock is released
+    // Once lock is released, refresh the stack and clear the checking state
+    function pollBackgroundCompletion(stackName) {
+        // Poll with adaptive frequency to handle both fast and slow operations:
+        //   0–60s:   every 2s   (30 checks)
+        //   60s–5m:  every 5s   (48 checks)
+        //   5m–30m:  every 15s  (100 checks)
+        // Total coverage: ~30 minutes before giving up
+        var elapsed = 0; // seconds
+        var timeoutHandle;
+
+        function getInterval() {
+            if (elapsed < 60) return 2000;
+            if (elapsed < 300) return 5000;
+            return 15000;
+        }
+
+        function check() {
+            $.post(caURL, {
+                action: 'checkStackLock',
+                script: stackName
+            }, function(response) {
+                try {
+                    var parsed = JSON.parse(response);
+                    if (parsed.result === 'success' && !parsed.locked) {
+                        // Lock is released — clear spinner first, then fetch fresh data
+                        // so refreshStackByProject always wins and overwrites the restored state
+                        setStackActionInProgress(stackName, false);
+                        refreshStackByProject(stackName);
+                        return; // stop scheduling
+                    }
+                } catch (e) {
+                    composeClientDebug('[pollBackgroundCompletion] Parse error', e, 'daemon', 'error');
+                }
+
+                // Schedule next check if still within timeout (30 minutes)
+                var interval = getInterval();
+                elapsed += interval / 1000;
+                if (elapsed < 1800) {
+                    timeoutHandle = setTimeout(check, interval);
+                } else {
+                    composeClientDebug('[pollBackgroundCompletion] Timeout after 30m', {stack: stackName}, 'daemon', 'warn');
+                    setStackActionInProgress(stackName, false);
+                }
+            });
+        }
+
+        // Start first check after 2 seconds
+        elapsed += 2;
+        timeoutHandle = setTimeout(check, 2000);
+    }
+
     // Confirmed action handlers (no dialog, just execute)
-    function ComposeUpConfirmed(path, profile = "") {
+    function ComposeUpConfirmed(path, profile = "", background = false) {
         var height = 800;
         var width = 1200;
 
@@ -1898,9 +1967,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $.post(compURL, {
             action: 'composeUp',
             path: path,
-            profile: profile
+            profile: profile,
+            background: background ? 1 : 0
         }, function(data) {
-            if (data) {
+            var parsed = tryParseJson(data);
+            if (parsed && parsed.background) {
+                notifyBackgroundStarted('Compose Up: ' + basename(path));
+                pollBackgroundCompletion(stackNameForReload);
+            } else if (data) {
                 openBox(data, "Compose Up: " + basename(path), height, width, true);
             }
         })
@@ -1926,7 +2000,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         showStackActionDialog('up', path, profile);
     }
 
-    function ComposeDownConfirmed(path, profile = "") {
+    function ComposeDownConfirmed(path, profile = "", background = false) {
         var height = 800;
         var width = 1200;
 
@@ -1938,9 +2012,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $.post(compURL, {
             action: 'composeDown',
             path: path,
-            profile: profile
+            profile: profile,
+            background: background ? 1 : 0
         }, function(data) {
-            if (data) {
+            var parsed = tryParseJson(data);
+            if (parsed && parsed.background) {
+                notifyBackgroundStarted('Compose Down: ' + basename(path));
+                pollBackgroundCompletion(stackNameForReloadDown);
+            } else if (data) {
                 openBox(data, "Compose Down: " + basename(path), height, width, true);
             }
         })
@@ -1951,7 +2030,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     // Stop stack without removing containers
-    function ComposeStopConfirmed(path, profile = "") {
+    function ComposeStopConfirmed(path, profile = "", background = false) {
         var height = 800;
         var width = 1200;
 
@@ -1963,9 +2042,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $.post(compURL, {
             action: 'composeStop',
             path: path,
-            profile: profile
+            profile: profile,
+            background: background ? 1 : 0
         }, function(data) {
-            if (data) {
+            var parsed = tryParseJson(data);
+            if (parsed && parsed.background) {
+                notifyBackgroundStarted('Compose Stop: ' + basename(path));
+                pollBackgroundCompletion(stackNameForStop);
+            } else if (data) {
                 openBox(data, "Compose Stop: " + basename(path), height, width, true);
             }
         })
@@ -1976,7 +2060,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     // Restart stack (recreate containers without pulling)
-    function ComposeRestartConfirmed(path, profile = "") {
+    function ComposeRestartConfirmed(path, profile = "", background = false) {
         var height = 800;
         var width = 1200;
 
@@ -1988,9 +2072,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $.post(compURL, {
             action: 'composeUpRecreate',
             path: path,
-            profile: profile
+            profile: profile,
+            background: background ? 1 : 0
         }, function(data) {
-            if (data) {
+            var parsed = tryParseJson(data);
+            if (parsed && parsed.background) {
+                notifyBackgroundStarted('Compose Restart: ' + basename(path));
+                pollBackgroundCompletion(stackNameForRestart);
+            } else if (data) {
                 openBox(data, "Compose Restart: " + basename(path), height, width, true);
             }
         })
@@ -2001,7 +2090,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     // Force update stack (pull and rebuild even without detected updates)
-    function ForceUpdateStackConfirmed(path, profile = "") {
+    function ForceUpdateStackConfirmed(path, profile = "", background = false) {
         var height = 800;
         var width = 1200;
 
@@ -2017,9 +2106,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             $.post(compURL, {
                 action: 'composeUpPullBuild',
                 path: path,
-                profile: profile
+                profile: profile,
+                background: background ? 1 : 0
             }, function(data) {
-                if (data) {
+                var parsed = tryParseJson(data);
+                if (parsed && parsed.background) {
+                    notifyBackgroundStarted('Force Update: ' + basename(path));
+                    pollBackgroundCompletion(stackName);
+                } else if (data) {
                     openBox(data, "Force Update: " + basename(path), height, width, true);
                 }
             });
@@ -2203,8 +2297,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         // Now update the row using the fresh cache
                         updateParentStackFromContainers(stackId, project);
                         // If details are expanded, refresh them too
-                        if (expandedStacks[stackId]) {
+                        // If details are expanded (by JS state or DOM visibility), refresh them
+                        var $detailsRow = $('#details-row-' + stackId);
+                        if (expandedStacks[stackId] || $detailsRow.is(':visible')) {
+                            expandedStacks[stackId] = true; // re-sync JS state with DOM
                             renderContainerDetails(stackId, containers, project);
+                            if (!$detailsRow.is(':visible')) {
+                                $detailsRow.slideDown(200);
+                            }
                         }
                     }
                 } catch (e) {
@@ -2262,7 +2362,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
     }
 
-    function UpdateStackConfirmed(path, profile = "") {
+    function UpdateStackConfirmed(path, profile = "", background = false) {
         var height = 800;
         var width = 1200;
 
@@ -2280,9 +2380,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             $.post(compURL, {
                 action: 'composeUpPullBuild',
                 path: path,
-                profile: profile
+                profile: profile,
+                background: background ? 1 : 0
             }, function(data) {
-                if (data) {
+                var parsed = tryParseJson(data);
+                if (parsed && parsed.background) {
+                    notifyBackgroundStarted('Update: ' + basename(path));
+                    pollBackgroundCompletion(stackName);
+                } else if (data) {
                     openBox(data, "Update: " + basename(path), height, width, true);
                 }
             });
@@ -2700,33 +2805,89 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         // Warning/info text
         html += '<div style="color:' + cfg.warningColor + ';margin-top:14px;font-size:0.9em;"><i class="fa fa-' + cfg.warningIcon + '"></i> ' + cfg.warning + '</div>';
+
+        // Run-in-background checkbox (appended after config is fetched below)
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:8px;">' +
+            '<input type="checkbox" id="swal-run-bg-checkbox" style="width:16px;height:16px;cursor:pointer;">' +
+            '<label for="swal-run-bg-checkbox" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
+            '</div>';
+        html += bgCheckboxHtml;
         html += '</div>';
 
-        // Use native swal (SweetAlert 1.x) with callback style
-        swal({
-            title: cfg.title,
-            text: html,
-            html: true,
-            type: 'warning',
-            showCancelButton: true,
-            confirmButtonText: cfg.confirmText,
-            cancelButtonText: 'Cancel'
-        }, function(confirmed) {
-            if (confirmed) {
-                cfg.confirmedFn(path, profile);
-            }
+        // Fetch config to determine default checkbox state, then show swal
+        getConfig().then(function(pluginCfg) {
+            var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+
+            // Use native swal (SweetAlert 1.x) with callback style
+            swal({
+                title: cfg.title,
+                text: html,
+                html: true,
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonText: cfg.confirmText,
+                cancelButtonText: 'Cancel'
+            }, function(confirmed) {
+                if (confirmed) {
+                    // Capture checkbox state before swal destroys the DOM
+                    var runInBackground = $('#swal-run-bg-checkbox').is(':checked');
+                    cfg.confirmedFn(path, profile, runInBackground);
+                }
+            });
+
+            // Set checkbox default state after swal renders (small delay for DOM)
+            setTimeout(function() {
+                var $cb = $('#swal-run-bg-checkbox');
+                if ($cb.length) {
+                    $cb.prop('checked', bgDefault);
+                }
+            }, 50);
         });
     }
 
-    function ComposePullConfirmed(path, profile = "") {
+    function ViewLastCmdLog(project, displayName) {
+        $.post(caURL, {
+            action: 'getLastCmdLog',
+            script: project
+        }, function(response) {
+            var parsed = tryParseJson(response);
+            if (!parsed || parsed.result !== 'success') {
+                swal({ title: 'Error', text: 'Could not retrieve the log.', type: 'error' });
+                return;
+            }
+            if (!parsed.log) {
+                swal({ title: 'No log available', text: 'No command log has been saved for ' + escapeHtml(displayName) + ' yet.\nRun a command to generate one.', type: 'info' });
+                return;
+            }
+            // Show log in a swal with a scrollable pre block
+            var logHtml = '<div style="text-align:left;">' +
+                '<pre style="background:rgba(0,0,0,0.3);border-radius:4px;padding:12px;max-height:400px;overflow-y:auto;' +
+                'font-size:0.82em;line-height:1.4;white-space:pre-wrap;word-break:break-all;">' +
+                escapeHtml(parsed.log) + '</pre></div>';
+            swal({
+                title: 'Last Cmd Log: ' + escapeHtml(displayName),
+                text: logHtml,
+                html: true,
+                type: null,
+                confirmButtonText: 'Close'
+            });
+        });
+    }
+
+    function ComposePullConfirmed(path, profile = "", background = false) {
         var height = 800;
         var width = 1200;
         $.post(compURL, {
             action: 'composePull',
             path: path,
-            profile: profile
+            profile: profile,
+            background: background ? 1 : 0
         }, function(data) {
-            if (data) {
+            var parsed = tryParseJson(data);
+            if (parsed && parsed.background) {
+                notifyBackgroundStarted('Compose Pull: ' + basename(path));
+                pollBackgroundCompletion(basename(path));
+            } else if (data) {
                 openBox(data, "Compose Pull: " + basename(path), height, width, true);
             }
         })
@@ -2844,6 +3005,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 break;
             case 'logs':
                 ComposeLogs(path);
+                break;
+            case 'viewCmdLog':
+                ViewLastCmdLog(project, projectName);
                 break;
             case 'edit':
                 openEditorModalByProject(project, projectName);
@@ -3814,8 +3978,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             expandedStacks[stackId] = true;
 
             if (stackContainersCache[stackId]) {
-                // Cached — content is already rendered in the DOM from last load.
-                // Just slide down without re-fetching to avoid flash/layout shift.
+                // Cached — always re-render from cache before showing.
+                // This prevents stale hidden DOM content when a stack changed
+                // state while details were collapsed.
+                renderContainerDetails(stackId, stackContainersCache[stackId], project);
                 $detailsRow.slideDown(200);
             } else {
                 // First load: fetch data, row stays hidden until render completes
@@ -3849,47 +4015,56 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             script: project
         }, function(data) {
             if (data) {
-                var response = JSON.parse(data);
-                if (response.result === 'success') {
-                    var containers = response.containers;
+                try {
+                    var response = JSON.parse(data);
+                    if (response.result === 'success') {
+                        var containers = response.containers;
 
-                    // Normalize all containers via factory function (PascalCase→camelCase)
-                    containers = containers.map(createContainerInfo).filter(Boolean);
+                        // Normalize all containers via factory function (PascalCase→camelCase)
+                        containers = containers.map(createContainerInfo).filter(Boolean);
 
-                    // Merge update status from stackUpdateStatus if available
-                    mergeUpdateStatus(containers, project);
+                        // Merge update status from stackUpdateStatus if available
+                        mergeUpdateStatus(containers, project);
 
-                    stackContainersCache[stackId] = containers;
-                    stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
-                    composeClientDebug('[loadStackContainerDetails] success', {
+                        stackContainersCache[stackId] = containers;
+                        stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
+                        composeClientDebug('[loadStackContainerDetails] success', {
+                            stackId: stackId,
+                            project: project,
+                            containers: containers.length
+                        }, 'daemon', 'info');
+                        renderContainerDetails(stackId, containers, project);
+                        // Slide down details row now that content is rendered
+                        $('#details-row-' + stackId).slideDown(200);
+                    } else {
+                        // Escape error message to prevent XSS
+                        var errorMsg = escapeHtml(response.message || 'Failed to load container details');
+                        $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> ' + errorMsg + '</div>');
+                        $('#details-row-' + stackId).slideDown(200);
+                        composeClientDebug('[loadStackContainerDetails] error', {
+                            stackId: stackId,
+                            project: project,
+                            message: errorMsg
+                        }, 'daemon', 'error');
+                    }
+                } catch (e) {
+                    $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> Failed to parse container details response</div>');
+                    $('#details-row-' + stackId).slideDown(200);
+                    composeClientDebug('[loadStackContainerDetails] parse-error', {
                         stackId: stackId,
                         project: project,
-                        containers: containers.length
-                    }, 'daemon', 'info');
-                    renderContainerDetails(stackId, containers, project);
-                    // Slide down details row now that content is rendered
-                    $('#details-row-' + stackId).slideDown(200);
-                } else {
-                    // Escape error message to prevent XSS
-                    var errorMsg = escapeHtml(response.message || 'Failed to load container details');
-                    $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> ' + errorMsg + '</div>');
-                    $('#details-row-' + stackId).slideDown(200);
-                    stackDetailsLoading[stackId] = false;
-                    composeClientDebug('[loadStackContainerDetails] error', {
-                        stackId: stackId,
-                        project: project,
-                        message: errorMsg
+                        err: e.toString()
                     }, 'daemon', 'error');
                 }
             } else {
                 $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> Failed to load container details</div>');
                 $('#details-row-' + stackId).slideDown(200);
-                stackDetailsLoading[stackId] = false;
                 composeClientDebug('[loadStackContainerDetails] empty-response', {
                     stackId: stackId,
                     project: project
                 }, 'daemon', 'warning');
             }
+            stackDetailsLoading[stackId] = false;
         }).fail(function() {
             $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> Failed to load container details</div>');
             $('#details-row-' + stackId).slideDown(200);
@@ -4259,6 +4434,50 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }
             }
 
+            // Update data-isup and data-running so context menu reflects new state
+            var newIsUp = anyRunning ? '1' : '0';
+            $stackRow.data('isup', newIsUp).attr('data-isup', newIsUp);
+            var $iconSpan = $stackRow.find('span[data-stackid]');
+            $iconSpan.data('isup', newIsUp).attr('data-isup', newIsUp);
+            $iconSpan.data('running', runningCount).attr('data-running', runningCount);
+
+            // Rebind stack context menu so options (Up/Down/Stop/etc.) match new state
+            var stackElementId = 'stack-' + stackId;
+            if ($('#' + stackElementId).length) {
+                addComposeStackContext(stackElementId);
+            }
+
+            // Update the uptime column (4th td, index 3)
+            try {
+                var $uptimeCell = $stackRow.find('td').eq(3);
+                var uptimeText = 'stopped';
+                var uptimeClass = 'grey-text';
+                if (anyRunning) {
+                    // Find the earliest startedAt among running containers
+                    var earliest = null;
+                    stackInfo.containers.forEach(function(c) {
+                        if (c.isRunning && c.startedAt) {
+                            // Docker timestamps have nanosecond precision e.g. "2026-03-11T12:34:56.789012345Z"
+                            // JS Date only handles milliseconds — trim excess fractional digits
+                            var ts = c.startedAt.replace(/(\.\d{3})\d+(Z|[+-]\d{2}:\d{2})$/, '$1$2');
+                            var t = new Date(ts).getTime();
+                            if (!isNaN(t) && (earliest === null || t < earliest)) earliest = t;
+                        }
+                    });
+                    if (earliest !== null) {
+                        var secs = Math.max(0, Math.floor((Date.now() - earliest) / 1000));
+                        if (secs < 60) uptimeText = '< 1 min';
+                        else if (secs < 3600) uptimeText = Math.floor(secs / 60) + ' min' + (Math.floor(secs / 60) !== 1 ? 's' : '');
+                        else if (secs < 86400) uptimeText = Math.floor(secs / 3600) + ' hour' + (Math.floor(secs / 3600) !== 1 ? 's' : '');
+                        else uptimeText = Math.floor(secs / 86400) + ' day' + (Math.floor(secs / 86400) !== 1 ? 's' : '');
+                    } else {
+                        uptimeText = 'running';
+                    }
+                    uptimeClass = 'green-text';
+                }
+                $uptimeCell.html('<span class="' + uptimeClass + '">' + uptimeText + '</span>');
+            } catch (e) {}
+
             // Re-apply view mode (advanced/basic) to ensure column content visibility
             applyListView();
         } catch (e) {
@@ -4400,6 +4619,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
         });
 
+        // Ensure stale menu bindings don't persist across state transitions
+        $el.off('contextmenu');
         context.attach('#' + elementId, opts);
     }
 
@@ -4774,6 +4995,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
         });
 
+        // View Last Cmd Log (always available)
+        opts.push({
+            text: 'View Last Cmd Log',
+            icon: 'fa-list-alt',
+            action: function(e) {
+                e.preventDefault();
+                ViewLastCmdLog(project, projectName);
+            }
+        });
+
         opts.push({ divider: true });
 
         // Delete Stack
@@ -4942,6 +5173,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             <div class="stack-actions-divider"></div>
             <button class="stack-action-item" onclick="executeStackAction('logs');">
                 <i class="fa fa-file-text-o"></i> View Logs
+            </button>
+            <button class="stack-action-item" onclick="executeStackAction('viewCmdLog');">
+                <i class="fa fa-list-alt"></i> View Last Cmd Log
             </button>
             <div class="stack-actions-divider"></div>
             <button class="stack-action-item" onclick="executeStackAction('editFiles');">

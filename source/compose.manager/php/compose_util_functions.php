@@ -25,12 +25,13 @@ if (!function_exists('logger')) {
 }
 
 /**
- * Execute a compose command in a ttyd terminal.
+ * Execute a compose command in a ttyd terminal, optionally capturing output to a log file.
  *
  * @param string $cmd The command to execute
  * @param bool $debug Whether to log debug messages
+ * @param string $logFile Optional path to write a copy of the output
  */
-function execComposeCommandInTTY($cmd, $debug)
+function execComposeCommandInTTY($cmd, $debug, $logFile = '')
 {
     global $socket_name;
     // Use pkill -f for more robust process matching instead of pgrep|awk pipeline
@@ -38,7 +39,15 @@ function execComposeCommandInTTY($cmd, $debug)
     usleep(300000); // 300ms for process to exit
     @unlink("/var/tmp/$socket_name.sock");
     $socketPath = escapeshellarg("/var/tmp/$socket_name.sock");
-    $command = "ttyd -R -o -i $socketPath $cmd > /dev/null &";
+    if ($logFile !== '') {
+        // Preserve interactive TTY behavior by running the command under "script"
+        // (PTY capture). A plain tee pipeline breaks terminal redraw/spinner output.
+        $scriptCmd = "script -qefc " . escapeshellarg($cmd) . " " . escapeshellarg($logFile);
+        $innerCmd = "bash -lc " . escapeshellarg($scriptCmd);
+        $command = "ttyd -R -o -i $socketPath $innerCmd > /dev/null &";
+    } else {
+        $command = "ttyd -R -o -i $socketPath $cmd > /dev/null &";
+    }
     exec($command);
     if ($debug) {
         logger($command);
@@ -50,8 +59,9 @@ function execComposeCommandInTTY($cmd, $debug)
  *
  * @param string $action The compose action (up, down, update, pull, stop, logs)
  * @param bool $recreate Whether to force recreate containers (adds --force-recreate flag)
+ * @param bool $background Whether to run in the background (no terminal window; sends notification on finish)
  */
-function echoComposeCommand($action, $recreate = false)
+function echoComposeCommand($action, $recreate = false, $background = false)
 {
     global $plugin_root;
     global $sName;
@@ -113,16 +123,33 @@ function echoComposeCommand($action, $recreate = false)
             $composeCommand[] = "--debug";
         }
 
-        if ($cfg['OUTPUTSTYLE'] == "ttyd") {
-            $composeCommand = array_map(function ($item) {
+        if ($background) {
+            // Run fully in the background using compose_background.sh.
+            // Output is captured to last_cmd.log; notification sent on completion.
+            $bgScript = $plugin_root . "scripts/compose_background.sh";
+            $bgCmd = escapeshellarg($bgScript);
+            foreach ($composeCommand as $arg) {
+                $bgCmd .= ' ' . escapeshellarg($arg);
+            }
+            $bgCmd .= ' > /dev/null 2>&1 &';
+            exec($bgCmd);
+            if ($debug) {
+                logger("Background command: " . $bgCmd);
+            }
+            // Signal to JS that this ran in background (no terminal window to open)
+            echo json_encode(['background' => true]);
+        } elseif ($cfg['OUTPUTSTYLE'] == "ttyd") {
+            $logFile = $path . '/last_cmd.log';
+            $composeCommandEscaped = array_map(function ($item) {
                 return escapeshellarg($item);
             }, $composeCommand);
-            $composeCommand = join(" ", $composeCommand);
-            execComposeCommandInTTY($composeCommand, $debug);
+            $composeCommandStr = join(" ", $composeCommandEscaped);
+            execComposeCommandInTTY($composeCommandStr, $debug, $logFile);
             if ($debug) {
-                logger($composeCommand);
+                logger($composeCommandStr);
             }
             $composeCommand = "/plugins/compose.manager/php/show_ttyd.php" . ($originalAction !== 'logs' ? "?done=1" : "");
+            echo $composeCommand;
         } else {
             $i = 0;
             $composeCommand = array_reduce($composeCommand, function ($v1, $v2) use (&$i) {
@@ -133,11 +160,10 @@ function echoComposeCommand($action, $recreate = false)
                     return $v1 . $v2;
                 }
             }, "");
+            echo $composeCommand;
         }
-
-        echo $composeCommand;
         if ($debug) {
-            logger($composeCommand);
+            logger((string)$composeCommand);
         }
     }
 }

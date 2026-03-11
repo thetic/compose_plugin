@@ -1594,6 +1594,17 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         </dl>
 
         <dl>
+            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Run in Background by Default)_:</dt>
+            <dd>
+                <input type="checkbox" name="RUN_IN_BACKGROUND_DEFAULT" class="compose-toggle" <?= ($cfg['RUN_IN_BACKGROUND_DEFAULT'] ?? 'false') == 'true' ? 'checked' : '' ?>>
+                <blockquote class="inline_help">
+                    When enabled, the <em>Run in background</em> checkbox in action dialogs (Compose Up, Down, Update, etc.) will be checked by default.<br>
+                    Background runs skip the terminal window and send an Unraid notification on completion. The output is always saved to a per-stack log file viewable via the stack's context menu.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
             <dt style="cursor: help;" onclick="toggleHelp(this)">_(Recreate During Autostart)_:</dt>
             <dd>
                 <input type="checkbox" name="AUTOSTART_FORCE_RECREATE" class="compose-toggle" <?= $cfg['AUTOSTART_FORCE_RECREATE'] == 'true' ? 'checked' : '' ?>>
