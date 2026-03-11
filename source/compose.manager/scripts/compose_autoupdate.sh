@@ -15,16 +15,51 @@ if [ -z "$COMPOSE_FILE" ] || [ -z "$PROJECT_NAME" ]; then
 fi
 
 OUT=$(mktemp)
+RC=0
+
+# Get current image digests before pull
+# Uses docker compose images to list service images, then inspects each for RepoDigests
+get_image_digests() {
+  docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" images -q 2>/dev/null | while read -r img_id; do
+    if [ -n "$img_id" ]; then
+      docker inspect --format='{{index .RepoDigests 0}}' "$img_id" 2>/dev/null || echo "$img_id"
+    fi
+  done | sort
+}
+
+OLD_DIGESTS=$(get_image_digests)
 
 # Run pull and capture output
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull > "$OUT" 2>&1 || RC=$?
 
-CONTENT=$(cat "$OUT")
+if [ "$RC" -ne 0 ]; then
+  ERRMSG="Auto-update pull failed for '$PROJECT_NAME'. See output: $(cat $OUT)"
+  echo "$ERRMSG" >&2
+  if [ -x "$NOTIFY" ]; then
+    "$NOTIFY" -e 'Compose Manager' -s "Auto-update failed: $PROJECT_NAME" -d "$ERRMSG" -i 'warning'
+  fi
+  rm -f "$OUT"
+  exit 1
+fi
 
-# Determine if any images were updated
-if echo "$CONTENT" | grep -E "Downloaded|Pull complete|Status: Downloaded|Downloaded newer image" >/dev/null 2>&1; then
-  # Run recreate/up
+# Get new image digests after pull
+NEW_DIGESTS=$(get_image_digests)
+
+# Compare digests to determine if any images were updated
+if [ "$OLD_DIGESTS" != "$NEW_DIGESTS" ]; then
+  # Images changed - run recreate/up
   docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d >> "$OUT" 2>&1 || RC=$?
+  
+  if [ "$RC" -ne 0 ]; then
+    ERRMSG="Auto-update up failed for '$PROJECT_NAME'. See output: $(cat $OUT)"
+    echo "$ERRMSG" >&2
+    if [ -x "$NOTIFY" ]; then
+      "$NOTIFY" -e 'Compose Manager' -s "Auto-update failed: $PROJECT_NAME" -d "$ERRMSG" -i 'warning'
+    fi
+    rm -f "$OUT"
+    exit 1
+  fi
+  
   MSG="Stack '$PROJECT_NAME' was updated successfully."
   echo "$MSG"
   if [ -x "$NOTIFY" ]; then
@@ -33,16 +68,6 @@ if echo "$CONTENT" | grep -E "Downloaded|Pull complete|Status: Downloaded|Downlo
 else
   MSG="No updates for stack '$PROJECT_NAME'."
   echo "$MSG"
-fi
-
-if [ -n "$RC" ] && [ "$RC" -ne 0 ]; then
-  ERRMSG="Auto-update failed for '$PROJECT_NAME'. See output: $(cat $OUT)"
-  echo "$ERRMSG" >&2
-  if [ -x "$NOTIFY" ]; then
-    "$NOTIFY" -e 'Compose Manager' -s "Auto-update failed: $PROJECT_NAME" -d "$ERRMSG" -i 'warning'
-  fi
-  rm -f "$OUT"
-  exit 1
 fi
 
 rm -f "$OUT"
