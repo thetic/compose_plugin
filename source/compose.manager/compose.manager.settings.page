@@ -201,6 +201,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     /* Auto-Updates table styles */
     #updates-ui {
         max-width: 900px;
+        margin: 0 auto;
     }
 
     #updates-ui .default-settings {
@@ -224,6 +225,15 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         padding: 4px 8px;
     }
 
+    /* Toggle switch in updates table */
+    #compose_updates .switch-button-background {
+        margin: 0 auto;
+    }
+
+    #compose_updates .switch-button-label {
+        margin-top: 0;
+    }
+
     #compose_updates {
         width: 100%;
         border-collapse: collapse;
@@ -238,7 +248,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     #compose_updates th:nth-child(1) { width: auto; }
-    #compose_updates th:nth-child(2) { width: 100px; text-align: center; }
+    #compose_updates th:nth-child(2) { width: 120px; text-align: center; }
     #compose_updates th:nth-child(3) { width: 130px; }
     #compose_updates th:nth-child(4) { width: 110px; }
     #compose_updates th:nth-child(5) { width: 170px; }
@@ -296,6 +306,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         gap: 10px;
         margin-top: 16px;
         align-items: center;
+        justify-content: flex-start;
     }
 
     #updates-ui .cron-status-row {
@@ -304,6 +315,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         gap: 10px;
         margin-top: 12px;
         align-items: center;
+        justify-content: flex-start;
     }
 
     #cron-status {
@@ -1318,7 +1330,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     var monthday = (entry.monthday !== undefined) ? entry.monthday : 1;
                     var row = '<tr class="sortable" data-path="'+escapeHtml(key)+'">';
                     row += '<td>'+escapeHtml(p.name)+'</td>';
-                    row += '<td><input type="checkbox" class="au-enabled" '+enabled+'></td>';
+                    row += '<td><input type="checkbox" class="au-enabled compose-toggle" '+enabled+'></td>';
                     row += '<td><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
                     row += '<td><input type="time" class="au-time" value="'+escapeHtml(time)+'"></td>';
                     row += '<td>';
@@ -1340,6 +1352,14 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     $last.find('.au-weekday').val(String(weekday));
                     $last.find('.au-monthday').val(monthday);
                     updateScheduleControls($last);
+                });
+                // Initialize toggle switches for all au-enabled checkboxes
+                $('#updates-tbody .au-enabled').each(function() {
+                    $(this).switchButton({
+                        labels_placement: 'right',
+                        on_label: '',
+                        off_label: ''
+                    });
                 });
             }, 'json').fail(function() {
                 $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#b33;padding:12px;">_(Failed to load auto-update settings.)_</td></tr>');
