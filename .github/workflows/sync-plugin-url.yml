@@ -16,6 +16,8 @@ on:
 
 jobs:
   sync-url:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     # Skip if this is already a bot commit (prevents infinite loops)
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
