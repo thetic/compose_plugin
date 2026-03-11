@@ -56,13 +56,13 @@ class AutoupdateTest extends TestCase
 
     public function testRunNowExecutesScript(): void
     {
-        // Create a fake stack
-        $tmp = sys_get_temp_dir() . '/autoupdate_test_' . getmypid();
+        // Create a fake stack under compose_root so path validation passes
+        global $plugin_root, $compose_root;
+        $tmp = $compose_root . '/autoupdate_test_' . getmypid();
         if (!is_dir($tmp)) mkdir($tmp, 0755, true);
         file_put_contents($tmp . '/docker-compose.yml', "services:\n  a:\n    image: busybox\n");
 
         // Create stub script that writes marker file
-        global $plugin_root;
         $marker = sys_get_temp_dir() . '/autoupdate_marker_' . getmypid();
         $scriptPath = $plugin_root . 'scripts/compose_autoupdate.sh';
         // real script file (not executed directly in tests because we override COMPOSE_MANAGER_SH)
@@ -75,7 +75,7 @@ class AutoupdateTest extends TestCase
         $wrapper = $plugin_root . 'php/sh_wrapper.php';
         putenv('COMPOSE_MANAGER_SH=' . PHP_BINARY . ' ' . escapeshellarg($wrapper));
 
-        $_POST = ['action' => 'runNow', 'path' => urlencode($tmp)];
+        $_POST = ['action' => 'runNow', 'path' => $tmp];
         ob_start(); include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php'; $out = ob_get_clean();
         $r = json_decode($out, true);
         // rc should be 0 for our stub
