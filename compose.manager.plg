@@ -28,10 +28,81 @@
 >
 
 <CHANGES>
-###2026.03.10-dev.1503
-- Bug Fixes: remove redundant hiding of associated child rows in compose manager
-- Bug Fixes: improve branch validation and switching logic in release script
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.10-dev.1439...v2026.03.10-dev.1503)
+###2026.03.11-dev.1235
+- Features: add background execution for compose commands with logging and notifications
+- Features: enhance auto-updates UI with new styles and layout adjustments
+- Features: improve auto-update script with enhanced digest comparison and error handling
+- Features: enhance auto-update functionality with path validation and StackInfo integration
+- Features: add build configuration support and example stack for testing
+- Features (logging): sanitize log messages for disallowed paths in autoupdate
+- Features (tests): add BATS setup script and update test framework loading
+- Features (ui): update spinner implementation for backup actions and enhance visibility
+- Features (ui): enhance auto-update settings UI with improved layout and functionality
+- Features (ui): implement toggle-all functionality for auto-updates and enhance header controls
+- Features (ui): implement toggle for auto-update scheduler and enhance controls for bulk updates
+- Features (ui): enhance auto-updates UI with improved styling and toggle switch initialization
+- Bug Fixes: address remaining autoupdate review feedback
+- Bug Fixes: move last_run update to after compose file is verified in autoupdate_runner
+- Bug Fixes: use is_file check on resolved composeFilePath in getYml case
+- Bug Fixes: verify persistent dir is writable before returning persistent autoupdate.json path
+- Bug Fixes: use correct bats_setup.bash extension in compose.bats load path
+- Bug Fixes: address PR review comments for auto-update feature
+  - Fix path boundary check in isAllowedAutoUpdatePath() to prevent false
+  - Switch cron install/remove/status to use crontab marker blocks instead
+  - Fix scheduling timing: use last_run tracking so any configured time
+  - Validate and sanitize time format in autoupdate_runner.php before use
+  - Validate stack paths in autoupdate_runner.php against compose_root
+  - Validate stack path keys in saveConfig to prevent security bypass
+  - Add flock-based locking to compose_autoupdate.sh to prevent race
+  - Remove unused PLUGIN_ROOT variable from compose_autoupdate.sh
+  - Fix JSON double-parse in loadUpdatesUI() and refreshCronStatus()
+  - Escape time value in Updates tab table rows to prevent stored XSS
+- Bug Fixes: update auto-update function to use exec.php for project listing
+- Bug Fixes: enhance service rename handling and preserve user data in overrides
+- Bug Fixes: update development version timestamp format in build script
+- Bug Fixes (autoupdate): validate JSON in getConfig, check crontab removal, remove closing tag
+  - getConfig now validates file contents are valid JSON before echoing,
+  - removeCron now checks crontab command return value and returns HTTP 500
+  - Remove unnecessary closing PHP tag to prevent accidental whitespace
+- Bug Fixes (autoupdate): handle JSON responses and harden path validation
+  - Use jQuery JSON response handling for save/run-now UI actions\n- Remove explicit urldecode on runNow path to avoid double-decoding risk\n- Align runner path allowlist with /compose_root, /mnt, and /boot/config
+- Bug Fixes (tests): clean up env vars in tearDown, use config file override
+  - Add tearDown to AutoupdateTest to restore environment variables
+  - Clean env vars (COMPOSE_MANAGER_SH, AUTOTEST_MARKER, etc.) in
+  - Set COMPOSE_MANAGER_AUTOUPDATE_FILE in runner test to ensure the
+- Bug Fixes (tests): align AutoupdateTest with path validation and encoding changes
+  - Create test stack under compose_root so isAllowedAutoUpdatePath passes
+  - Remove urlencode from runNow POST path to match updated JS/PHP behavior
+- Bug Fixes (ui): serialize Run Now requests to avoid overwhelming server
+  - Run Now button now fires auto-update requests sequentially instead
+  - Shows count of enabled stacks in confirmation message
+  - Handles case where no stacks are enabled
+- Refactoring: remove deprecated compose_projects.php and integrate project listing in exec.php
+- Refactoring (autoupdate): UI schedule controls, error handling, and code quality
+  - Add weekday/monthday selectors to Updates UI instead of hardcoding current day
+  - Add .fail() handlers on all autoupdate AJAX calls
+  - Move isAllowedAutoUpdatePath to util.php (removes function_exists guard)
+  - Add getAutoUpdateConfigFilePath() for persistent /boot/config storage with legacy migration
+  - Use preg_replace for robust project ID sanitization in listProjects
+  - Remove set -e from compose_autoupdate.sh; guard digest capture with || true
+  - Remove redundant encodeURIComponent from runNow JS (jQuery handles encoding)
+- Refactoring (autoupdate_runner): use shared path validation, remove dead code
+  - Replace inline path validation with isAllowedAutoUpdatePath() from
+  - Remove unused \ and \ variables (scheduling uses mktime)
+  - Remove unnecessary closing PHP tag
+- Refactoring (util): remove unused parameter from getAutoUpdateConfigFilePath function
+- Chores: update .gitignore to include autoupdate.json and remove obsolete files
+- Chores (tests): update subproject commit reference in framework
+- Add auto-update functionality for Docker Compose projects
+  - Introduced deploy.ps1 script for building and deploying the compose.manager package to Unraid servers.
+  - Created autoupdate.php to handle configuration retrieval, saving, and cron job management for auto-updates.
+  - Implemented autoupdate_runner.php to execute scheduled updates based on autoupdate.json configuration.
+  - Added compose_projects.php to list available Docker Compose projects.
+  - Developed compose_autoupdate.sh script to perform the actual Docker Compose update process.
+  - Created unit tests for autoupdate_runner.php and autoupdate.php to ensure functionality and error handling.
+- Update source/compose.manager/php/util.php
+- Update tests/unit/compose.bats
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.10-dev.1503...v2026.03.11-dev.1235)
 
 </CHANGES>
 
