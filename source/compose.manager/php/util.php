@@ -147,7 +147,6 @@ function hasComposeFile($dir)
  * Prefers a persistent path under /boot/config when available and writable,
  * with environment override support for tests.
  *
- * @param string $pluginRoot The plugin root directory path
  * @return string
  */
 function getAutoUpdateConfigFilePath(): string
