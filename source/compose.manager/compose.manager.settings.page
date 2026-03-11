@@ -198,31 +198,13 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         color: #888;
     }
 
-    /* Auto-Updates table styles */
-    #updates-ui {
-        max-width: 900px;
-        margin: 0 auto;
+    /* Auto-Updates styles - reuse backup-section layout */
+    #compose-tab-updates .backup-section {
+        margin-bottom: 20px;
     }
 
-    #updates-ui .default-settings {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        align-items: center;
-        margin-bottom: 16px;
-        padding: 10px 12px;
-        background: rgba(128, 128, 128, 0.1);
-        border-radius: 4px;
-    }
-
-    #updates-ui .default-settings label {
-        margin: 0;
-        font-weight: 500;
-    }
-
-    #updates-ui .default-settings select,
-    #updates-ui .default-settings input[type="time"] {
-        padding: 4px 8px;
+    #compose-tab-updates dl:has(blockquote.inline_help)>dt {
+        cursor: help;
     }
 
     /* Toggle switch in updates table */
@@ -236,33 +218,47 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     #compose_updates {
         width: 100%;
+        max-width: 700px;
         border-collapse: collapse;
         table-layout: fixed;
     }
 
     #compose_updates th {
         text-align: left;
-        padding: 8px 10px;
+        padding: 6px 8px;
         font-weight: 600;
         border-bottom: 2px solid rgba(128, 128, 128, 0.3);
+        font-size: 0.9em;
     }
 
     #compose_updates th:nth-child(1) { width: auto; }
-    #compose_updates th:nth-child(2) { width: 140px; text-align: center; }
-    #compose_updates th:nth-child(3) { width: 130px; }
-    #compose_updates th:nth-child(4) { width: 110px; }
-    #compose_updates th:nth-child(5) { width: 170px; }
+    #compose_updates th:nth-child(2) { width: 120px; text-align: center; }
+    #compose_updates th:nth-child(3) { width: 100px; }
+    #compose_updates th:nth-child(4) { width: 90px; }
+    #compose_updates th:nth-child(5) { width: 140px; }
 
-    /* Toggle All switch in header */
-    #compose_updates th .switch-button-background {
-        margin: 0;
+    /* Toggle All button in header */
+    #compose_updates th .toggle-all-btn {
+        cursor: pointer;
+        font-size: 1.2em;
         vertical-align: middle;
+        color: var(--header-background, #ff8c2f);
+    }
+
+    #compose_updates th .toggle-all-btn:hover {
+        opacity: 0.8;
+    }
+
+    #compose_updates th .toggle-label {
+        margin-left: 6px;
+        font-weight: 600;
     }
 
     #compose_updates td {
-        padding: 8px 10px;
+        padding: 4px 8px;
         border-bottom: 1px solid rgba(128, 128, 128, 0.15);
         vertical-align: middle;
+        font-size: 0.9em;
     }
 
     #compose_updates td:nth-child(2) {
@@ -293,40 +289,13 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         background: rgba(128, 128, 128, 0.08);
     }
 
-    /* Alternating row colors for updates table to match compose stacks */
-    #compose_updates tbody tr.sortable:nth-of-type(4n+1) {
+    /* Alternating row colors for updates table */
+    #compose_updates tbody tr:nth-child(odd) {
         background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color, rgba(0,0,0,0.05));
     }
 
-    #compose_updates tbody tr.sortable:nth-of-type(4n+3) {
+    #compose_updates tbody tr:nth-child(even) {
         background-color: transparent;
-    }
-
-    #compose_updates tbody tr.stack-details-row {
-        background-color: rgba(0,0,0,0.08) !important;
-    }
-
-    #updates-ui .button-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 16px;
-        align-items: center;
-        justify-content: flex-start;
-    }
-
-    #updates-ui .cron-status-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 12px;
-        align-items: center;
-        justify-content: flex-start;
-    }
-
-    #cron-status {
-        margin-left: 8px;
-        font-size: 0.9em;
     }
 
     /* Backup / Restore tab styles */
@@ -464,10 +433,23 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         border-top: 2px solid #ff8c2f;
         border-radius: 50%;
         animation: backup-spin 0.8s linear infinite;
+        flex-shrink: 0;
+    }
+
+    /* Use ID selector for higher specificity to override any global spinner styles */
+    #updates-spinner {
+        display: none;
+    }
+
+    #updates-spinner.visible {
+        display: inline-block;
     }
 
     @keyframes backup-spin {
-        to {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
             transform: rotate(360deg);
         }
     }
@@ -786,6 +768,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             if (tabId === 'backup') {
                 loadBackupArchives();
             }
+            // Always load updates UI when switching to updates tab
+            if (tabId === 'updates') {
+                loadUpdatesUI();
+                refreshCronStatus();
+            }
         });
 
         // On page load, initialize toggles for all tabs only once
@@ -825,6 +812,12 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         if (savedTab === 'log') {
             loadLogs();
             startLogRefresh();
+        }
+
+        // If the default tab is updates, load updates UI immediately
+        if (savedTab === 'updates') {
+            loadUpdatesUI();
+            refreshCronStatus();
         }
     });
 
@@ -1320,13 +1313,22 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     function updateToggleAllState() {
         var $checkboxes = $('#updates-tbody .au-enabled');
-        var $toggleAll = $('#toggle-all-updates');
-        if ($checkboxes.length === 0) {
-            $toggleAll.prop('checked', false);
-            return;
-        }
+        if ($checkboxes.length === 0) return;
         var allChecked = $checkboxes.filter(':checked').length === $checkboxes.length;
-        $toggleAll.prop('checked', allChecked);
+        updateToggleAllIcon(allChecked);
+    }
+
+    function updateToggleAllIcon(allOn) {
+        var $icon = $('#toggle-all-updates i');
+        if (typeof allOn === 'undefined') {
+            var $checkboxes = $('#updates-tbody .au-enabled');
+            allOn = $checkboxes.length > 0 && $checkboxes.filter(':checked').length === $checkboxes.length;
+        }
+        if (allOn) {
+            $icon.removeClass('fa-toggle-off').addClass('fa-toggle-on');
+        } else {
+            $icon.removeClass('fa-toggle-on').addClass('fa-toggle-off');
+        }
     }
 
     function loadUpdatesUI() {
@@ -1392,16 +1394,51 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getCronStatus'}, function(r){
             // Response is already parsed as JSON by jQuery due to Content-Type header
             var installed = r && r.installed;
-            var $btn = $('#toggle-scheduler');
-            $btn.data('installed', installed);
-            if (installed) {
-                $btn.val('_(Disable Scheduler)_').removeClass('orange-button');
-            } else {
-                $btn.val('_(Enable Scheduler)_').addClass('orange-button');
+            var $cb = $('#AUTOUPDATE_ENABLED');
+            var currentState = $cb.is(':checked');
+            // Only update if state changed to avoid flicker
+            if (currentState !== installed) {
+                // Click the switch-button-background to toggle visual state
+                var switchBg = $cb.next('.switch-button-background')[0];
+                if (switchBg) {
+                    switchBg.click();
+                } else {
+                    // Fallback if switchButton not yet initialized
+                    $cb.prop('checked', installed);
+                }
             }
         }, 'json').fail(function() {
-            $('#toggle-scheduler').val('_(Scheduler Status Unknown)_').prop('disabled', true);
+            // On failure, leave checkbox unchecked
+            var $cb = $('#AUTOUPDATE_ENABLED');
+            if ($cb.is(':checked')) {
+                var switchBg = $cb.next('.switch-button-background')[0];
+                if (switchBg) {
+                    switchBg.click();
+                } else {
+                    $cb.prop('checked', false);
+                }
+            }
         });
+    }
+
+    function showUpdatesStatus(message, type) {
+        var $el = $('#updates-status');
+        $el.removeClass('success error info').addClass(type).text(message).show();
+        if (type === 'success') {
+            setTimeout(function() { $el.fadeOut(); }, 8000);
+        }
+    }
+
+    function setUpdatesSpinner(spinning) {
+        var $btn = $('#save-updates');
+        var $spinner = $('#updates-spinner');
+        if (spinning) {
+            $btn.prop('disabled', true);
+            $spinner.addClass('visible');
+        } else {
+            $btn.prop('disabled', false);
+            $spinner.removeClass('visible');
+        }
     }
 
     // Initialize Updates tab when it's shown
@@ -1421,23 +1458,25 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             updateScheduleControls($(this).closest('tr'));
         });
 
-        // Initialize toggle-all switch in header
-        $('#toggle-all-updates').switchButton({
-            labels_placement: 'right',
-            on_label: '',
-            off_label: ''
-        });
-
         // Toggle all auto-updates on/off
-        $('#toggle-all-updates').on('change', function(){
-            var checked = $(this).is(':checked');
+        $(document).on('click', '#toggle-all-updates', function(){
             var $checkboxes = $('#updates-tbody .au-enabled');
+            if ($checkboxes.length === 0) return;
+            
+            // Determine if we should turn all ON or OFF (if any are off, turn all on)
+            var anyOff = $checkboxes.filter(function(){ return !$(this).is(':checked'); }).length > 0;
+            var targetState = anyOff; // true = turn all on, false = turn all off
+            
             $checkboxes.each(function(){
-                var $cb = $(this);
-                if ($cb.is(':checked') !== checked) {
-                    $cb.prop('checked', checked).change();
+                if ($(this).is(':checked') !== targetState) {
+                    // Click the switch-button-background sibling to toggle
+                    var switchBg = $(this).next('.switch-button-background')[0];
+                    if (switchBg) switchBg.click();
                 }
             });
+            
+            // Update the toggle-all icon
+            updateToggleAllIcon();
         });
 
         // Sync toggle-all state when individual toggles change
@@ -1445,31 +1484,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             updateToggleAllState();
         });
 
-        // Toggle scheduler (single button that shows state)
-        $('#toggle-scheduler').on('click', function(){
-            var $btn = $(this);
-            var isInstalled = $btn.data('installed');
-            if (isInstalled) {
-                // Remove cron
-                $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'removeCron'}, function(d){ 
-                    refreshCronStatus(); 
-                    swal('Disabled','Scheduler has been disabled.','success'); 
-                }, 'json').fail(function(){
-                    swal('Error', 'Failed to disable scheduler.', 'error');
-                });
-            } else {
-                // Install cron
-                $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'installCron'}, function(d){ 
-                    refreshCronStatus(); 
-                    swal('Enabled','Scheduler enabled (runs every 15 minutes).','success'); 
-                }, 'json').fail(function(){
-                    swal('Error', 'Failed to enable scheduler.', 'error');
-                });
-            }
-        });
-
-        // Save auto-update settings
+        // Save auto-update settings (includes scheduler enable/disable)
         $('#save-updates').on('click', function(){
+            setUpdatesSpinner(true);
+            
             var cfg = {};
             $('#updates-tbody tr').each(function(){
                 var path = $(this).data('path');
@@ -1484,13 +1502,31 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 cfg[path] = { enabled: enabled, schedule: schedule, time: time, weekday: weekday, monthday: monthday };
             });
             var defaults = { schedule: $('#default-schedule').val(), time: $('#default-time').val() };
-            var payload = cfg;
-            payload['defaults'] = defaults;
-            $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'saveConfig', data: JSON.stringify(payload)}, function(resp){
-                if (resp && resp.ok) swal('Saved', 'Auto-update settings saved.', 'success');
-                else swal('Error', 'Failed to save settings', 'error');
+            cfg['defaults'] = defaults;
+            
+            var schedulerEnabled = $('#AUTOUPDATE_ENABLED').is(':checked');
+            
+            // Save config first
+            $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'saveConfig', data: JSON.stringify(cfg)}, function(resp){
+                if (!resp || !resp.ok) {
+                    setUpdatesSpinner(false);
+                    showUpdatesStatus('Failed to save settings.', 'error');
+                    return;
+                }
+                
+                // Then update scheduler
+                var schedulerAction = schedulerEnabled ? 'installCron' : 'removeCron';
+                $.post('/plugins/compose.manager/php/autoupdate.php', {action: schedulerAction}, function(d){
+                    setUpdatesSpinner(false);
+                    refreshCronStatus();
+                    showUpdatesStatus('Auto-update settings saved.', 'success');
+                }, 'json').fail(function(){
+                    setUpdatesSpinner(false);
+                    showUpdatesStatus('Settings saved but scheduler update failed.', 'error');
+                });
             }, 'json').fail(function(){
-                swal('Error', 'Failed to save settings', 'error');
+                setUpdatesSpinner(false);
+                showUpdatesStatus('Failed to save settings.', 'error');
             });
         });
 
@@ -1508,12 +1544,19 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 swal('Info', 'No stacks are enabled for auto-update.', 'info');
                 return;
             }
+            
+            showUpdatesStatus('Running auto-update for ' + paths.length + ' stack(s)...', 'info');
+            
             var idx = 0;
+            var completed = 0;
             function runNext() {
-                if (idx >= paths.length) return;
+                if (idx >= paths.length) {
+                    showUpdatesStatus('Auto-update completed for ' + completed + ' stack(s).', 'success');
+                    return;
+                }
                 var p = paths[idx++];
                 $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'runNow', path: p}, function(data){
-                    console.log(data);
+                    completed++;
                     runNext();
                 }, 'json').fail(function(){
                     console.log('runNow failed for path', p);
@@ -1521,14 +1564,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 });
             }
             runNext();
-            swal('Started', 'Triggered auto-update for ' + paths.length + ' enabled stack(s). Check logs for details.', 'info');
         });
 
-        // Load updates UI when tab is clicked
-        $('.compose-tab[data-tab="updates"]').on('click', function() {
-            loadUpdatesUI();
-            refreshCronStatus();
-        });
+        // Note: Updates tab loading is now handled by the main tab switching handler
     });
 </script>
 
@@ -1767,43 +1805,81 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
 <!-- Updates Tab -->
 <div id="compose-tab-updates" class="compose-tab-content">
-    <div class="title"><span class="left"><i class="fa fa-list icon"></i>_(Per-Stack Auto-Updates)_</span></div>
-    <div id="updates-ui">
-        <div class="default-settings">
-            <label>_(Default Schedule)_:</label>
-            <select id="default-schedule">
-                <option value="daily">_(Daily)_</option>
-                <option value="weekly">_(Weekly)_</option>
-                <option value="monthly">_(Monthly)_</option>
-            </select>
-            <label>_(Time)_:</label>
-            <input type="time" id="default-time" value="02:00">
-            <input type="button" id="apply-default" class="slim-button orange-button" value="_(Apply to All)_">
-        </div>
 
-        <table id="compose_updates" class="tablesorter shift">
-            <thead>
-                <tr>
-                    <th>_(Stack)_</th>
-                    <th><input type="checkbox" id="toggle-all-updates" title="_(Toggle all auto-updates on/off)_"></th>
-                    <th>_(Schedule)_</th>
-                    <th>_(Time)_</th>
-                    <th>_(On)_</th>
-                </tr>
-            </thead>
-            <tbody id="updates-tbody">
-                <tr><td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>
-            </tbody>
-        </table>
+    <!-- Auto-Update Settings Section -->
+    <div class="backup-section">
+        <div class="title"><span class="left"><i class="fa fa-clock-o icon"></i>_(Auto-Update Settings)_</span></div>
 
-        <div class="button-row">
-            <input type="button" id="save-updates" value="_(Save Auto-Update Settings)_" class="orange-button">
-            <input type="button" id="run-now" value="_(Run Now for Selected)_" class="slim-button">
-        </div>
+        <dl>
+            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Enable Auto-Updates)_:</dt>
+            <dd>
+                <input type="checkbox" id="AUTOUPDATE_ENABLED" class="compose-toggle">
+                <blockquote class="inline_help">
+                    Enable the auto-update scheduler. When enabled, stacks with auto-update turned on<br>
+                    will be checked every 15 minutes and updated according to their individual schedules.
+                </blockquote>
+            </dd>
+        </dl>
 
-        <div class="cron-status-row">
-            <input type="button" id="toggle-scheduler" class="slim-button" value="_(Enable Scheduler)_">
-        </div>
+        <dl>
+            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Default Schedule)_:</dt>
+            <dd>
+                <div class="schedule-options">
+                    <label>_(Frequency)_:
+                        <select id="default-schedule">
+                            <option value="daily">_(Daily)_</option>
+                            <option value="weekly">_(Weekly)_</option>
+                            <option value="monthly">_(Monthly)_</option>
+                        </select>
+                    </label>
+                    <label>_(Time)_:
+                        <input type="time" id="default-time" value="02:00">
+                    </label>
+                    <input type="button" id="apply-default" class="slim-button" value="_(Apply to All Stacks)_">
+                </div>
+                <blockquote class="inline_help">
+                    Set the default schedule for new stacks. Use "Apply to All Stacks" to apply this<br>
+                    schedule to all existing stacks in the table below.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt>&nbsp;</dt>
+            <dd>
+                <div class="backup-actions">
+                    <input type="button" id="save-updates" value="_(Save Settings)_" class="orange-button">
+                    <input type="button" id="run-now" value="_(Update Now)_" title="_(Run auto-update now for all enabled stacks)_">
+                    <div class="spinner" id="updates-spinner"></div>
+                </div>
+                <div id="updates-status" class="backup-status"></div>
+            </dd>
+        </dl>
+    </div>
+
+    <!-- Per-Stack Configuration Section -->
+    <div class="backup-section">
+        <div class="title"><span class="left"><i class="fa fa-cubes icon"></i>_(Stack Configuration)_</span></div>
+
+        <dl>
+            <dt>_(Stacks)_:</dt>
+            <dd>
+                <table id="compose_updates" class="tablesorter shift">
+                    <thead>
+                        <tr>
+                            <th>_(Stack)_</th>
+                            <th><span id="toggle-all-updates" class="toggle-all-btn" title="_(Toggle all auto-updates on/off)_"><i class="fa fa-toggle-off"></i></span><span class="toggle-label">_(Auto-Update)_</span></th>
+                            <th>_(Schedule)_</th>
+                            <th>_(Time)_</th>
+                            <th>_(On)_</th>
+                        </tr>
+                    </thead>
+                    <tbody id="updates-tbody">
+                        <tr><td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>
+                    </tbody>
+                </table>
+            </dd>
+        </dl>
     </div>
 </div>
 
