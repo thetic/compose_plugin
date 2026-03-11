@@ -1275,9 +1275,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     function loadUpdatesUI() {
         $('#updates-tbody').html('<tr><td colspan="4" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>');
         $.post('/plugins/compose.manager/php/exec.php', {action: 'listProjects'}, function(projects) {
-            $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getConfig'}, function(cfgdata) {
-                var cfg = {};
-                try { cfg = JSON.parse(cfgdata); } catch(e){ cfg = {}; }
+            $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getConfig'}, function(cfg) {
+                // Response is already parsed as JSON by jQuery due to Content-Type header
+                if (typeof cfg !== 'object' || cfg === null) cfg = {};
                 $('#updates-tbody').empty();
                 projects.forEach(function(p) {
                     var id = p.id;
@@ -1290,7 +1290,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     row += '<td>'+escapeHtml(p.name)+'</td>';
                     row += '<td><input type="checkbox" class="au-enabled" '+enabled+'></td>';
                     row += '<td><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
-                    row += '<td><input type="time" class="au-time" value="'+time+'"></td>';
+                    row += '<td><input type="time" class="au-time" value="'+escapeHtml(time)+'"></td>';
                     row += '</tr>';
                     $('#updates-tbody').append(row);
                     var $last = $('#updates-tbody tr').last();
@@ -1301,9 +1301,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     function refreshCronStatus() {
-        $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getCronStatus'}, function(d){
-            try { var r = JSON.parse(d); $('#cron-status').text(r.installed ? '_(Scheduler active)_' : '_(Scheduler not installed)_'); } catch(e) { $('#cron-status').text(''); }
-        });
+        $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getCronStatus'}, function(r){
+            // Response is already parsed as JSON by jQuery due to Content-Type header
+            $('#cron-status').text(r && r.installed ? '_(Scheduler active)_' : '_(Scheduler not installed)_');
+        }, 'json');
     }
 
     // Initialize Updates tab when it's shown

@@ -6,13 +6,34 @@ set -e
 
 COMPOSE_FILE="$1"
 PROJECT_NAME="$2"
-PLUGIN_ROOT="/usr/local/emhttp/plugins/compose.manager"
 NOTIFY="/usr/local/emhttp/webGui/scripts/notify"
+LOCK_DIR="/var/run/compose.manager"
+LOCK_TIMEOUT=${COMPOSE_LOCK_TIMEOUT:-30}
 
 if [ -z "$COMPOSE_FILE" ] || [ -z "$PROJECT_NAME" ]; then
   echo "Usage: $0 <compose_yml_path> <project_name>"
   exit 2
 fi
+
+# Create lock directory if needed
+mkdir -p "$LOCK_DIR" 2>/dev/null || true
+
+# Acquire lock to prevent concurrent operations on the same stack
+LOCK_FILE="$LOCK_DIR/${PROJECT_NAME}.lock"
+exec 9>"$LOCK_FILE"
+
+waited=0
+while ! flock -n 9 2>/dev/null; do
+    if [ $waited -ge $LOCK_TIMEOUT ]; then
+        echo "Could not acquire lock for $PROJECT_NAME after ${LOCK_TIMEOUT}s - another operation may be in progress" >&2
+        exit 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+done
+
+# Write lock info
+echo "{\"pid\":$$,\"command\":\"autoupdate\",\"time\":\"$(date -Iseconds)\"}" >&9
 
 OUT=$(mktemp)
 RC=0

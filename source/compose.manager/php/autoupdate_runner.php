@@ -27,29 +27,67 @@ $minute = intval(date('i', $now));
 $wday = intval(date('w', $now)); // 0 (Sun) - 6
 $mday = intval(date('j', $now)); // 1-31
 
+// Track whether we need to save updated last_run timestamps
+$dataModified = false;
+
 foreach ($data as $path => $entry) {
     if ($path === 'defaults') continue;
     if (!is_array($entry)) continue;
     if (empty($entry['enabled'])) continue;
+    
+    // Validate path is within allowed compose root for security
+    $realPath = realpath($path);
+    $realComposeRoot = realpath($compose_root);
+    if ($realPath === false || $realComposeRoot === false) {
+        clientDebug("[autoupdate] Skipping entry with unresolved path: $path", null, 'daemon', 'warn');
+        continue;
+    }
+    $realComposeRoot = rtrim($realComposeRoot, DIRECTORY_SEPARATOR);
+    if ($realPath !== $realComposeRoot && strpos($realPath, $realComposeRoot . DIRECTORY_SEPARATOR) !== 0) {
+        clientDebug("[autoupdate] Skipping disallowed path outside compose root: $path", null, 'daemon', 'warn');
+        continue;
+    }
+    
     $schedule = isset($entry['schedule']) ? $entry['schedule'] : 'daily';
-    $time = isset($entry['time']) ? $entry['time'] : '02:00';
-    $parts = explode(':', $time);
-    $sh = intval($parts[0]);
-    $sm = intval($parts[1]);
+    $defaultTime = '02:00';
+    $time = isset($entry['time']) ? $entry['time'] : $defaultTime;
+    
+    // Validate time format (H:MM or HH:MM) and bounds; fall back to safe default on invalid
+    $sh = 2; // default hour from 02:00
+    $sm = 0; // default minute from 02:00
+    if (is_string($time) && preg_match('/^\d{1,2}:\d{2}$/', $time)) {
+        $parts = explode(':', $time);
+        $parsedHour = intval($parts[0]);
+        $parsedMinute = intval($parts[1]);
+        if ($parsedHour >= 0 && $parsedHour <= 23 && $parsedMinute >= 0 && $parsedMinute <= 59) {
+            $sh = $parsedHour;
+            $sm = $parsedMinute;
+        }
+    }
 
+    // Calculate today's scheduled timestamp and check if we should run
+    // Using last_run tracking to handle non-15-minute-boundary times
+    $scheduledToday = mktime($sh, $sm, 0);
+    $lastRun = isset($entry['last_run']) ? intval($entry['last_run']) : 0;
+    
     $shouldRun = false;
-    if ($sh == $hour && $sm == $minute) {
-        if ($schedule == 'daily') $shouldRun = true;
-        elseif ($schedule == 'weekly') {
-            $weekday = isset($entry['weekday']) ? intval($entry['weekday']) : $wday;
+    // Check if current time is past the scheduled time and we haven't run yet today
+    if ($now >= $scheduledToday && $lastRun < $scheduledToday) {
+        if ($schedule == 'daily') {
+            $shouldRun = true;
+        } elseif ($schedule == 'weekly') {
+            $weekday = isset($entry['weekday']) ? intval($entry['weekday']) : 0; // Default Sunday
             if ($weekday == $wday) $shouldRun = true;
         } elseif ($schedule == 'monthly') {
-            $monthday = isset($entry['monthday']) ? intval($entry['monthday']) : $mday;
+            $monthday = isset($entry['monthday']) ? intval($entry['monthday']) : 1; // Default 1st
             if ($monthday == $mday) $shouldRun = true;
         }
     }
 
     if ($shouldRun) {
+        // Update last_run timestamp
+        $data[$path]['last_run'] = $now;
+        $dataModified = true;
         // Find compose file using shared utility
         $composeFile = findComposeFile($path);
         if (!$composeFile) continue;
@@ -73,6 +111,11 @@ foreach ($data as $path => $entry) {
         $cmd = $shCmd . ' ' . escapeshellarg($script) . " " . escapeshellarg($composeFile) . " " . escapeshellarg($projectName) . " >/dev/null 2>&1 &";
         exec($cmd);
     }
+}
+
+// Save updated last_run timestamps if any were modified
+if ($dataModified) {
+    file_put_contents($autofile, json_encode($data, JSON_PRETTY_PRINT));
 }
 
 ?>
