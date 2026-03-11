@@ -1426,8 +1426,17 @@ class StackInfo
      */
     public static function fromComposePath(string $composeRoot, string $composePath): ?self
     {
+        // Static cache: [composeRoot => [composeSourcePath => StackInfo]]
+        static $cacheByRoot = [];
+
         $composeRoot = rtrim($composeRoot, '/');
         $normalizedPath = rtrim($composePath, '/');
+
+        if (isset($cacheByRoot[$composeRoot])) {
+            return $cacheByRoot[$composeRoot][$normalizedPath] ?? null;
+        }
+
+        $cacheByRoot[$composeRoot] = [];
 
         $projects = @array_diff(@scandir($composeRoot), ['.', '..']) ?: [];
         foreach ($projects as $project) {
@@ -1435,13 +1444,18 @@ class StackInfo
             if (!is_dir($projectPath)) {
                 continue;
             }
-            // Check if this project's composeSource matches
+            // Build and cache by composeSource, then do O(1) lookups for this root.
             $stackInfo = self::fromProject($composeRoot, $project);
-            if (rtrim($stackInfo->composeSource, '/') === $normalizedPath) {
-                return $stackInfo;
+            if ($stackInfo === null) {
+                continue;
+            }
+            $sourcePath = rtrim($stackInfo->composeSource, '/');
+            if ($sourcePath !== '') {
+                $cacheByRoot[$composeRoot][$sourcePath] = $stackInfo;
             }
         }
-        return null;
+
+        return $cacheByRoot[$composeRoot][$normalizedPath] ?? null;
     }
 }
 

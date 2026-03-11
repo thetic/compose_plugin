@@ -40,6 +40,11 @@ if [ -z "$OUT" ]; then
 fi
 RC=0
 
+summarize_output() {
+  # Keep notifications readable and avoid huge untrusted payloads.
+  tail -n 40 "$OUT" 2>/dev/null | tr -cd '[:print:]\n\t'
+}
+
 # Get current image digests before pull
 # Uses docker compose images to list service images, then inspects each for RepoDigests
 get_image_digests() {
@@ -56,7 +61,7 @@ OLD_DIGESTS=$(get_image_digests || true)
 docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull > "$OUT" 2>&1 || RC=$?
 
 if [ "$RC" -ne 0 ]; then
-  ERRMSG="Auto-update pull failed for '$PROJECT_NAME'. See output: $(cat $OUT)"
+  ERRMSG="Auto-update pull failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
   echo "$ERRMSG" >&2
   if [ -x "$NOTIFY" ]; then
     "$NOTIFY" -e 'Compose Manager' -s "Auto-update failed: $PROJECT_NAME" -d "$ERRMSG" -i 'warning'
@@ -74,7 +79,7 @@ if [ "$OLD_DIGESTS" != "$NEW_DIGESTS" ]; then
   docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d >> "$OUT" 2>&1 || RC=$?
   
   if [ "$RC" -ne 0 ]; then
-    ERRMSG="Auto-update up failed for '$PROJECT_NAME'. See output: $(cat $OUT)"
+    ERRMSG="Auto-update up failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
     echo "$ERRMSG" >&2
     if [ -x "$NOTIFY" ]; then
       "$NOTIFY" -e 'Compose Manager' -s "Auto-update failed: $PROJECT_NAME" -d "$ERRMSG" -i 'warning'

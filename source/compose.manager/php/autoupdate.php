@@ -50,8 +50,18 @@ switch ($action) {
         }
         // ensure directory exists (test environment may map plugin_root differently)
         $dir = dirname($autofile);
-        if (!is_dir($dir)) mkdir($dir, 0755, true);
-        file_put_contents($autofile, json_encode($filtered, JSON_PRETTY_PRINT));
+        if (!is_dir($dir)) {
+            if (!mkdir($dir, 0755, true)) {
+                http_response_code(500);
+                echo json_encode(array('error' => 'Failed to create config directory'));
+                break;
+            }
+        }
+        if (file_put_contents($autofile, json_encode($filtered, JSON_PRETTY_PRINT)) === false) {
+            http_response_code(500);
+            echo json_encode(array('error' => 'Failed to write config file'));
+            break;
+        }
         echo json_encode(array('ok' => true));
         break;
     case 'installCron':
@@ -135,14 +145,18 @@ switch ($action) {
             // If nothing changed, we are effectively done.
             if ($cleaned !== $existing) {
                 $tmpFile = tempnam(sys_get_temp_dir(), 'cm_cron_');
-                if ($tmpFile !== false && file_put_contents($tmpFile, rtrim($cleaned) . "\n") !== false) {
-                    exec('crontab ' . escapeshellarg($tmpFile), $output, $returnVar);
-                    unlink($tmpFile);
-                    if ($returnVar !== 0) {
-                        http_response_code(500);
-                        echo json_encode(array('error' => 'Failed to update crontab'));
-                        break;
-                    }
+                if ($tmpFile === false || file_put_contents($tmpFile, rtrim($cleaned) . "\n") === false) {
+                    http_response_code(500);
+                    echo json_encode(array('error' => 'Failed to prepare temporary cron file'));
+                    break;
+                }
+
+                exec('crontab ' . escapeshellarg($tmpFile), $output, $returnVar);
+                unlink($tmpFile);
+                if ($returnVar !== 0) {
+                    http_response_code(500);
+                    echo json_encode(array('error' => 'Failed to update crontab'));
+                    break;
                 }
             }
             echo json_encode(array('ok' => true));
