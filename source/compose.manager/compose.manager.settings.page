@@ -1372,9 +1372,16 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     function refreshCronStatus() {
         $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getCronStatus'}, function(r){
             // Response is already parsed as JSON by jQuery due to Content-Type header
-            $('#cron-status').text(r && r.installed ? '_(Scheduler active)_' : '_(Scheduler not installed)_');
+            var installed = r && r.installed;
+            var $btn = $('#toggle-scheduler');
+            $btn.data('installed', installed);
+            if (installed) {
+                $btn.val('_(Disable Scheduler)_').removeClass('orange-button');
+            } else {
+                $btn.val('_(Enable Scheduler)_').addClass('orange-button');
+            }
         }, 'json').fail(function() {
-            $('#cron-status').text('_(Scheduler status unavailable)_');
+            $('#toggle-scheduler').val('_(Scheduler Status Unknown)_').prop('disabled', true);
         });
     }
 
@@ -1395,24 +1402,43 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             updateScheduleControls($(this).closest('tr'));
         });
 
-        // Install cron job
-        $('#install-cron').on('click', function(){
-            $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'installCron'}, function(d){ 
-                refreshCronStatus(); 
-                swal('Installed','Scheduler installed (runs every 15 minutes).','success'); 
-            }, 'json').fail(function(){
-                swal('Error', 'Failed to install scheduler.', 'error');
+        // Toggle all auto-updates on/off
+        $('#toggle-all-updates').on('click', function(){
+            var $checkboxes = $('#updates-tbody .au-enabled');
+            if ($checkboxes.length === 0) return;
+            // Determine target state: if any are unchecked, turn all on; otherwise turn all off
+            var anyOff = $checkboxes.filter(function(){ return !$(this).is(':checked'); }).length > 0;
+            $checkboxes.each(function(){
+                var $cb = $(this);
+                if (anyOff) {
+                    if (!$cb.is(':checked')) $cb.prop('checked', true).change();
+                } else {
+                    if ($cb.is(':checked')) $cb.prop('checked', false).change();
+                }
             });
         });
 
-        // Remove cron job
-        $('#remove-cron').on('click', function(){
-            $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'removeCron'}, function(d){ 
-                refreshCronStatus(); 
-                swal('Removed','Scheduler removed.','success'); 
-            }, 'json').fail(function(){
-                swal('Error', 'Failed to remove scheduler.', 'error');
-            });
+        // Toggle scheduler (single button that shows state)
+        $('#toggle-scheduler').on('click', function(){
+            var $btn = $(this);
+            var isInstalled = $btn.data('installed');
+            if (isInstalled) {
+                // Remove cron
+                $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'removeCron'}, function(d){ 
+                    refreshCronStatus(); 
+                    swal('Disabled','Scheduler has been disabled.','success'); 
+                }, 'json').fail(function(){
+                    swal('Error', 'Failed to disable scheduler.', 'error');
+                });
+            } else {
+                // Install cron
+                $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'installCron'}, function(d){ 
+                    refreshCronStatus(); 
+                    swal('Enabled','Scheduler enabled (runs every 15 minutes).','success'); 
+                }, 'json').fail(function(){
+                    swal('Error', 'Failed to enable scheduler.', 'error');
+                });
+            }
         });
 
         // Save auto-update settings
@@ -1732,7 +1758,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             <thead>
                 <tr>
                     <th>_(Stack)_</th>
-                    <th>_(Auto-Update)_</th>
+                    <th>_(Auto-Update)_ <input type="button" id="toggle-all-updates" class="slim-button" value="_(Toggle All)_" title="_(Toggle all auto-updates on/off)_" style="margin-left:8px;padding:2px 8px;font-size:0.85em;"></th>
                     <th>_(Schedule)_</th>
                     <th>_(Time)_</th>
                     <th>_(On)_</th>
@@ -1749,9 +1775,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         </div>
 
         <div class="cron-status-row">
-            <input type="button" id="install-cron" class="slim-button" value="_(Enable Scheduler)_">
-            <input type="button" id="remove-cron" class="slim-button" value="_(Disable Scheduler)_">
-            <span id="cron-status"></span>
+            <input type="button" id="toggle-scheduler" class="slim-button" value="_(Enable Scheduler)_">
         </div>
     </div>
 </div>
