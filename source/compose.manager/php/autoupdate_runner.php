@@ -76,12 +76,13 @@ foreach ($data as $path => $entry) {
     }
 
     if ($shouldRun) {
-        // Update last_run timestamp
-        $data[$path]['last_run'] = $now;
-        $dataModified = true;
         // Find compose file using shared utility
         $composeFile = findComposeFile($path);
         if (!$composeFile) continue;
+
+        // Update last_run timestamp only after compose file is verified
+        $data[$path]['last_run'] = $now;
+        $dataModified = true;
 
         // Resolve project name via StackInfo if possible
         $stackInfo = StackInfo::fromComposePath($compose_root, $path);
