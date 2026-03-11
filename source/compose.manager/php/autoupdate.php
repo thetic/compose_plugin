@@ -18,8 +18,13 @@ header('Content-Type: application/json');
 switch ($action) {
     case 'getConfig':
         if (is_file($autofile)) {
-            $data = file_get_contents($autofile);
-            echo $data;
+            $raw = file_get_contents($autofile);
+            $decoded = json_decode($raw, true);
+            if (!is_array($decoded)) {
+                echo json_encode(array());
+            } else {
+                echo $raw;
+            }
         } else {
             echo json_encode(array());
         }
@@ -133,6 +138,11 @@ switch ($action) {
                 if ($tmpFile !== false && file_put_contents($tmpFile, rtrim($cleaned) . "\n") !== false) {
                     exec('crontab ' . escapeshellarg($tmpFile), $output, $returnVar);
                     unlink($tmpFile);
+                    if ($returnVar !== 0) {
+                        http_response_code(500);
+                        echo json_encode(array('error' => 'Failed to update crontab'));
+                        break;
+                    }
                 }
             }
             echo json_encode(array('ok' => true));
@@ -201,5 +211,3 @@ switch ($action) {
         echo json_encode(array('error' => 'Unknown action'));
         break;
 }
-
-?>
