@@ -159,7 +159,8 @@ function getAutoUpdateConfigFilePath(): string
     }
 
     $persistentPath = '/boot/config/plugins/compose.manager/autoupdate.json';
-    $persistentDir = dirname($persistentPath);
+    $persistentDir  = dirname($persistentPath);
+
     // Prefer a persistent, writable location under /boot/config when possible.
     if ((is_dir('/boot/config') || is_dir($persistentDir) || @mkdir($persistentDir, 0755, true)) && is_dir($persistentDir)) {
         if (is_writable($persistentDir)) {
