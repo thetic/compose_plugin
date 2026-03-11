@@ -33,6 +33,16 @@ class AutoupdateTest extends TestCase
         putenv('COMPOSE_MANAGER_CRON_DIR=' . $plugin_root);
     }
 
+    protected function tearDown(): void
+    {
+        putenv('COMPOSE_MANAGER_CRON_DIR');
+        putenv('COMPOSE_MANAGER_SH');
+        putenv('AUTOTEST_MARKER');
+        putenv('COMPOSE_MANAGER_AUTOUPDATE_FILE');
+        $_POST = [];
+        parent::tearDown();
+    }
+
     public function testGetConfigWhenMissingReturnsEmptyObject(): void
     {
         $_POST = ['action' => 'getConfig'];

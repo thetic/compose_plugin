@@ -29,11 +29,17 @@ PHP;
         file_put_contents($plugin_root . 'php/sh_wrapper.php', $shim);
         // redirect cron writes to plugin root in tests (not strictly needed here but harmless)
         putenv('COMPOSE_MANAGER_CRON_DIR=' . $plugin_root);
+        // ensure autoupdate config file resolves to plugin_root in tests
+        putenv('COMPOSE_MANAGER_AUTOUPDATE_FILE=' . $plugin_root . 'autoupdate.json');
     }
 
     protected function tearDown(): void
     {
         global $compose_root;
+        putenv('COMPOSE_MANAGER_CRON_DIR');
+        putenv('COMPOSE_MANAGER_SH');
+        putenv('AUTOTEST_MARKER');
+        putenv('COMPOSE_MANAGER_AUTOUPDATE_FILE');
         if (is_dir($compose_root)) {
             foreach (scandir($compose_root) as $f) {
                 if ($f === '.' || $f === '..') continue;
