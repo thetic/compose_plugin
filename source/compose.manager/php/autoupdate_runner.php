@@ -35,7 +35,7 @@ foreach ($data as $path => $entry) {
     
     // Validate path is within allowed locations for security
     if (!isAllowedAutoUpdatePath($path)) {
-        clientDebug("[autoupdate] Skipping disallowed path: $path", null, 'daemon', 'warn');
+        clientDebug("[autoupdate] Skipping disallowed path: " . sanitizeLogText($path), null, 'daemon', 'warn');
         continue;
     }
     

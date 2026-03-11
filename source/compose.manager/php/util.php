@@ -57,6 +57,11 @@ function sanitizeStr($a)
     return strtolower($a);
 }
 
+function sanitizeLogText(string $text): string
+{
+    return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
 /**
  * Sanitize a stack name to create a safe folder name.
  * Removes special characters that could cause issues in paths,

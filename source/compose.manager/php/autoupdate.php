@@ -174,7 +174,7 @@ switch ($action) {
         }
         // Security: validate path is under allowed directories
         if (!isAllowedAutoUpdatePath($path)) {
-            clientDebug("[autoupdate] Rejected invalid path: $path", null, 'daemon', 'error');
+            clientDebug("[autoupdate] Rejected invalid path: " . sanitizeLogText($path), null, 'daemon', 'error');
             http_response_code(403);
             echo json_encode(array('error' => 'Path not allowed'));
             break;
