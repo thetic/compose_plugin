@@ -3,8 +3,8 @@
 # Unit Tests for compose.sh script functions
 #
 
-# Load test framework
-load '../framework/bats/setup'
+# Load test framework (project-level bootstrap wraps the generic framework)
+load '../bats_setup'
 
 # Path to the script we're testing
 COMPOSE_SCRIPT="$BATS_TEST_DIRNAME/../../source/compose.manager/scripts/compose.sh"
