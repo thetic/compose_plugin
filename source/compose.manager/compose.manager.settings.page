@@ -1352,14 +1352,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             var payload = cfg;
             payload['defaults'] = defaults;
             $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'saveConfig', data: JSON.stringify(payload)}, function(resp){
-                try { 
-                    var r = JSON.parse(resp); 
-                    if (r.ok) swal('Saved', 'Auto-update settings saved.', 'success'); 
-                    else swal('Error', 'Failed to save settings', 'error'); 
-                } catch(e) { 
-                    swal('Saved', 'Auto-update settings saved.', 'success'); 
-                }
-            });
+                if (resp && resp.ok) swal('Saved', 'Auto-update settings saved.', 'success');
+                else swal('Error', 'Failed to save settings', 'error');
+            }, 'json');
         });
 
         // Run auto-update now for enabled stacks
@@ -1369,8 +1364,8 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 var enabled = $(this).find('.au-enabled').is(':checked');
                 if (enabled) {
                     $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'runNow', path: encodeURIComponent(path)}, function(data){
-                        try { var r = JSON.parse(data); console.log(r); } catch(e) { console.log(data); }
-                    });
+                        console.log(data);
+                    }, 'json');
                 }
             });
             swal('Started', 'Triggered auto-update for enabled stacks. Check logs for details.', 'info');

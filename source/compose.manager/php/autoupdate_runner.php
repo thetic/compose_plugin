@@ -35,16 +35,28 @@ foreach ($data as $path => $entry) {
     if (!is_array($entry)) continue;
     if (empty($entry['enabled'])) continue;
     
-    // Validate path is within allowed compose root for security
+    // Validate path is within allowed locations for security
     $realPath = realpath($path);
     $realComposeRoot = realpath($compose_root);
-    if ($realPath === false || $realComposeRoot === false) {
+    if ($realPath === false) {
         clientDebug("[autoupdate] Skipping entry with unresolved path: $path", null, 'daemon', 'warn');
         continue;
     }
-    $realComposeRoot = rtrim($realComposeRoot, DIRECTORY_SEPARATOR);
-    if ($realPath !== $realComposeRoot && strpos($realPath, $realComposeRoot . DIRECTORY_SEPARATOR) !== 0) {
-        clientDebug("[autoupdate] Skipping disallowed path outside compose root: $path", null, 'daemon', 'warn');
+    $allowedPath = false;
+    if ($realComposeRoot !== false) {
+        $realComposeRoot = rtrim($realComposeRoot, DIRECTORY_SEPARATOR);
+        if ($realPath === $realComposeRoot || strpos($realPath, $realComposeRoot . DIRECTORY_SEPARATOR) === 0) {
+            $allowedPath = true;
+        }
+    }
+    if (!$allowedPath && ($realPath === '/mnt' || strpos($realPath, '/mnt/') === 0)) {
+        $allowedPath = true;
+    }
+    if (!$allowedPath && ($realPath === '/boot/config' || strpos($realPath, '/boot/config/') === 0)) {
+        $allowedPath = true;
+    }
+    if (!$allowedPath) {
+        clientDebug("[autoupdate] Skipping disallowed path: $path", null, 'daemon', 'warn');
         continue;
     }
     
