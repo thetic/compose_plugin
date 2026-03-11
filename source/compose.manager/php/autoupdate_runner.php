@@ -22,8 +22,6 @@ if (is_file($timezoneFile)) {
 // If no /etc/timezone or failed, PHP uses system default which is fine
 
 $now = time();
-$hour = intval(date('H', $now));
-$minute = intval(date('i', $now));
 $wday = intval(date('w', $now)); // 0 (Sun) - 6
 $mday = intval(date('j', $now)); // 1-31
 
@@ -36,26 +34,7 @@ foreach ($data as $path => $entry) {
     if (empty($entry['enabled'])) continue;
     
     // Validate path is within allowed locations for security
-    $realPath = realpath($path);
-    $realComposeRoot = realpath($compose_root);
-    if ($realPath === false) {
-        clientDebug("[autoupdate] Skipping entry with unresolved path: $path", null, 'daemon', 'warn');
-        continue;
-    }
-    $allowedPath = false;
-    if ($realComposeRoot !== false) {
-        $realComposeRoot = rtrim($realComposeRoot, DIRECTORY_SEPARATOR);
-        if ($realPath === $realComposeRoot || strpos($realPath, $realComposeRoot . DIRECTORY_SEPARATOR) === 0) {
-            $allowedPath = true;
-        }
-    }
-    if (!$allowedPath && ($realPath === '/mnt' || strpos($realPath, '/mnt/') === 0)) {
-        $allowedPath = true;
-    }
-    if (!$allowedPath && ($realPath === '/boot/config' || strpos($realPath, '/boot/config/') === 0)) {
-        $allowedPath = true;
-    }
-    if (!$allowedPath) {
+    if (!isAllowedAutoUpdatePath($path)) {
         clientDebug("[autoupdate] Skipping disallowed path: $path", null, 'daemon', 'warn');
         continue;
     }
@@ -129,5 +108,3 @@ foreach ($data as $path => $entry) {
 if ($dataModified) {
     file_put_contents($autofile, json_encode($data, JSON_PRETTY_PRINT));
 }
-
-?>
