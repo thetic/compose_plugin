@@ -86,8 +86,24 @@ function sanitizeFolderName(string $stackName): string
 }
 
 function isIndirect($path)
-{
-    return is_file("$path/indirect");
+{   
+    $indirectFilePath = "$path/indirect";
+    if (is_file("$indirectFilePath")) {
+        $indirectPath = trim(file_get_contents("$indirectFilePath"));
+        if ($indirectPath === '' 
+        || strpos($indirectPath, "\n") !== false // Disallow newlines to prevent multi-line indirect files that could bypass other checks
+        || strpos($indirectPath, '/') === false // Must contain at least one slash to be a valid path
+        || strpos($indirectPath, '\\') !== false // Disallow backslashes to prevent Windows-style paths that could bypass checks
+        || strpos($indirectPath, '/.') !== false // Disallow relative path segments (e.g., "/./", "/..") to prevent directory escape attacks
+        || strpos($indirectPath, './') !== false // Disallow relative path segments at the start or within the path (e.g., "./", "../")
+        || !is_dir($indirectPath) // Must be an existing directory on the filesystem
+        ) {
+            exec("rm -f " . escapeshellarg("$indirectFilePath")); // Remove invalid indirect file to prevent repeated issues
+            return false;
+        }
+        return true;
+    }
+    return false;
 }
 
 function getPath($basePath)
