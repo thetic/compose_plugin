@@ -239,20 +239,47 @@ function echoComposeCommandMultiple($action, $paths)
         $commands[] = $composeCommand;
     }
 
+    // Human-readable action label for terminal headings
+    $actionLabelByType = [
+        'up' => 'Starting',
+        'down' => 'Stopping',
+        'update' => 'Updating',
+    ];
+    $actionLabel = $actionLabelByType[$action] ?? ucfirst($action);
+
     if ($cfg['OUTPUTSTYLE'] == "ttyd") {
-        // Build a bash script that runs all commands sequentially
-        $bashScript = "bash -c '";
-        $first = true;
+        // Create a temporary script and execute it via ttyd.
+        // This avoids nested shell-quote edge cases and continues after per-stack failures.
+        $tmpScript = "/tmp/compose_multi_" . uniqid() . ".sh";
+        $scriptContent = "#!/bin/bash\n";
+        $scriptContent .= "# Multi-stack compose script (ttyd) - auto-generated\n\n";
+
         foreach ($commands as $idx => $cmd) {
             $cmdStr = implode(" ", array_map('escapeshellarg', $cmd));
-            if (!$first) $bashScript .= " && ";
-            $bashScript .= "echo \"\" && echo \"=== Starting: " . addslashes($stackNames[$idx]) . " ===\" && echo \"\" && " . $cmdStr;
-            $first = false;
-        }
-        $bashScript .= "'";
+            $stackTitle = str_replace(['\\', '"'], ['\\\\', '\\"'], $stackNames[$idx]);
 
-        execComposeCommandInTTY($bashScript, $debug);
-        clientDebug("Multi-stack command: " . $bashScript, null, 'daemon', 'debug');
+            $scriptContent .= "echo \"\"\n";
+            $scriptContent .= "echo \"=== " . $actionLabel . ": " . $stackTitle . " ===\"\n";
+            $scriptContent .= "echo \"\"\n";
+            $scriptContent .= $cmdStr . "\n";
+            $scriptContent .= "rc=$?\n";
+            $scriptContent .= "if [ \$rc -ne 0 ]; then\n";
+            $scriptContent .= "  echo \"X Stack " . $stackTitle . " failed to " . strtolower($actionLabel) . " (exit code: \$rc)\"\n";
+            $scriptContent .= "fi\n";
+            $scriptContent .= "echo \"\"\n";
+        }
+
+        $scriptContent .= "echo \"========================================\"\n";
+        $scriptContent .= "echo \"=== All operations complete ===\"\n";
+        $scriptContent .= "echo \"========================================\"\n";
+        $scriptContent .= "rm -f " . escapeshellarg($tmpScript) . "\n";
+
+        file_put_contents($tmpScript, $scriptContent);
+        chmod($tmpScript, 0755);
+
+        $ttydCommand = "bash " . escapeshellarg($tmpScript);
+        execComposeCommandInTTY($ttydCommand, $debug);
+        clientDebug("Multi-stack script created: " . $tmpScript, null, 'daemon', 'debug');
         echo "/plugins/compose.manager/php/show_ttyd.php?done=1";
     } else {
         // For nchan/traditional output, create a temporary bash script that runs all commands
