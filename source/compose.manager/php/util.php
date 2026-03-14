@@ -224,6 +224,32 @@ function isAllowedAutoUpdatePath($path): bool
     return false;
 }
 
+/**
+ * Pure string checks for path validation.
+ */
+class Path
+{
+    public static function hasNewline(string $path): bool
+    {
+        return strpos($path, "\n") !== false;
+    }
+
+    public static function hasSeparator(string $path): bool
+    {
+        return strpos($path, '/') !== false || strpos($path, DIRECTORY_SEPARATOR) !== false;
+    }
+
+    public static function hasWindowsStylePath(string $path): bool
+    {
+        return DIRECTORY_SEPARATOR === '/' && strpos($path, '\\') !== false;
+    }
+
+    public static function hasTraversal(string $path): bool
+    {
+        return strpos($path, '/.') !== false || strpos($path, './') !== false;
+    }
+}
+
 
 function pruneOverrideContentServices(string $overrideContent, array $validServices): array
 {
@@ -1007,6 +1033,32 @@ class StackInfo
             self::$instances = [];
         }
     }
+    /**
+     * Determine if the stack uses an indirect compose path by checking for a valid 'indirect' file.
+     * Validate file path to prevent security issues (e.g. directory traversal, invalid paths) and ensure it points to an existing directory.
+     * 
+     * @return bool True if the stack is indirect, false otherwise
+     */
+    private function isIndirect(): bool
+    {   
+        $indirectPath = $this->readMetadata('indirect');
+        if ($indirectPath !== null) {
+            if ($indirectPath === ''
+            || Path::hasNewline($indirectPath)
+            || !Path::hasSeparator($indirectPath)
+            || Path::hasWindowsStylePath($indirectPath)
+            || Path::hasTraversal($indirectPath)
+            || !is_dir($indirectPath)
+            ) {
+                @unlink("$this->path/indirect"); // Remove invalid indirect file to prevent repeated issues
+                unset($this->metadataCache['indirect']); // Clear cache to ensure state is updated on next access
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
 
     // ---------------------------------------------------------------
     // Lazy metadata getters — read from file on first access, cache
