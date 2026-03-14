@@ -9,6 +9,15 @@
 
 declare(strict_types=1);
 
+// Stub the logger function before source files are loaded.
+// On Linux this is a syslog command; on Windows it doesn't exist.
+if (!function_exists('logger')) {
+    function logger(string $message = ''): void
+    {
+        // no-op in test environment
+    }
+}
+
 // Load the plugin-tests framework
 require_once __DIR__ . '/framework/src/php/bootstrap.php';
 

@@ -14,6 +14,9 @@
 .PARAMETER Dev
     Generate a development build with timestamp: YYYY.MM.DD-dev-HHMMSS
 
+.PARAMETER SkipTests
+    Skip running tests before building. Not recommended.
+
 .PARAMETER ComposeVersion
     Docker Compose version to include. Default: 2.40.3
 
@@ -30,12 +33,27 @@
 param(
     [string]$Version,
     [switch]$Dev,
+    [switch]$SkipTests,
     [string]$ComposeVersion,
     [string]$AceVersion
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
+
+# Run tests before building
+$testScript = Join-Path $ScriptDir "test.ps1"
+if (Test-Path $testScript) {
+    if (-not $SkipTests) {
+        Write-Host "Running tests..." -ForegroundColor Yellow
+        & $testScript
+        if ($LASTEXITCODE -ne 0) {
+            throw "Tests failed. Build aborted."
+        }
+    }
+} else {
+    throw "test.ps1 not found. Cannot run tests."
+}
 
 # Read component versions from versions.env if not supplied as parameters
 $versionsFile = Join-Path $ScriptDir "versions.env"
