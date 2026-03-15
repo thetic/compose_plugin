@@ -27,6 +27,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'mystack';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
         $this->assertInstanceOf(\StackInfo::class, $info);
     }
@@ -35,22 +36,25 @@ class StackInfoTest extends TestCase
     {
         $stack = 'my-stack';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
+        file_put_contents($this->tempRoot . '/' . $stack . '/name', 'My Stack');
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
-        $this->assertSame('my-stack', $info->project);
-        $this->assertSame(sanitizeStr('my-stack'), $info->sanitizedName);
+        $this->assertSame('my-stack', $info->projectFolder);
+        $this->assertSame('My Stack', $info->displayName);
         $this->assertSame($this->tempRoot . '/my-stack', $info->path);
         $this->assertFalse($info->isIndirect);
     }
 
-    public function testSanitizedNameRemovesSpecialChars(): void
+    public function testSanitizedNameUsesCanonicalProjectRules(): void
     {
         $stack = 'My Stack (v2)';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
-        // sanitizeStr lowercases and removes non-alphanumeric/dash/underscore
-        $this->assertSame(sanitizeStr('My Stack (v2)'), $info->sanitizedName);
+        // Canonical project identity: lowercased, special chars replaced, underscores collapsed.
+        $this->assertSame('my_stack_v2', $info->projectFolder);
     }
 
     public function testIndirectStackResolution(): void
@@ -61,6 +65,7 @@ class StackInfoTest extends TestCase
         mkdir($stackDir);
         mkdir($indirectTarget);
         file_put_contents($stackDir . '/indirect', $indirectTarget);
+        file_put_contents($indirectTarget . '/compose.yaml', "services:\n");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
@@ -73,6 +78,7 @@ class StackInfoTest extends TestCase
         $stack = 'direct-stack';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
@@ -86,10 +92,11 @@ class StackInfoTest extends TestCase
 
     public function testComposeFilePathNullWhenNoFile(): void
     {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/no compose file found/');
         $stack = 'no-compose';
         mkdir($this->tempRoot . '/' . $stack);
-        $info = \StackInfo::fromProject($this->tempRoot, $stack);
-        $this->assertNull($info->composeFilePath);
+        \StackInfo::fromProject($this->tempRoot, $stack);
     }
 
     public function testComposeFilePathResolvedWithComposeYaml(): void
@@ -139,6 +146,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'override-stack';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertInstanceOf(\OverrideInfo::class, $info->overrideInfo);
@@ -150,6 +158,7 @@ class StackInfoTest extends TestCase
         $stack = 'with-override';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/compose.override.yaml", '# override');
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -166,6 +175,7 @@ class StackInfoTest extends TestCase
         $stack = 'named-stack';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/name", "My Display Name");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -177,6 +187,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'unnamed-stack';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertSame('unnamed-stack', $info->getName());
@@ -187,6 +198,7 @@ class StackInfoTest extends TestCase
         $stack = 'desc-stack';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/description", "A test stack\nwith multiple lines");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -198,6 +210,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'no-desc';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertSame('', $info->getDescription());
@@ -208,6 +221,7 @@ class StackInfoTest extends TestCase
         $stack = 'env-stack';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/envpath", "/path/to/.env");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -219,6 +233,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'no-env';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertNull($info->getEnvFilePath());
@@ -229,6 +244,7 @@ class StackInfoTest extends TestCase
         $stack = 'icon-stack';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/icon_url", "https://example.com/icon.png");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -241,6 +257,7 @@ class StackInfoTest extends TestCase
         $stack = 'bad-icon';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/icon_url", "not-a-url");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -253,6 +270,7 @@ class StackInfoTest extends TestCase
         $stack = 'ftp-icon';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/icon_url", "ftp://example.com/icon.png");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -265,6 +283,7 @@ class StackInfoTest extends TestCase
         $stack = 'webui-stack';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/webui_url", "http://192.168.1.1:8080");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -277,6 +296,7 @@ class StackInfoTest extends TestCase
         $stack = 'bad-webui';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/webui_url", "javascript:alert(1)");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -289,6 +309,7 @@ class StackInfoTest extends TestCase
         $stack = 'profiles-stack';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/default_profile", "dev, test , production");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -300,6 +321,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'no-profiles';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertSame([], $info->getDefaultProfiles());
@@ -310,6 +332,7 @@ class StackInfoTest extends TestCase
         $stack = 'autostart-stack';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/autostart", "true");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -321,6 +344,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'no-autostart';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertFalse($info->getAutostart());
@@ -331,6 +355,7 @@ class StackInfoTest extends TestCase
         $stack = 'false-autostart';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/autostart", "false");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -343,6 +368,7 @@ class StackInfoTest extends TestCase
         $stack = 'started-stack';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/started_at", "2024-06-15T10:30:00Z");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -354,6 +380,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'not-started';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertNull($info->getStartedAt());
@@ -364,6 +391,7 @@ class StackInfoTest extends TestCase
         $stack = 'json-profiles';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/profiles", json_encode(['dev', 'staging', 'prod']));
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -375,6 +403,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'no-json-profiles';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertSame([], $info->getProfiles());
@@ -385,6 +414,7 @@ class StackInfoTest extends TestCase
         $stack = 'bad-json';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/profiles", "not-valid-json{");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -401,6 +431,7 @@ class StackInfoTest extends TestCase
         $stack = 'cached-name';
         $stackDir = $this->tempRoot . '/' . $stack;
         mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
         file_put_contents("$stackDir/name", "Original Name");
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -417,6 +448,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'cached-instance';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
 
         $first = \StackInfo::fromProject($this->tempRoot, $stack);
         $second = \StackInfo::fromProject($this->tempRoot, $stack);
@@ -428,6 +460,7 @@ class StackInfoTest extends TestCase
     {
         $stack = 'clear-cache';
         mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
 
         $first = \StackInfo::fromProject($this->tempRoot, $stack);
         \StackInfo::clearCache();
@@ -453,7 +486,7 @@ class StackInfoTest extends TestCase
         $this->assertArrayHasKey('projectName', $args);
         $this->assertArrayHasKey('files', $args);
         $this->assertArrayHasKey('envFile', $args);
-        $this->assertSame($info->sanitizedName, $args['projectName']);
+        $this->assertSame($info->projectFolder, $args['projectName']);
         $this->assertStringContainsString('compose.yaml', $args['files']);
     }
 
@@ -510,8 +543,8 @@ class StackInfoTest extends TestCase
     {
         $stack = \StackInfo::createNew($this->tempRoot, 'My "Stack" (v2)');
 
-        // sanitizeFolderName removes quotes and parens, replaces spaces
-        $this->assertSame('My_Stack_v2', $stack->project);
+        // sanitizeProjectString lowercases and replaces unsupported chars
+        $this->assertSame('my_stack_v2', $stack->projectFolder);
         $this->assertSame('My "Stack" (v2)', $stack->getName());
     }
 
@@ -561,15 +594,16 @@ class StackInfoTest extends TestCase
 
     public function testCreateNewHandlesFolderCollision(): void
     {
-        // Pre-create the folder that sanitizeFolderName would produce
-        $existingDir = $this->tempRoot . '/Collide';
+        // Pre-create the folder that sanitizeProjectString would produce
+        $sanitized = 'collide';
+        $existingDir = $this->tempRoot . '/' . $sanitized;
         mkdir($existingDir, 0755, true);
 
         $stack = \StackInfo::createNew($this->tempRoot, 'Collide');
 
-        // Should have created a different folder (with random suffix)
-        $this->assertNotSame('Collide', $stack->project);
-        $this->assertStringStartsWith('Collide', $stack->project);
+        // Should have created a different folder (with collision suffix)
+        $this->assertNotSame($sanitized, $stack->projectFolder);
+        $this->assertStringStartsWith($sanitized, $stack->projectFolder);
         $this->assertDirectoryExists($stack->path);
     }
 
@@ -589,7 +623,7 @@ class StackInfoTest extends TestCase
         $stack = \StackInfo::createNew($this->tempRoot, 'Cached New');
 
         // Fetching via fromProject should return the same cached instance
-        $fetched = \StackInfo::fromProject($this->tempRoot, $stack->project);
+        $fetched = \StackInfo::fromProject($this->tempRoot, $stack->projectFolder);
         $this->assertSame($stack, $fetched);
     }
 
@@ -617,15 +651,15 @@ class StackInfoTest extends TestCase
 
     public function testCreateNewCollisionSuffixDoesNotCompound(): void
     {
-        // Pre-create the base folder
-        $baseName = 'CompoundTest';
+        // Pre-create the base folder (already lowercase to match sanitization)
+        $baseName = 'compoundtest';
         mkdir($this->tempRoot . '/' . $baseName, 0755, true);
 
         $stack = \StackInfo::createNew($this->tempRoot, $baseName);
 
-        // The project name should be baseName + one random suffix, not compounded
-        $suffix = substr($stack->project, strlen($baseName));
-        // The suffix should be a single numeric string (from one mt_rand call)
-        $this->assertMatchesRegularExpression('/^\d+$/', $suffix);
+        // The project name should be baseName + one collision suffix, not compounded
+        $suffix = substr($stack->projectFolder, strlen($baseName));
+        // The suffix should be a dash followed by digits (from collision avoidance)
+        $this->assertMatchesRegularExpression('/^-\d+$/', $suffix);
     }
 }

@@ -87,7 +87,7 @@ foreach ($data as $path => $entry) {
         // Resolve project name via StackInfo if possible
         $stackInfo = StackInfo::fromComposePath($compose_root, $path);
         if ($stackInfo !== null) {
-            $projectName = $stackInfo->sanitizedName;
+            $projectName = $stackInfo->projectFolder;
         } else {
             $projectName = basename($path);
             if (is_file($path . '/name')) $projectName = trim(file_get_contents($path . '/name'));

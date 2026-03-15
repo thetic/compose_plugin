@@ -202,7 +202,7 @@ switch ($action) {
         // Resolve project name - try to find the StackInfo, fall back to basename
         $stackInfo = StackInfo::fromComposePath($compose_root, $path);
         if ($stackInfo !== null) {
-            $projectName = $stackInfo->sanitizedName;
+            $projectName = $stackInfo->projectFolder;
         } else {
             $projectName = basename($path);
             if (is_file("$path/name")) {

@@ -19,136 +19,88 @@ require_once '/usr/local/emhttp/plugins/compose.manager/php/util.php';
 class UtilTest extends TestCase
 {
     /**
-     * Test sanitizeStr removes dots
+     * Test sanitizeProjectString replaces dots with underscores
      */
-    public function testSanitizeStrRemovesDots(): void
+    public function testSanitizeProjectStringReplacesDots(): void
     {
-        $result = sanitizeStr('my.stack.name');
+        $result = \StackInfo::sanitizeProjectString('my.stack.name');
         $this->assertEquals('my_stack_name', $result);
     }
 
     /**
-     * Test sanitizeStr removes spaces
+     * Test sanitizeProjectString replaces spaces with underscores
      */
-    public function testSanitizeStrRemovesSpaces(): void
+    public function testSanitizeProjectStringReplacesSpaces(): void
     {
-        $result = sanitizeStr('my stack name');
+        $result = \StackInfo::sanitizeProjectString('my stack name');
         $this->assertEquals('my_stack_name', $result);
     }
 
     /**
-     * Test sanitizeStr removes dashes
+     * Test sanitizeProjectString preserves dashes
      */
-    public function testSanitizeStrRemovesDashes(): void
+    public function testSanitizeProjectStringPreservesDashes(): void
     {
-        $result = sanitizeStr('my-stack-name');
-        $this->assertEquals('my_stack_name', $result);
+        $result = \StackInfo::sanitizeProjectString('my-stack-name');
+        $this->assertEquals('my-stack-name', $result);
     }
 
     /**
-     * Test sanitizeStr converts to lowercase
+     * Test sanitizeProjectString converts to lowercase
      */
-    public function testSanitizeStrConvertsToLowercase(): void
+    public function testSanitizeProjectStringConvertsToLowercase(): void
     {
-        $result = sanitizeStr('MyStackName');
+        $result = \StackInfo::sanitizeProjectString('MyStackName');
         $this->assertEquals('mystackname', $result);
     }
 
     /**
-     * Test sanitizeStr handles combined cases
+     * Test sanitizeProjectString handles combined cases (dashes preserved, other specials → underscore)
      */
-    public function testSanitizeStrCombined(): void
+    public function testSanitizeProjectStringCombined(): void
     {
-        $result = sanitizeStr('My.Stack-Name Here');
-        $this->assertEquals('my_stack_name_here', $result);
+        $result = \StackInfo::sanitizeProjectString('My.Stack-Name Here');
+        $this->assertEquals('my_stack-name_here', $result);
     }
 
     /**
-     * Test sanitizeStr with empty string
+     * Test sanitizeProjectString with empty string defaults to 'compose'
      */
-    public function testSanitizeStrEmptyString(): void
+    public function testSanitizeProjectStringEmptyStringDefaultsToCompose(): void
     {
-        $result = sanitizeStr('');
-        $this->assertEquals('', $result);
+        $result = \StackInfo::sanitizeProjectString('');
+        $this->assertEquals('compose', $result);
     }
 
     /**
-     * Test sanitizeStr with underscores (should be preserved)
+     * Test sanitizeProjectString with underscores (should be preserved)
      */
-    public function testSanitizeStrPreservesUnderscores(): void
+    public function testSanitizeProjectStringPreservesUnderscores(): void
     {
-        $result = sanitizeStr('my_stack_name');
+        $result = \StackInfo::sanitizeProjectString('my_stack_name');
         $this->assertEquals('my_stack_name', $result);
     }
 
     /**
-     * Test sanitizeStr with numbers
+     * Test sanitizeProjectString with numbers
      */
-    public function testSanitizeStrWithNumbers(): void
+    public function testSanitizeProjectStringWithNumbers(): void
     {
-        $result = sanitizeStr('Stack123.Test');
+        $result = \StackInfo::sanitizeProjectString('Stack123.Test');
         $this->assertEquals('stack123_test', $result);
     }
 
     /**
-     * Test sanitizeStr with multiple consecutive special chars
+     * Test sanitizeProjectString with multiple consecutive special chars (dashes preserved, underscores collapsed)
      */
-    public function testSanitizeStrMultipleSpecialChars(): void
+    public function testSanitizeProjectStringMultipleSpecialChars(): void
     {
-        $result = sanitizeStr('my..stack--name  here');
-        $this->assertEquals('my__stack__name__here', $result);
+        $result = \StackInfo::sanitizeProjectString('my..stack--name  here');
+        $this->assertEquals('my_stack-name_here', $result);
     }
 
-    /**
-     * Test isIndirect returns false when no indirect file exists
-     */
-    public function testIsIndirectReturnsFalseWhenNoFile(): void
-    {
-        $tempDir = $this->createTempDir();
-        
-        $result = isIndirect($tempDir);
-        
-        $this->assertFalse($result);
-    }
-
-    /**
-     * Test isIndirect returns true when indirect file exists
-     */
-    public function testIsIndirectReturnsTrueWhenFileExists(): void
-    {
-        $tempDir = $this->createTempDir();
-        file_put_contents("$tempDir/indirect", '/mnt/user/appdata/realpath');
-        
-        $result = isIndirect($tempDir);
-        
-        $this->assertTrue($result);
-    }
-
-    /**
-     * Test getPath returns basePath when not indirect
-     */
-    public function testGetPathReturnsBasePathWhenNotIndirect(): void
-    {
-        $tempDir = $this->createTempDir();
-        
-        $result = getPath($tempDir);
-        
-        $this->assertEquals($tempDir, $result);
-    }
-
-    /**
-     * Test getPath returns indirect content when indirect file exists
-     */
-    public function testGetPathReturnsIndirectContent(): void
-    {
-        $tempDir = $this->createTempDir();
-        $targetPath = '/mnt/user/appdata/mystack';
-        file_put_contents("$tempDir/indirect", $targetPath);
-        
-        $result = getPath($tempDir);
-        
-        $this->assertEquals($targetPath, $result);
-    }
+    // isIndirect() and getPath() were moved to StackInfo instance methods.
+    // See StackInfoTest for indirect resolution coverage.
 
     /**
      * Test getStackLastResult returns null when no result file
@@ -551,8 +503,8 @@ class UtilTest extends TestCase
             $fp = acquireStackLock('My.Stack-Name', 1);
             $this->assertIsResource($fp);
             
-            // Lock file should use sanitized name
-            $expectedFile = $this->testLockDir . '/my_stack_name.lock';
+            // Lock file should use sanitized name (dashes preserved by sanitizeProjectString)
+            $expectedFile = $this->testLockDir . '/my_stack-name.lock';
             $this->assertFileExists($expectedFile);
             
             releaseStackLock($fp);

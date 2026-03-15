@@ -20,4 +20,16 @@ $compose_root = locate_compose_root($sName);
 define('COMPOSE_UPDATE_STATUS_FILE', '/boot/config/plugins/compose.manager/update-status.json');
 define('UNRAID_UPDATE_STATUS_FILE', '/var/lib/docker/unraid-update-status.json');
 define('PENDING_RECHECK_FILE', '/boot/config/plugins/compose.manager/pending-recheck.json');
+
+/**
+ * Compose file names in priority order per the Docker Compose spec.
+ * @see https://docs.docker.com/compose/intro/compose-application-model/#the-compose-file
+ */
+define('COMPOSE_FILE_NAMES', [
+    'compose.yaml',
+    'compose.yml',
+    'docker-compose.yaml',
+    'docker-compose.yml',
+]);
+
 ?>

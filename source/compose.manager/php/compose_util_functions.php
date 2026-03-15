@@ -12,19 +12,6 @@ require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 
 /**
- * Log a message to syslog.
- *
- * @param string $string The message to log
- */
-if (!function_exists('logger')) {
-    function logger($string)
-    {
-        $string = escapeshellarg($string);
-        exec("logger -t 'compose.manager' " . $string);
-    }
-}
-
-/**
  * Execute a compose command in a ttyd terminal, optionally capturing output to a log file.
  *
  * @param string $cmd The command to execute
@@ -49,9 +36,7 @@ function execComposeCommandInTTY($cmd, $debug, $logFile = '')
         $command = "ttyd -R -o -i $socketPath $cmd > /dev/null &";
     }
     exec($command);
-    if ($debug) {
-        logger($command);
-    }
+    clientDebug("Executing command in ttyd: " . $cmd, ['command' => $cmd], 'daemon', 'debug');
 }
 
 /**
@@ -63,6 +48,16 @@ function execComposeCommandInTTY($cmd, $debug, $logFile = '')
  */
 function echoComposeCommand($action, $recreate = false, $background = false)
 {
+    /**
+     * Note: This function is called from an AJAX endpoint and must be careful to only echo the intended command or JSON response.
+     * 
+     * POST parameters:
+     * 
+     * path: the stack path (required)
+     * profile: optional comma-separated list of profiles to enable
+     * 
+     * Security: The 'path' parameter is validated to ensure it is within allowed directories to prevent command injection or unauthorized file access.
+     */
     global $plugin_root;
     global $sName;
     global $compose_root;
@@ -71,20 +66,18 @@ function echoComposeCommand($action, $recreate = false, $background = false)
     $path = isset($_POST['path']) ? trim($_POST['path']) : "";
     $profile = isset($_POST['profile']) ? trim($_POST['profile']) : "";
     $unRaidVars = parse_ini_file("/var/local/emhttp/var.ini");
-    $originalAction = $action;
     if ($unRaidVars['mdState'] != "STARTED") {
         echo $plugin_root . "/scripts/arrayNotStarted.sh";
-        clientDebug("Array Not Started", null, 'daemon', 'debug');
+        clientDebug("Cannot perform action: array not started", ['action' => $action, 'path' => $path], 'daemon', 'debug');
     } else {
+        clientDebug("Preparing compose command", ['action' => $action, 'path' => $path, 'profile' => $profile, 'recreate' => $recreate, 'background' => $background], 'daemon', 'debug');
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
-        $project = basename($path);
-
         // Resolve stack identity via StackInfo
-        $stackInfo = StackInfo::fromProject($compose_root, $project);
+        $stackInfo = StackInfo::fromProject($compose_root, basename($path));
 
         $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . $stackInfo->sanitizedName;
+        $composeCommand[] = "-p" . $stackInfo->projectFolder;
 
         $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
         $composeCommand[] = "-f$composeFile";
@@ -133,9 +126,7 @@ function echoComposeCommand($action, $recreate = false, $background = false)
             }
             $bgCmd .= ' > /dev/null 2>&1 &';
             exec($bgCmd);
-            if ($debug) {
-                logger("Background command: " . $bgCmd);
-            }
+            clientDebug("Background command: " . $bgCmd, ['command' => $bgCmd], 'daemon', 'debug');
             // Signal to JS that this ran in background (no terminal window to open)
             echo json_encode(['background' => true]);
         } elseif ($cfg['OUTPUTSTYLE'] == "ttyd") {
@@ -145,10 +136,8 @@ function echoComposeCommand($action, $recreate = false, $background = false)
             }, $composeCommand);
             $composeCommandStr = join(" ", $composeCommandEscaped);
             execComposeCommandInTTY($composeCommandStr, $debug, $logFile);
-            if ($debug) {
-                logger($composeCommandStr);
-            }
-            $composeCommand = "/plugins/compose.manager/php/show_ttyd.php" . ($originalAction !== 'logs' ? "?done=1" : "");
+            clientDebug("Executing command in ttyd: " . $composeCommandStr, ['command' => $composeCommandStr], 'daemon', 'debug');
+            $composeCommand = "/plugins/compose.manager/php/show_ttyd.php" . ($action !== 'logs' ? "?done=1" : "");
             echo $composeCommand;
         } else {
             $i = 0;
@@ -162,9 +151,7 @@ function echoComposeCommand($action, $recreate = false, $background = false)
             }, "");
             echo $composeCommand;
         }
-        if ($debug) {
-            logger((string)$composeCommand);
-        }
+        clientDebug("Final compose command: " . $composeCommand, ['command' => $composeCommand], 'daemon', 'debug');
     }
 }
 
@@ -185,9 +172,7 @@ function echoComposeCommandMultiple($action, $paths)
 
     if ($unRaidVars['mdState'] != "STARTED") {
         echo $plugin_root . "/scripts/arrayNotStarted.sh";
-        if ($debug) {
-            logger("Array not Started!");
-        }
+        clientDebug("Multi Compose operation aborted: Array not started", null, 'daemon', 'warning');
         return;
     }
 
@@ -196,6 +181,7 @@ function echoComposeCommandMultiple($action, $paths)
     $stackNames = array();
 
     foreach ($paths as $path) {
+        clientDebug("Processing stack for multi-compose action: " . $path, ['path' => $path, 'action' => $action], 'daemon', 'debug');
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
         $project = basename($path);
@@ -205,7 +191,7 @@ function echoComposeCommandMultiple($action, $paths)
         $stackNames[] = $stackInfo->getName();
 
         $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . $stackInfo->sanitizedName;
+        $composeCommand[] = "-p" . $stackInfo->projectFolder;
 
         $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
         $composeCommand[] = "-f$composeFile";

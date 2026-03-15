@@ -14,51 +14,14 @@ $cfg = parse_plugin_cfg($sName);
 $stackstate = shell_exec($plugin_root . "/scripts/compose.sh -c list");
 $stackstate = json_decode($stackstate, TRUE);
 
-// Get all compose containers with status/uptime info
-$containersOutput = shell_exec($plugin_root . "/scripts/compose.sh -c ps");
-$containersByProject = [];
-if ($containersOutput) {
-    $lines = explode("\n", trim($containersOutput));
-    foreach ($lines as $line) {
-        if (!empty($line)) {
-            $container = json_decode($line, true);
-            if ($container && isset($container['Labels'])) {
-                // Extract project name from labels
-                if (preg_match('/com\.docker\.compose\.project=([^,]+)/', $container['Labels'], $matches)) {
-                    $projectName = $matches[1];
-                    if (!isset($containersByProject[$projectName])) {
-                        $containersByProject[$projectName] = [];
-                    }
-                    $containersByProject[$projectName][] = $container;
-                }
-            }
-        }
-    }
-}
-
-$composeProjects = @array_diff(@scandir($compose_root), array(".", ".."));
-if (! is_array($composeProjects)) {
-    $composeProjects = array();
-}
-
 $o = "";
 $stackCount = 0;
 
-foreach ($composeProjects as $project) {
-    // Skip if not a directory or if it doesn't contain a compose file (either directly or via indirect)
-    if (!hasComposeFile("$compose_root/$project") &&
-        (! is_file("$compose_root/$project/indirect"))
-    ) {
-        continue;
-    }
-
+foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $stackCount++;
 
-    // Resolve stack identity and metadata via StackInfo
-    $stackInfo = StackInfo::fromProject($compose_root, $project);
-
     $projectName = $stackInfo->getName();
-    $id = str_replace(".", "-", $project);
+    $id = str_replace(".", "-", $stackInfo->projectFolder);
     $id = str_replace(" ", "", $id);
 
     // Get the compose file path and override via StackInfo
@@ -69,10 +32,7 @@ foreach ($composeProjects as $project) {
     $definedServicesList = $stackInfo->getDefinedServices();
     $definedServices = count($definedServicesList);
 
-    // Get running container info from $containersByProject
-    // Use directory basename (sanitized) as project key — this matches the -p flag in echoComposeCommand
-    $sanitizedProject = sanitizeStr($project);
-    $projectContainers = $containersByProject[$sanitizedProject] ?? [];
+    $projectContainers = $stackInfo->getContainerList();
     $runningCount = 0;
     $stoppedCount = 0;
     $pausedCount = 0;
@@ -154,11 +114,11 @@ foreach ($composeProjects as $project) {
     }
 
     // Escape for HTML output
-    $projectNameHtml = htmlspecialchars($projectName, ENT_QUOTES, 'UTF-8');
-    $projectHtml = htmlspecialchars($project, ENT_QUOTES, 'UTF-8');
+    $projectNameHtml = htmlspecialchars($stackInfo->displayName, ENT_QUOTES, 'UTF-8');
+    $projectHtml = htmlspecialchars($stackInfo->projectFolder, ENT_QUOTES, 'UTF-8');
     $descriptionHtml = $description; // Already contains <br> tags from earlier processing
-    $pathHtml = htmlspecialchars("$compose_root/$project", ENT_QUOTES, 'UTF-8');
-    $projectIconUrl = htmlspecialchars($projectIcon ?? '', ENT_QUOTES, 'UTF-8');
+    $pathHtml = htmlspecialchars($stackInfo->path, ENT_QUOTES, 'UTF-8');
+    $projectIconUrl = htmlspecialchars($stackInfo->getIconUrl() ?? '', ENT_QUOTES, 'UTF-8');
 
     // Status like Docker tab (started/stopped with icon)
     $status = $isrunning ? ($runningCount == $containerCount ? 'started' : 'partial') : 'stopped';

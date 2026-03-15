@@ -49,92 +49,16 @@ function clientDebug($message, $data = null, $type = 'daemon', $level = 'info')
     }
 }
 
-function sanitizeStr($a)
-{
-    $a = str_replace(".", "_", $a);
-    $a = str_replace(" ", "_", $a);
-    $a = str_replace("-", "_", $a);
-    return strtolower($a);
-}
-
 function sanitizeLogText(string $text): string
 {
     return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 /**
- * Sanitize a stack name to create a safe folder name.
- * Removes special characters that could cause issues in paths,
- * including path separators and traversal sequences to prevent
- * directory escape attacks.
+ * Find the first compose file in a directory using Docker Compose spec priority.
  *
- * @param string $stackName The stack name to sanitize
- * @return string The sanitized folder name
- */
-function sanitizeFolderName(string $stackName): string
-{
-    $folderName = str_replace('"', '', $stackName);
-    $folderName = str_replace("'", '', $folderName);
-    $folderName = str_replace('&', '', $folderName);
-    $folderName = str_replace('(', '', $folderName);
-    $folderName = str_replace(')', '', $folderName);
-    // Remove path separators and traversal sequences
-    $folderName = str_replace(['/', '\\', '..'], '', $folderName);
-    $folderName = preg_replace('/ {2,}/', ' ', $folderName);
-    $folderName = preg_replace('/\s/', '_', $folderName);
-    return $folderName;
-}
-
-function isIndirect($path)
-{   
-    $indirectFilePath = "$path/indirect";
-    if (is_file("$indirectFilePath")) {
-        $indirectPath = trim(file_get_contents("$indirectFilePath"));
-        if ($indirectPath === '' 
-        || strpos($indirectPath, "\n") !== false // Disallow newlines to prevent multi-line indirect files that could bypass other checks
-        || strpos($indirectPath, '/') === false // Must contain at least one slash to be a valid path
-        || strpos($indirectPath, '\\') !== false // Disallow backslashes to prevent Windows-style paths that could bypass checks
-        || strpos($indirectPath, '/.') !== false // Disallow relative path segments (e.g., "/./", "/..") to prevent directory escape attacks
-        || strpos($indirectPath, './') !== false // Disallow relative path segments at the start or within the path (e.g., "./", "../")
-        || !is_dir($indirectPath) // Must be an existing directory on the filesystem
-        ) {
-            exec("rm -f " . escapeshellarg("$indirectFilePath")); // Remove invalid indirect file to prevent repeated issues
-            return false;
-        }
-        return true;
-    }
-    return false;
-}
-
-function getPath($basePath)
-{
-    $outPath = $basePath;
-    if (isIndirect($basePath)) {
-        $outPath = file_get_contents("$basePath/indirect");
-    }
-
-    return $outPath;
-}
-
-/**
- * Compose file names in priority order per the Docker Compose spec.
- * @see https://docs.docker.com/compose/intro/compose-application-model/#the-compose-file
- */
-define('COMPOSE_FILE_NAMES', [
-    'compose.yaml',
-    'compose.yml',
-    'docker-compose.yaml',
-    'docker-compose.yml',
-]);
-
-/**
- * Find the compose file in a directory using Docker Compose spec priority.
- *
- * Checks for compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml
- * in that order and returns the first one found.
- *
- * @param string $dir The directory to search in
- * @return string|false The full path to the compose file, or false if none found
+ * @param string $dir The directory to check
+ * @return string|false Full path to compose file, or false if none found
  */
 function findComposeFile($dir)
 {
@@ -377,6 +301,24 @@ function pruneOverrideContentServices(string $overrideContent, array $validServi
     return ['content' => $newContent, 'removed' => $removedServices, 'changed' => true];
 }
 
+/**
+ * Data class representing the override file information for a stack, including paths and usage flags.
+ * This class encapsulates the logic for determining which override file to use (project vs indirect),
+ * handles legacy override migration, and provides utility methods for pruning and migrating override content.
+ * 
+ * @property string $computedName The computed override filename based on the compose file (e.g. compose.override.yaml)
+ * @property string|null $projectOverride The path to the project override file
+ * @property string|null $indirectOverride The path to the indirect override file (if applicable)
+ * @property bool $useIndirect Whether the indirect override should be used instead of the project override
+ * @property bool $mismatchIndirectLegacy Whether there is a legacy-named indirect override that doesn't match the computed name
+ * @property string|null $composeFilePath The resolved path to the main compose file for the stack
+ * @method static OverrideInfo fromStackInfo(StackInfo $stackInfo) Create an OverrideInfo from a StackInfo instance (preferred)
+ * @method static OverrideInfo fromStack(string $composeRoot, string $stack) Create an OverrideInfo by resolving paths from scratch (deprecated)
+ * @method string|null getOverridePath() Get the path to the override file that should be used (indirect if present, else project)
+ * @method array{changed: bool, removed: string[]} pruneOrphanServices(array $validServices) Prune orphaned services from the override file based on a list of valid service names
+ * @method array{migrated: bool, migrations: array<array{oldName: string, newName: string}>} migrateRenamedServices(string $oldComposeContent, string $newComposeContent) Migrate override entries when services are renamed by comparing old and new compose content
+ * 
+ */
 class OverrideInfo
 {
     /**
@@ -735,6 +677,30 @@ class OverrideInfo
  * Provides a single canonical shape for container data regardless of source
  * (docker inspect response, update-check response, or cached status).
  * Eliminates PascalCase/camelCase drift and container-name aliasing issues.
+ * 
+ * @property string $name Canonical container name (from Name/Service/container)
+ * @property string $id Docker container ID
+ * @property string $service Compose service name
+ * @property string $image Full image reference (e.g. library/nginx:latest)
+ * @property string $state Container state (running/exited/paused/restarting)
+ * @property bool $isRunning Whether the container is currently running
+ * @property bool $hasUpdate Whether an image update is available
+ * @property string $updateStatus Update status text (unknown/up-to-date/update-available)
+ * @property string $localSha Local image SHA (truncated)
+ * @property string $remoteSha Remote image SHA (truncated)
+ * @property bool $isPinned Whether the image is pinned to a specific digest
+ * @property string|null $pinnedDigest Pinned digest if isPinned is true
+ * @property string $icon Icon URL from Docker label
+ * @property string $shell Shell path from Docker label
+ * @property string $webUI Resolved WebUI URL
+ * @property array $ports Port mappings (e.g. ["192.168.1.50:8080->80/tcp"])
+ * @property array $networks Network info [{name, ip, driver}]
+ * @property array $volumes Volume mounts [{source, destination, type}]
+ * @property string $created ISO datetime when container was created
+ * @property string $startedAt ISO datetime when container was started
+ * @method static ContainerInfo fromDockerInspect(array $raw) Create a ContainerInfo from a docker inspect + compose ps result array
+ * @method static ContainerInfo fromUpdateResponse(array $raw) Create a ContainerInfo from an update-check response element
+ * 
  */
 class ContainerInfo
 {
@@ -924,6 +890,27 @@ class ContainerInfo
     }
 
     /**
+     * Create a ContainerInfo from a `docker ps --format '{{json .}}'` row.
+     *
+     * This is a lightweight factory that populates only the fields available
+     * from a docker ps row (no inspect, no ports/networks/volumes detail).
+     *
+     * @param array $raw Decoded JSON row from docker ps
+     * @return ContainerInfo
+     */
+    public static function fromDockerPs(array $raw): self
+    {
+        $info = new self();
+        $info->name = ltrim(trim($raw['Names'] ?? $raw['Name'] ?? $raw['name'] ?? ''), '/');
+        $info->id = $raw['ID'] ?? $raw['Id'] ?? $raw['id'] ?? '';
+        $info->image = $raw['Image'] ?? $raw['image'] ?? '';
+        $info->state = strtolower($raw['State'] ?? $raw['state'] ?? '');
+        $info->isRunning = ($info->state === 'running');
+        $info->derivePinned();
+        return $info;
+    }
+
+    /**
      * Derive isPinned and pinnedDigest from the image reference.
      */
     private function derivePinned(): void
@@ -947,18 +934,33 @@ class ContainerInfo
  * Construction is intentionally eager for identity fields and override
  * resolution (preserving current side-effect behavior). Metadata files are
  * loaded lazily on first access.
+ * 
+ * @property string $projectFolder Compose project folder basename (also project string)
+ * @property string $displayName Display name (from ./name)
+ * @property string $path Full path to the stack directory ($composeRoot/$project)
+ * @property string|null $indirectPath Indirect path or null if not indirect
+ * @property string $composeSource Resolved compose source directory, direct or indirect
+ * @property string|null $composeFilePath Full path to the main compose file, direct or indirect
+ * @property bool $isIndirect Whether this stack uses an indirect compose path
+ * @property OverrideInfo $overrideInfo Resolved override info (eager)
+ * @method static StackInfo fromProject(string $composeRoot, string $project) Create a StackInfo for a project directory under the compose root, with caching
+ * @method static void clearCache(?string $key = null) Clear the static instance cache (all or specific key) - primarily for testing
+ * @method string|null getMetadata(string $field) Get the value of a metadata file (e.g. name, description, envpath) with lazy loading and caching
+ * 
  */
 class StackInfo
 {
-    /** @var string Directory basename (canonical filesystem identity) */
-    public string $project;
-    /** @var string sanitizeStr($project) — used as Docker -p project name */
-    public string $sanitizedName;
+    /** @var string Compose project folder basename (also project string) */
+    public string $projectFolder;
+    /** @var string Display name (from ./name) */
+    public string $displayName;
     /** @var string Full path to the stack directory ($composeRoot/$project) */
     public string $path;
-    /** @var string Resolved compose source directory (indirect target or $path) */
+    /** @var string|null Indirect path or null if not indirect */
+    public ?string $indirectPath;
+    /** @var string Resolved compose source directory, direct or indirect */
     public string $composeSource;
-    /** @var string|null Full path to the main compose file, or null if none */
+    /** @var string Full path to the main compose file, direct or indirect */
     public ?string $composeFilePath;
     /** @var bool Whether this stack uses an indirect compose path */
     public bool $isIndirect;
@@ -974,26 +976,41 @@ class StackInfo
     /** @var array<string, StackInfo> Static instance cache keyed by composeRoot/project */
     private static array $instances = [];
 
+    /** @var array[]|null Per-instance lazy cache of docker compose ps rows (null = not yet fetched) */
+    private ?array $cachedContainerList = null;
+
     /**
      * @param string $composeRoot Compose root directory
-     * @param string $project Directory basename of the stack
+     * @param string $projectFolder Directory basename of the stack
      */
-    private function __construct(string $composeRoot, string $project)
+    private function __construct(string $composeRoot, string $projectFolder)
     {
+        // Set the things we know right away: compose root and project folder.
         $this->composeRoot = rtrim($composeRoot, '/');
-        $this->project = $project;
-        $this->path = $this->composeRoot . '/' . $project;
-        $this->sanitizedName = sanitizeStr($project);
+        $this->projectFolder = $projectFolder;
+        $this->setPath();
 
-        // Resolve indirect
-        $this->isIndirect = isIndirect($this->path);
-        $this->composeSource = $this->isIndirect
-            ? (trim(@file_get_contents($this->path . '/indirect')) ?: $this->path)
-            : $this->path;
+        // Ensure the folder name is a valid project string.
+        // Only rename if the folder itself needs sanitization (e.g. contains uppercase, spaces, etc).
+        $sanitizedFolder = self::sanitizeProjectString($this->projectFolder);
+        if ($sanitizedFolder !== $this->projectFolder) { 
+
+            $this->updatePath($sanitizedFolder);
+        }
+
+        // Resolve display name from metadata (or default to folder name).
+        $this->displayName = $this->getDisplayName();
+        
+        // Resolve indirect path and compose source (indirect if present, else direct)
+        $this->isIndirect = $this->isIndirect();
+        $this->indirectPath = $this->readMetadata('indirect');
+        $this->composeSource = $this->isIndirect ? $this->indirectPath : $this->path;
 
         // Resolve compose file
-        $found = findComposeFile($this->composeSource);
-        $this->composeFilePath = ($found !== false) ? $found : null;
+        $this->composeFilePath = self::getComposeFilePath($this->composeSource);
+        if ($this->composeFilePath === null) {
+            throw new \RuntimeException("Not a valid compose stack: no compose file found at $this->composeSource");
+        }
 
         // Eagerly resolve override info using pre-resolved identity (no duplicate I/O)
         $this->overrideInfo = OverrideInfo::fromStackInfo($this);
@@ -1033,6 +1050,28 @@ class StackInfo
             self::$instances = [];
         }
     }
+
+    /**
+     * Find the compose file in a directory using Docker Compose spec priority.
+     *
+     * Checks for compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml
+     * in that order and returns the first one found.
+     *
+     * @return string|null Full path to the compose file if found, or null if none found
+     */
+    private static function getComposeFilePath($path): string|null
+    {
+        $composeFilePath = null;
+        foreach (COMPOSE_FILE_NAMES as $name) {
+            if (is_file("$path/$name")) {
+                $composeFilePath = "$path/$name";
+                break;
+            }
+        }
+        return $composeFilePath;
+    }
+
+
     /**
      * Determine if the stack uses an indirect compose path by checking for a valid 'indirect' file.
      * Validate file path to prevent security issues (e.g. directory traversal, invalid paths) and ensure it points to an existing directory.
@@ -1059,18 +1098,71 @@ class StackInfo
         return false;
     }
 
+    /**
+     * Canonical sanitizer for Display Name to Docker Compose project name.
+     *
+     * Docker Compose project names must match: [a-z0-9][a-z0-9_-]*
+     *
+     * @param string $rawProjectString Directory basename of the stack
+     * @return string Canonical compose project name
+     */
+    public static function sanitizeProjectString(string $rawProjectString): string
+    {
+
+        // Trim and lowercase the input to start normalization.
+        $sanitizedProjectString = strtolower(trim($rawProjectString));
+
+        // Replace unsupported characters with underscore.
+        $sanitizedProjectString = preg_replace('/[^a-z0-9_-]/', '_', $sanitizedProjectString) ?? '';
+
+        // Collapse multiple underscores into one.
+        $sanitizedProjectString = preg_replace('/_+/', '_', $sanitizedProjectString);
+
+        // Collapse multiple dashes into one.
+        $sanitizedProjectString = preg_replace('/-+/', '-', $sanitizedProjectString);
+
+        // Remove leading or trailing underscores or dashes.
+        $sanitizedProjectString = trim($sanitizedProjectString, '_-');
+
+        // If the result is empty, default to 'compose' to ensure a valid project name.
+        if ($sanitizedProjectString === '') {
+            clientDebug("Sanitized project string is empty after processing; defaulting to 'compose'", ['input' => $rawProjectString], 'daemon', 'warning');
+            return 'compose';
+        }
+
+        // Log the sanitization result for debugging purposes.
+        clientDebug("Sanitized project string: '$rawProjectString' -> '$sanitizedProjectString'", ['input' => $rawProjectString, 'output' => $sanitizedProjectString], 'daemon', 'debug');
+        return $sanitizedProjectString;
+    }
 
     // ---------------------------------------------------------------
     // Lazy metadata getters — read from file on first access, cache
     // ---------------------------------------------------------------
 
     /**
-     * Get the display name (from `name` file, falls back to $project).
+     * Get the display name (from `name` file, falls back to project folder).
+     * @return string
+     */
+    public function getDisplayName(): string
+    {
+        $displayName = $this->readMetadata('name') ?? null;
+        if ($displayName === null || $displayName === '') {
+            // If no display name is set, initialize it from the project folder name.
+            $displayName = $this->projectFolder;
+            $this->writeMetadata('name', $displayName);
+            clientDebug("Initialized missing display name from project folder: '$displayName'", ['project' => $this->projectFolder, 'displayName' => $displayName], 'daemon', 'warning');
+        }
+        $this->displayName = $displayName;
+        return $this->displayName;
+    }
+
+    /**
+     * Alias for getDisplayName() — backward compatibility.
      * @return string
      */
     public function getName(): string
     {
-        return $this->readMetadata('name') ?? $this->project;
+        return $this->displayName;
     }
 
     /**
@@ -1306,7 +1398,7 @@ class StackInfo
         }
 
         return [
-            'projectName' => $this->sanitizedName,
+            'projectName' => $this->projectFolder,
             'files' => $files,
             'envFile' => $envFile,
         ];
@@ -1367,14 +1459,33 @@ class StackInfo
     // ---------------------------------------------------------------
 
     /**
+     * Check whether any containers are currently running for the given compose project name.
+     *
+     * Used before renaming a project folder to avoid breaking a running stack.
+     * Returns false in test environments where docker is not available.
+     *
+     * @param string $projectName The compose project name (folder basename)
+     * @return bool True if at least one container is running under this project
+     */
+    private static function hasRunningContainers(string $projectName): bool
+    {
+        if (defined('PHPUNIT_COMPOSER_INSTALL') || defined('__PHPUNIT_PHAR__')) {
+            return false;
+        }
+        $output = shell_exec('docker ps -q --filter ' . escapeshellarg('label=com.docker.compose.project=' . $projectName) . ' 2>/dev/null');
+        return !empty(trim($output ?? ''));
+    }
+
+    /**
      * Read a metadata file from the stack directory (lazy, cached).
      *
      * @param string $filename Metadata filename (e.g. 'name', 'envpath')
+     * @param bool $forceRefresh If true, bypass cache and re-read from disk
      * @return string|null Trimmed file contents, or null if file doesn't exist
      */
-    private function readMetadata(string $filename): ?string
+    private function readMetadata(string $filename, bool $forceRefresh = false): ?string
     {
-        if (array_key_exists($filename, $this->metadataCache)) {
+        if (!$forceRefresh && array_key_exists($filename, $this->metadataCache)) {
             return $this->metadataCache[$filename];
         }
 
@@ -1388,6 +1499,72 @@ class StackInfo
 
         return $this->metadataCache[$filename];
     }
+
+    /** Write a metadata file to the stack directory and update cache.
+     *
+     * @param string $filename Metadata filename (e.g. 'name', 'envpath')
+     * @param string $content Content to write to the file
+     * @return bool True on success, false on failure
+     */
+    private function writeMetadata(string $filename, string $content): bool
+    {
+        $content = trim($content);
+        $result = @file_put_contents($this->path . '/' . $filename, $content) !== false;
+        if ($result) {
+            $this->metadataCache[$filename] = $content;
+        }
+        return $result;
+    }
+
+    /** 
+     * Set the path to $composeRoot/$project.
+     * 
+     * @return void
+     */
+    private function setPath(): void
+    {
+        $this->path = $this->composeRoot . '/' . $this->projectFolder;
+    }
+
+    /**
+     * Update the project name and path, used when sanitization changes the project name.
+     *
+     * @param string $newProject The new project name to set
+     * @return void
+     */
+    private function updatePath(string $newProject): void
+    {
+        if ($newProject !== self::sanitizeProjectString($newProject)) {
+            $logmsg = "Attempted to update project name to '$newProject' which is not a valid sanitized project string.";
+            clientDebug($logmsg, ['attemptedName' => $newProject], 'daemon', 'error');
+            throw new \Exception($logmsg);
+        }
+        if (self::hasRunningContainers($this->projectFolder)) {
+            $logmsg = "Cannot rename project folder from '$this->projectFolder' to '$newProject' because containers are currently running under the old project name.";
+            clientDebug(
+                $logmsg,
+                ['old' => $this->projectFolder, 'new' => $newProject],
+                'daemon',
+                'warning'
+            );
+            throw new \Exception($logmsg);
+        }
+        $oldPath = $this->path;
+        $this->projectFolder = $newProject;
+        $this->setPath();
+        // Attempt to rename the directory to match the new project name
+        if (is_dir($oldPath)){
+            if (!is_dir($this->path)) {
+                @rename($oldPath, $this->path);
+                clientDebug("Renamed project directory from '$oldPath' to '$this->path' to match sanitized project name '$newProject'.", ['from' => $oldPath, 'to' => $this->path], 'daemon', 'info');
+            } else {
+                clientDebug("Did not rename project directory from '$oldPath' to '$this->path' because the new path already exists.", ['oldPath' => $oldPath, 'newPath' => $this->path], 'daemon', 'warning');
+            }
+        } else {
+            clientDebug("Did not rename project directory from '$oldPath' to '$this->path' because the old path does not exist or the new path already exists. Manual intervention may be needed to resolve this.", ['oldPath' => $oldPath, 'newPath' => $this->path], 'daemon', 'warning');
+        }
+    }
+
 
     // ---------------------------------------------------------------
     // Static factory: create a new stack on disk
@@ -1420,66 +1597,187 @@ class StackInfo
     ): self {
         $composeRoot = rtrim($composeRoot, '/');
 
-        // 0. Validate stack name is not empty
+        // Validate stack name is not empty
         if (trim($stackName) === '') {
             throw new \RuntimeException("Stack name cannot be empty");
         }
+        $projectName = $stackName;
 
-        // 1. Generate a unique folder name
-        $folderName = sanitizeFolderName($stackName);
-        if ($folderName === '') {
+        // Set the project name to the folder-and-project sanitized version of the display name.
+        $project = self::sanitizeProjectString($stackName);
+        if ($project === '') {
             throw new \RuntimeException("Stack name produced an empty folder name after sanitization.");
         }
-        $folder = $composeRoot . '/' . $folderName;
+
+        // Set the path to composeRoot/project (even if indirect, we want the folder there for metadata and override)
+        $path = $composeRoot . '/' . $project;
 
         // Verify the resolved path stays within composeRoot (defense-in-depth)
         $realComposeRoot = realpath($composeRoot);
         if ($realComposeRoot === false) {
             throw new \RuntimeException("Invalid compose root directory.");
         }
+        
         // For new folders, check that the parent resolves correctly
-        $resolvedParent = realpath(dirname($folder));
+        $resolvedParent = realpath(dirname($path));
         if ($resolvedParent === false || strpos($resolvedParent, $realComposeRoot) !== 0) {
             throw new \RuntimeException("Invalid stack name: path would escape compose root.");
         }
 
-        if (is_dir($folder)) {
-            // Append a random suffix to the base name to avoid collision;
-            // re-derive from the clean base each attempt so suffixes don't compound.
+        try {
+            // Ensure the project folder is available, handling collisions by appending suffixes if needed (e.g. "my-stack-001", "my-stack-002", etc.)
+            $path = self::getAvailablePath($composeRoot, $project);
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("Failed to create stack: " . $e->getMessage());
+        }
+        
+        // Create the directory
+        if (!mkdir($path, 0755, true) && !is_dir($path)) {
+            throw new \RuntimeException("Failed to create stack directory: $path");
+        }
+
+        // Create indirect file to store path to indirect project directory
+        if ($indirectPath !== '') {
+            file_put_contents("$path/indirect", $indirectPath);
+        }
+
+        // Write metadata
+        file_put_contents("$path/name", $projectName);
+        if ($description !== '') {
+            file_put_contents("$path/description", $description);
+        }
+
+        // Create default compose file at the appropriate location (indirect target or stack dir)
+        $composeTarget = ($indirectPath !== '') ? $indirectPath : $path;
+        self::writeDefaultComposeFile($composeTarget);
+
+        // Build + cache the instance (resolves override, etc.)
+        return self::fromProject($composeRoot, basename($path));
+    }
+
+    /**
+     * Write a blank compose file to the given path if one doesn't already exist.
+     * 
+     * @param string $dir The directory to check for an existing compose file and write to if missing
+     * @return string The path to the compose file (existing or newly created)
+     * @throws \RuntimeException If the compose file cannot be created
+     */
+    private static function writeDefaultComposeFile(string $dir): string
+    {
+        $filePath = "$dir/" . COMPOSE_FILE_NAMES[0];
+        if (!file_exists($filePath)) {
+            if (file_put_contents($filePath, "services:\n") === false) {
+                throw new \RuntimeException("Failed to create default compose file: $filePath");
+            }
+        }
+        return $filePath;
+    }
+
+    /**
+     * Get an available project folder path under the compose root, handling name collisions by appending numeric suffixes.
+     * 
+     * @param string $composeRoot
+     * @param string $baseName
+     * @return string An available project name (folder name) that doesn't collide with existing stacks
+     * @throws \RuntimeException If an available name cannot be found after many attempts
+     */
+    private static function getAvailablePath(string $composeRoot, string $baseName): string
+    {
+        $candidate = $composeRoot . '/' . $baseName;
+        $project = $baseName;
+
+        // Handle name collision by appending a suffix (if the folder already exists)
+        if (is_dir($candidate)) {
+            $maxAttempts = 100;
             $attempts = 0;
             do {
-                $candidate = $composeRoot . '/' . $folderName . mt_rand();
+                if ($attempts < 1) {
+                    clientDebug("Name collision detected for preferred folder, '$candidate', attempting to find an available name.", ['candidate' => $candidate], 'daemon', 'info');
+                } else {
+                    clientDebug("Name collision detected for suffixed name, '$candidate'.", ['candidate' => $candidate], 'daemon', 'info');
+                }
                 $attempts++;
-                if ($attempts > 100) {
-                    throw new \RuntimeException("Unable to find a unique folder name for stack: $stackName");
+                $candidate = $composeRoot . '/' . $project . '-' . sprintf('%03d', $attempts);
+                clientDebug("Checking candidate stack name: '$candidate'", ['candidate' => $candidate], 'daemon', 'debug');
+                if ($attempts > $maxAttempts) {
+                    throw new \RuntimeException("Unable to find a unique folder name for stack '$baseName' after $maxAttempts attempts");
                 }
             } while (is_dir($candidate));
-            $folder = $candidate;
         }
+        return $candidate;
+    }
 
-        // 2. Create the directory
-        if (!mkdir($folder, 0755, true) && !is_dir($folder)) {
-            throw new \RuntimeException("Failed to create stack directory: $folder");
-        }
-
-        // 3. Create compose / indirect files
-        if ($indirectPath !== '') {
-            file_put_contents("$folder/indirect", $indirectPath);
-            if (!findComposeFile($indirectPath)) {
-                file_put_contents("$indirectPath/" . COMPOSE_FILE_NAMES[0], "services:\n");
+    /**
+     * Return all valid StackInfo instances under a compose root.
+     *
+     * Scans the root directory and returns one StackInfo per valid stack,
+     * silently skipping non-directory entries and folders with no compose file.
+     *
+     * @param string $composeRoot Compose projects root directory
+     * @return self[]
+     */
+    public static function allFromRoot(string $composeRoot): array
+    {
+        $stacks = [];
+        $projects = @array_diff(@scandir($composeRoot), ['.', '..']) ?: [];
+        foreach ($projects as $project) {
+            try {
+                $stacks[] = self::fromProject($composeRoot, $project);
+            } catch (\RuntimeException $e) {
+                // skip non-stack directories
             }
-        } else {
-            file_put_contents("$folder/" . COMPOSE_FILE_NAMES[0], "services:\n");
         }
+        return $stacks;
+    }
 
-        // 4. Write metadata
-        file_put_contents("$folder/name", $stackName);
-        if ($description !== '') {
-            file_put_contents("$folder/description", $description);
+    /**
+     * Get the raw docker compose ps rows for this stack.
+     *
+     * Runs `docker compose ps --all --format json` scoped to this stack using
+     * the resolved compose file, env file, and project name. Results are cached
+     * on the instance so repeated calls are free.
+     *
+     * @return array[] Raw rows from `docker compose ps --all --format json`
+     */
+    public function getContainerList(): array
+    {
+        if ($this->cachedContainerList !== null) {
+            return $this->cachedContainerList;
         }
+        $this->cachedContainerList = [];
+        $args = $this->buildComposeArgs();
+        $cmd = "docker compose {$args['files']} {$args['envFile']} -p "
+            . escapeshellarg($args['projectName'])
+            . " ps --all --format json 2>/dev/null";
+        $output = shell_exec($cmd);
+        if (!$output) {
+            return $this->cachedContainerList;
+        }
+        foreach (explode("\n", trim($output)) as $line) {
+            if ($line === '') {
+                continue;
+            }
+            $container = @json_decode($line, true);
+            if ($container) {
+                $this->cachedContainerList[] = $container;
+            }
+        }
+        return $this->cachedContainerList;
+    }
 
-        // 5. Build + cache the instance (resolves override, etc.)
-        return self::fromProject($composeRoot, basename($folder));
+    /**
+     * Get the containers for this stack as ContainerInfo objects.
+     *
+     * Uses the same cached docker ps data as getContainerList().
+     *
+     * @return ContainerInfo[]
+     */
+    public function getContainers(): array
+    {
+        return array_map(
+            fn($raw) => ContainerInfo::fromDockerPs($raw),
+            $this->getContainerList()
+        );
     }
 
     /**
@@ -1506,17 +1804,7 @@ class StackInfo
 
         $cacheByRoot[$composeRoot] = [];
 
-        $projects = @array_diff(@scandir($composeRoot), ['.', '..']) ?: [];
-        foreach ($projects as $project) {
-            $projectPath = $composeRoot . '/' . $project;
-            if (!is_dir($projectPath)) {
-                continue;
-            }
-            // Build and cache by composeSource, then do O(1) lookups for this root.
-            $stackInfo = self::fromProject($composeRoot, $project);
-            if ($stackInfo === null) {
-                continue;
-            }
+        foreach (self::allFromRoot($composeRoot) as $stackInfo) {
             $sourcePath = rtrim($stackInfo->composeSource, '/');
             if ($sourcePath !== '') {
                 $cacheByRoot[$composeRoot][$sourcePath] = $stackInfo;
@@ -1526,10 +1814,6 @@ class StackInfo
         return $cacheByRoot[$composeRoot][$normalizedPath] ?? null;
     }
 }
-
-
-
-
 
 /**
  * Stack operation locking functions
@@ -1560,7 +1844,7 @@ function acquireStackLock($stackName, $timeout = 30)
         @mkdir($lockDir, 0755, true);
     }
 
-    $lockFile = "$lockDir/" . sanitizeStr($stackName) . ".lock";
+    $lockFile = "$lockDir/" . StackInfo::sanitizeProjectString($stackName) . ".lock";
     $fp = @fopen($lockFile, 'w');
 
     if (!$fp) {
@@ -1608,7 +1892,7 @@ function releaseStackLock($fp)
 function isStackLocked($stackName)
 {
     $lockDir = getLockDir();
-    $lockFile = "$lockDir/" . sanitizeStr($stackName) . ".lock";
+    $lockFile = "$lockDir/" . StackInfo::sanitizeProjectString($stackName) . ".lock";
 
     if (!is_file($lockFile)) {
         return false;
