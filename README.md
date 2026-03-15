@@ -5,12 +5,15 @@ Compose Manager installs the Docker Compose CLI plugin on your unRAID server and
 ## Screenshots
 
 ### Main Compose Manager Interface
+
 ![Compose Manager UI](docs/images/compose.png)
 
 ### Dashboard Integration
+
 ![Dashboard Stacks](docs/images/dashboard.png)
 
 ### Stack Editor
+
 The built-in editor provides multiple tabs for managing your compose stack:
 
 | Compose File | Settings |
@@ -32,12 +35,12 @@ The built-in editor provides multiple tabs for managing your compose stack:
 - **Web Terminal** - Integrated terminal for live, colorized compose command output.
 - **Developer & Testing Tools** - Unit tests and CI workflows to help contributors and ensure quality.
 
-
 ## Installation
 
 ~~Install via the Community Applications plugin in unRAID~~, or manually install by navigating to:
 
 **Plugins → Install Plugin** and entering the plugin URL:
+
 ```
 https://raw.githubusercontent.com/mstrhakr/compose_plugin/main/compose.manager.plg
 ```
