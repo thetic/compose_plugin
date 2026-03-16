@@ -27,6 +27,7 @@ for i in "$@"; do
 done
 
 LOG_FILE="${STACK_PATH}/last_cmd.log"
+LOCK_FILE="${STACK_PATH}/.compose.lock"
 PROJECT_NAME=$(basename "$STACK_PATH")
 
 # Ensure the stack directory exists before writing
@@ -34,6 +35,17 @@ if [ -z "$STACK_PATH" ] || [ ! -d "$STACK_PATH" ]; then
   if [ -x "$NOTIFY" ]; then
     "$NOTIFY" -e 'Compose Manager' -s "Background command failed: $PROJECT_NAME" \
       -d "Could not determine stack path for background operation." -i 'warning'
+  fi
+  exit 1
+fi
+
+# Use flock to queue operations per-stack — if another background command is
+# already running on this stack, we wait for it to finish before starting.
+exec 9>"$LOCK_FILE"
+if ! flock -w 600 9; then
+  MSG="Timed out waiting for lock on '$PROJECT_NAME' after 10 minutes."
+  if [ -x "$NOTIFY" ]; then
+    "$NOTIFY" -e 'Compose Manager' -s "Background $OPERATION timed out: $PROJECT_NAME" -d "$MSG" -i 'warning'
   fi
   exit 1
 fi
@@ -59,6 +71,8 @@ RC=$?
   echo "Exit code: $RC"
   echo "======================================="
 } >> "$LOG_FILE"
+
+# Lock is released automatically when fd 9 closes (script exits)
 
 # Send Unraid notification
 if [ $RC -eq 0 ]; then
