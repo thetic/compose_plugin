@@ -28,13 +28,10 @@
 >
 
 <CHANGES>
-###2026.03.16-dev.0245
-- Bug Fixes: align patch.bats load path with compose.bats
-- Bug Fixes: support both concatenated and separated arg forms in compose_background.sh
-- Bug Fixes: use escapeAttr for HTML attribute contexts in settings page
-- Bug Fixes: default ports/networks/volumes to [] instead of empty string
-- Performance: batch-preload containers in allFromRoot via single docker ps call
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.16-dev.0215...v2026.03.16-dev.0245)
+###2026.03.16-dev.0314
+- Features: enhance beta release process with PR and better comparison links
+- [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.16-dev.0314)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
