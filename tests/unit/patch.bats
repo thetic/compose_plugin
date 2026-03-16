@@ -2,7 +2,7 @@
 # Unit tests for patch.sh helpers
 
 # Load test framework
-load '../bats_setup'
+load '../bats_setup.bash'
 
 PATCH_SCRIPT="$BATS_TEST_DIRNAME/../../source/compose.manager/scripts/patch.sh"
 
