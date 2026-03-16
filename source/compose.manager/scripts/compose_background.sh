@@ -13,9 +13,15 @@ NOTIFY="/usr/local/emhttp/webGui/scripts/notify"
 # Parse stack path (-s) from the argument list so we know where to write the log
 STACK_PATH=""
 OPERATION=""
+NEXT_S=""
+NEXT_C=""
 for i in "$@"; do
+  if [ -n "$NEXT_S" ]; then STACK_PATH="$i"; NEXT_S=""; continue; fi
+  if [ -n "$NEXT_C" ]; then OPERATION="$i"; NEXT_C=""; continue; fi
   case "$i" in
+    -s)  NEXT_S=1 ;;
     -s*) STACK_PATH="${i#-s}" ;;
+    -c)  NEXT_C=1 ;;
     -c*) OPERATION="${i#-c}" ;;
   esac
 done
