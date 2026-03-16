@@ -980,6 +980,19 @@ class StackInfo
     private ?array $cachedContainerList = null;
 
     /**
+     * Pre-populate the container list cache for this stack.
+     *
+     * Used by allFromRoot() to inject batch-fetched container data so that
+     * getContainerList() returns immediately without a per-stack docker call.
+     *
+     * @param array[] $containers Raw rows (docker ps JSON format)
+     */
+    public function setContainerList(array $containers): void
+    {
+        $this->cachedContainerList = $containers;
+    }
+
+    /**
      * @param string $composeRoot Compose root directory
      * @param string $projectFolder Directory basename of the stack
      */
@@ -1727,6 +1740,32 @@ class StackInfo
                 // skip non-stack directories
             }
         }
+
+        // Batch-preload container data with a single docker ps call to avoid
+        // O(n) docker invocations when callers iterate getContainerList().
+        $containersByProject = [];
+        $psOutput = shell_exec("docker ps -a --filter label=com.docker.compose.project --format json 2>/dev/null");
+        if ($psOutput) {
+            foreach (explode("\n", trim($psOutput)) as $line) {
+                if ($line === '') {
+                    continue;
+                }
+                $ct = @json_decode($line, true);
+                if (!$ct) {
+                    continue;
+                }
+                // Extract project name from Labels string
+                $labels = $ct['Labels'] ?? '';
+                if (preg_match('/com\.docker\.compose\.project=([^,]+)/', $labels, $m)) {
+                    $containersByProject[$m[1]][] = $ct;
+                }
+            }
+        }
+        foreach ($stacks as $stack) {
+            $key = $stack->projectFolder;
+            $stack->setContainerList($containersByProject[$key] ?? []);
+        }
+
         return $stacks;
     }
 
