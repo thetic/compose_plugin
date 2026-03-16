@@ -28,74 +28,13 @@
 >
 
 <CHANGES>
-###2026.03.16-dev.0215
-- Features: implement automated release tagging and update documentation for release process
-- Features: add path validation methods and enhance isIndirect function for security checks
-- Features: add SkipTests parameter to build script and implement conditional test execution
-- Features: enhance multi-stack command execution with improved logging and error handling     Fixed incorrect Stop All heading text in multi-stack ttyd output.     Fixed “one failure kills whole batch” behavior for ttyd multi-stack runs.     Added clearer per-stack failure output in ttyd multi-stack runs.
-- Features: implement dynamic version loading from versions.env for build scripts
-- Features: add background execution for compose commands with logging and notifications
-- Features (ui): update spinner implementation for backup actions and enhance visibility
-- Features (ui): enhance auto-update settings UI with improved layout and functionality
-- Features (ui): implement toggle-all functionality for auto-updates and enhance header controls
-- Features (ui): implement toggle for auto-update scheduler and enhance controls for bulk updates
-- Features (ui): enhance auto-updates UI with improved styling and toggle switch initialization
-- Features (logging): sanitize log messages for disallowed paths in autoupdate
-- Features (tests): add BATS setup script and update test framework loading
-- Features: enhance auto-updates UI with new styles and layout adjustments
-- Features: improve auto-update script with enhanced digest comparison and error handling
-- Features: enhance auto-update functionality with path validation and StackInfo integration
-- Features: add build configuration support and example stack for testing
-- Features: enhance container data handling with flexible property access and improved HTML escaping
-- Features: implement caching for StackInfo instances and add cache management methods
-- Features: add ContainerInfo and StackInfo standard classes
-- Bug Fixes (ci): store regex in variable to avoid bash syntax error in tag-release
-- Bug Fixes: update subproject commit reference in tests framework
-- Bug Fixes: update test framework loading path in patch.bats
-- Bug Fixes: change failOnWarning setting to false in phpunit configuration
-- Bug Fixes: enhance isIndirect function with validation checks for indirect file paths
-- Bug Fixes: standardize FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 environment variable across workflows
-- Bug Fixes: update environment variable syntax in Docker build step
-- Bug Fixes: prevent re-entrant detail reloads in container rendering
-- Bug Fixes: address remaining autoupdate review feedback
-- Bug Fixes: move last_run update to after compose file is verified in autoupdate_runner
-- Bug Fixes: use is_file check on resolved composeFilePath in getYml case
-- Bug Fixes: verify persistent dir is writable before returning persistent autoupdate.json path
-- Bug Fixes: use correct bats_setup.bash extension in compose.bats load path
-- Bug Fixes (ui): serialize Run Now requests to avoid overwhelming server
-- Bug Fixes (tests): clean up env vars in tearDown, use config file override
-- Bug Fixes (autoupdate): validate JSON in getConfig, check crontab removal, remove closing tag
-- Bug Fixes (tests): align AutoupdateTest with path validation and encoding changes
-- Bug Fixes (autoupdate): handle JSON responses and harden path validation
-- Bug Fixes: address PR review comments for auto-update feature
-- Bug Fixes: update auto-update function to use exec.php for project listing
-- Bug Fixes: enhance service rename handling and preserve user data in overrides
-- Bug Fixes: update development version timestamp format in build script
-- Bug Fixes: remove redundant hiding of associated child rows in compose manager
-- Bug Fixes: improve branch validation and switching logic in release script
-- Bug Fixes: enhance release script to support beta tagging and update branch logic
-- Bug Fixes: update plugin URL to point to the dev branch for consistency
-- Bug Fixes: address Copilot PR review comments
-- Bug Fixes: restore container discovery and pinned digest display after class refactor
-- Bug Fixes: ensure container ID is a string before substring operation
-- Bug Fixes: improve StackInfo::createNew() folder naming and input validation
-- Bug Fixes: address code review findings for standard classes
-- Bug Fixes: standardize container property names to lowercase
-- Bug Fixes: update README formatting and clarify installation instructions
-- Refactoring (util): remove unused parameter from getAutoUpdateConfigFilePath function
-- Refactoring (autoupdate_runner): use shared path validation, remove dead code
-- Refactoring (autoupdate): UI schedule controls, error handling, and code quality
-- Refactoring: remove deprecated compose_projects.php and integrate project listing in exec.php
-- Refactoring: internalize stack creation into StackInfo::createNew()
-- Refactoring: decouple OverrideInfo from stack identity resolution
-- Documentation: update README to enhance feature descriptions and clarify usage instructions
-- Chores (tests): update subproject commit reference in framework
-- Chores: update .gitignore to include autoupdate.json and remove obsolete files
-- Refactor StackInfo and Util tests for project name sanitization
-- Potential fix for code scanning alert no. 4: Workflow does not contain permissions
-- Update source/compose.manager/php/util.php
-- Add auto-update functionality for Docker Compose projects
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.15-dev.1837...v2026.03.16-dev.0215)
+###2026.03.16-dev.0245
+- Bug Fixes: align patch.bats load path with compose.bats
+- Bug Fixes: support both concatenated and separated arg forms in compose_background.sh
+- Bug Fixes: use escapeAttr for HTML attribute contexts in settings page
+- Bug Fixes: default ports/networks/volumes to [] instead of empty string
+- Performance: batch-preload containers in allFromRoot via single docker ps call
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.16-dev.0215...v2026.03.16-dev.0245)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
