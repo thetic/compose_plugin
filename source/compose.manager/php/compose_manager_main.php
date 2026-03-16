@@ -192,9 +192,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             icon: raw.icon || raw.Icon || '',
             shell: raw.shell || raw.Shell || '/bin/bash',
             webUI: raw.webUI || raw.WebUI || '',
-            ports: raw.ports || raw.Ports || '',
-            networks: raw.networks || raw.Networks || '',
-            volumes: raw.volumes || raw.Volumes || '',
+            ports: raw.ports || raw.Ports || [],
+            networks: raw.networks || raw.Networks || [],
+            volumes: raw.volumes || raw.Volumes || [],
             id: raw.id || raw.Id || raw.ID || '',
             created: raw.created || raw.Created || '',
             startedAt: raw.startedAt || raw.StartedAt || ''
