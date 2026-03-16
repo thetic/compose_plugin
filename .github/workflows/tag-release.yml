@@ -135,7 +135,9 @@ jobs:
             [[ "$subject" =~ ^v[0-9]{4}\. ]] && continue
 
             # Parse conventional commit: type(scope): message
-            if [[ "$subject" =~ ^([a-z]+)(\([^)]+\))?:\ (.+)$ ]]; then
+            # Regex must be in a variable — bash [[ =~ ]] chokes on inline )
+            CONV_RE='^([a-z]+)(\([^)]+\))?:[[:space:]](.+)$'
+            if [[ "$subject" =~ $CONV_RE ]]; then
               TYPE="${BASH_REMATCH[1]}"
               SCOPE="${BASH_REMATCH[2]}"
               MSG="${BASH_REMATCH[3]}"
