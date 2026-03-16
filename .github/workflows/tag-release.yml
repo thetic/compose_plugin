@@ -9,6 +9,7 @@
 # Guards:
 # - Skips bot commits ([skip ci], Release v*) to prevent infinite loops
 # - Handles same-day tag collisions with a/b/c suffixes (stable only)
+# - Beta releases require an open PR from dev → main
 
 name: Tag Release
 
@@ -24,13 +25,37 @@ env:
   PLUGIN_NAME: compose.manager
 
 jobs:
-  tag:
+  gate:
     runs-on: ubuntu-latest
-    # Skip bot commits to prevent loops from build.yml and sync-plugin-url.yml
     if: >-
       !contains(github.event.head_commit.message, '[skip ci]')
       && !startsWith(github.event.head_commit.message, 'Release v')
       && github.event.head_commit.author.name != 'github-actions[bot]'
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      pr_number: ${{ steps.check.outputs.pr_number }}
+    steps:
+      - name: Check for open PR (dev → main)
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "$GITHUB_REF_NAME" == "dev" ]]; then
+            PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --head dev --base main --state open --json number --jq '.[0].number // empty')
+            if [[ -z "$PR_NUMBER" ]]; then
+              echo "::notice::No open PR from dev → main. Skipping beta release."
+              echo "should_release=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            echo "Open PR #${PR_NUMBER} found — proceeding with beta release."
+            echo "pr_number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+          fi
+          echo "should_release=true" >> $GITHUB_OUTPUT
+
+  tag:
+    needs: gate
+    runs-on: ubuntu-latest
+    if: needs.gate.outputs.should_release == 'true'
 
     steps:
       - name: Checkout repository
@@ -173,8 +198,12 @@ jobs:
             NOTES+="- Minor updates and improvements"$'\n'
           fi
 
-          # Add comparison link
+          # Add comparison and PR links
           if [[ "$IS_BETA" == "true" ]]; then
+            PR_NUMBER="${{ needs.gate.outputs.pr_number }}"
+            if [[ -n "$PR_NUMBER" ]]; then
+              NOTES+="- [PR #${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER})"$'\n'
+            fi
             LATEST_STABLE=$(git tag -l 'v*' | grep -v '\-dev' | sort -V | tail -1)
             if [[ -n "$LATEST_STABLE" ]]; then
               NOTES+="- [beta release diff](https://github.com/${{ github.repository }}/compare/${LATEST_STABLE}...${NEW_TAG})"$'\n'

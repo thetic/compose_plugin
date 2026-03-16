@@ -152,6 +152,8 @@ jobs:
 
       - name: Prepare release notes
         id: notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           TARGET_BRANCH="${{ steps.release_type.outputs.target_branch }}"
@@ -164,10 +166,24 @@ jobs:
             COMPONENTS="See release artifacts for component versions"
           fi
 
-          # Set release title based on type
+          # Beta-specific: find PR and latest stable tag for diff link
+          PR_SECTION=""
           if [[ "$IS_BETA" == "true" ]]; then
             TITLE="Compose Manager v${VERSION} (Beta)"
             INSTALL_NOTE="**Beta Release** - Install from the beta channel for testing."
+
+            PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --head dev --base main --state open --json number --jq '.[0].number // empty')
+            LATEST_STABLE=$(git tag -l 'v*' | grep -v '\-dev' | sort -V | tail -1)
+
+            if [[ -n "$PR_NUMBER" || -n "$LATEST_STABLE" ]]; then
+              PR_SECTION=$'\n### Links\n'
+              if [[ -n "$PR_NUMBER" ]]; then
+                PR_SECTION+="- [PR #${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER})"$'\n'
+              fi
+              if [[ -n "$LATEST_STABLE" ]]; then
+                PR_SECTION+="- [Beta release diff](https://github.com/${{ github.repository }}/compare/${LATEST_STABLE}...v${VERSION})"$'\n'
+              fi
+            fi
           else
             TITLE="Compose Manager v${VERSION}"
             INSTALL_NOTE=""
@@ -178,6 +194,7 @@ jobs:
           ## ${TITLE}
 
           ${INSTALL_NOTE}
+          ${PR_SECTION}
 
           ### Installation
 
