@@ -850,6 +850,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         return div.innerHTML;
     }
 
+    function escapeAttr(text) {
+        return String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
     function startLogRefresh() {
         stopLogRefresh();
         var interval = parseInt($('#log-refresh').val()) || 0;
@@ -1009,7 +1013,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var html = '';
         archives.forEach(function(a) {
             var date = a.modified ? new Date(a.modified).toLocaleString() : a.filename;
-            html += '<tr data-archive="' + escapeHtml(a.filename) + '" onclick="selectArchive(this)">';
+            html += '<tr data-archive="' + escapeAttr(a.filename) + '" onclick="selectArchive(this)">';
             html += '<td><input type="radio" name="backup_archive_select" style="pointer-events:none;"></td>';
             html += '<td>' + escapeHtml(a.filename) + '</td>';
             html += '<td>' + escapeHtml(a.size) + '</td>';
@@ -1070,7 +1074,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             '<input type="checkbox" id="restore-select-all" onchange="toggleRestoreSelectAll(this)"> Select All (' + stacks.length + ' stacks)</label>';
 
         stacks.forEach(function(stack) {
-            html += '<label><input type="checkbox" class="restore-stack-cb" value="' + escapeHtml(stack) + '" onchange="updateRestoreButton()"> ' + escapeHtml(stack) + '</label>';
+            html += '<label><input type="checkbox" class="restore-stack-cb" value="' + escapeAttr(stack) + '" onchange="updateRestoreButton()"> ' + escapeHtml(stack) + '</label>';
         });
 
         $checklist.html(html);
@@ -1327,11 +1331,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     var time = entry.time || '02:00';
                     var weekday = (entry.weekday !== undefined) ? entry.weekday : 0;
                     var monthday = (entry.monthday !== undefined) ? entry.monthday : 1;
-                    var row = '<tr class="sortable" data-path="'+escapeHtml(key)+'">';
+                    var row = '<tr class="sortable" data-path="'+escapeAttr(key)+'">';
                     row += '<td>'+escapeHtml(p.name)+'</td>';
                     row += '<td><input type="checkbox" class="au-enabled compose-toggle" '+enabled+'></td>';
                     row += '<td><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
-                    row += '<td><input type="time" class="au-time" value="'+escapeHtml(time)+'"></td>';
+                    row += '<td><input type="time" class="au-time" value="'+escapeAttr(time)+'"></td>';
                     row += '<td>';
                     row += '<select class="au-weekday">';
                     row += '<option value="0">_(Sunday)_</option>';
@@ -1342,7 +1346,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     row += '<option value="5">_(Friday)_</option>';
                     row += '<option value="6">_(Saturday)_</option>';
                     row += '</select>';
-                    row += '<input type="number" class="au-monthday" min="1" max="31" step="1" value="'+escapeHtml(String(monthday))+'">';
+                    row += '<input type="number" class="au-monthday" min="1" max="31" step="1" value="'+escapeAttr(String(monthday))+'">';
                     row += '</td>';
                     row += '</tr>';
                     $('#updates-tbody').append(row);
