@@ -68,11 +68,12 @@ jobs:
         id: tag
         run: |
           BRANCH="${GITHUB_REF_NAME}"
-          DATE_VERSION=$(date -u +%Y.%m.%d)
+          export TZ="America/Detroit"
+          DATE_VERSION=$(date +%Y.%m.%d)
 
           if [[ "$BRANCH" == "dev" ]]; then
-            # Beta: v2026.03.15-dev.HHMM (UTC) — always unique
-            TIME_STAMP=$(date -u +%H%M)
+            # Beta: v2026.03.15-dev.HHMM (America/Detroit) — always unique
+            TIME_STAMP=$(date +%H%M)
             NEW_TAG="v${DATE_VERSION}-dev.${TIME_STAMP}"
             echo "is_beta=true" >> $GITHUB_OUTPUT
           else
