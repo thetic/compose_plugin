@@ -160,8 +160,9 @@ function echoComposeCommand($action, $recreate = false, $background = false)
  *
  * @param string $action The compose action (up, down, update)
  * @param array $paths Array of stack paths
+ * @param bool $background Whether to run in the background (no terminal window; sends notification on finish)
  */
-function echoComposeCommandMultiple($action, $paths)
+function echoComposeCommandMultiple($action, $paths, $background = false)
 {
     global $plugin_root;
     global $sName;
@@ -232,6 +233,28 @@ function echoComposeCommandMultiple($action, $paths)
         'update' => 'Updating',
     ];
     $actionLabel = $actionLabelByType[$action] ?? ucfirst($action);
+
+    if ($background) {
+        // Queue stacks sequentially in a single background wrapper script
+        // so we don't slam the system with parallel compose operations.
+        $bgScript = $plugin_root . "scripts/compose_background.sh";
+        $tmpScript = "/tmp/compose_multi_bg_" . uniqid() . ".sh";
+        $scriptContent = "#!/bin/bash\n";
+        foreach ($commands as $cmd) {
+            $line = escapeshellarg($bgScript);
+            foreach ($cmd as $arg) {
+                $line .= ' ' . escapeshellarg($arg);
+            }
+            $scriptContent .= "$line\n";
+        }
+        $scriptContent .= "rm -f " . escapeshellarg($tmpScript) . "\n";
+        file_put_contents($tmpScript, $scriptContent);
+        chmod($tmpScript, 0700);
+        exec(escapeshellarg($tmpScript) . ' > /dev/null 2>&1 &');
+        clientDebug("Background multi-stack queued: " . $tmpScript, ['script' => $tmpScript, 'stacks' => count($commands)], 'daemon', 'debug');
+        echo json_encode(['background' => true]);
+        return;
+    }
 
     if ($cfg['OUTPUTSTYLE'] == "ttyd") {
         // Create a temporary script and execute it via ttyd.

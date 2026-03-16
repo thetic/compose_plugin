@@ -36,19 +36,19 @@ switch ($_POST['action']) {
     case 'composeUpMultiple':
         $paths = isset($_POST['paths']) ? json_decode($_POST['paths'], true) : array();
         if (!empty($paths)) {
-            echoComposeCommandMultiple('up', $paths);
+            echoComposeCommandMultiple('up', $paths, $background);
         }
         break;
     case 'composeDownMultiple':
         $paths = isset($_POST['paths']) ? json_decode($_POST['paths'], true) : array();
         if (!empty($paths)) {
-            echoComposeCommandMultiple('down', $paths);
+            echoComposeCommandMultiple('down', $paths, $background);
         }
         break;
     case 'composeUpdateMultiple':
         $paths = isset($_POST['paths']) ? json_decode($_POST['paths'], true) : array();
         if (!empty($paths)) {
-            echoComposeCommandMultiple('update', $paths);
+            echoComposeCommandMultiple('update', $paths, $background);
         }
         break;
     case 'containerConsole':
