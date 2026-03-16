@@ -1,6 +1,6 @@
 # Compose Manager
 
-Compose Manager installs the Docker Compose CLI plugin on your unRAID server and provides a comprehensive web-based interface to create, run, update, back up, and restore Compose stacks directly from the unRAID dashboard. It includes per-stack autostart with configurable options, an integrated terminal for live command output, optional UI integration to hide Compose-managed containers, and tooling for testing and CI.
+Compose Manager installs the Docker Compose CLI plugin on your unRAID server and provides a comprehensive web-based interface to create, run, update, back up, and restore Compose stacks directly from the unRAID dashboard. It includes per-stack autostart, scheduled automatic image updates, a rich context menu mirroring the native Docker tab experience, an integrated terminal for live command output, background command execution with notifications, optional UI integration to hide Compose-managed containers, and tooling for testing and CI.
 
 ## Screenshots
 
@@ -17,27 +17,42 @@ Compose Manager installs the Docker Compose CLI plugin on your unRAID server and
 The built-in editor provides multiple tabs for managing your compose stack:
 
 | Compose File | Settings |
-|:------------:|:--------:|
+| ------------ | -------- |
 | ![Editor - Compose File](docs/images/editor-composeFile.png) | ![Editor - Settings](docs/images/editor-settings.png) |
 
 | Env | Web UI Labels |
-|:---:|:-------------:|
+| --- | ------------- |
 | ![Editor - Env](docs/images/editor-env.png) | ![Editor - Web UI](docs/images/editor-webUI.png) |
 
 ## Features
 
-- **Docker Compose Integration** - Installs the Docker Compose CLI plugin and manages stacks on your unRAID server.
+- **Docker Compose Integration** - Installs the Docker Compose CLI plugin (v5 by default) and manages stacks on your unRAID server.
 - **Web UI Management** - Create, edit, and manage Compose stacks directly from the unRAID dashboard.
-- **Stack Operations** - Start, stop, update, and remove stacks with one click (supports profiles and override files).
-- **Autostart & Shutdown** - Configurable autostart with wait/recreate options and improved shutdown handling.
-- **Visibility & Filtering** - Optionally hide or filter Compose-managed containers in the native Docker UI (behavior varies by unRAID version).
+- **Stack Operations** - Start, stop, restart, update, pull/build, and remove stacks with one click (supports profiles and override files).
+- **Context Menu** - Rich context menu on every stack icon with state-aware actions (see [Context Menu](#context-menu) below).
+- **Container Context Menu** - Right-click individual containers to open a WebUI, console, or logs; start, stop, pause, resume, or restart individual containers without touching the whole stack.
+- **Auto-Updates** - Per-stack scheduled image update checks using SHA-256 digest comparison, with a configurable scheduler, bulk "Run Now", and toggle-all controls.
+- **Image Pinning** - Images referenced with a `@sha256:` digest are automatically detected as pinned and will not trigger update alerts.
+- **Background Execution** - Any stack action (up, down, update, pull, etc.) can be dispatched in the background; a notification is shown on completion and the UI polls for when the lock is released.
+- **Expandable Stack Details** - Click a stack row to expand an inline Docker-tab-style container table showing update status, image source/tag, network, IP, and port mapping for each container.
+- **Autostart & Shutdown** - Configurable per-stack autostart with optional force-recreate, wait-for-Docker, and configurable timeouts. Graceful shutdown handling.
+- **Visibility & Filtering** - Optionally hide Compose-managed containers from the native Docker UI and Dashboard tile to avoid duplicate entries (behavior varies by unRAID version).
 - **Backup & Restore** - Manual and scheduled backups with selective restore from the UI.
-- **Web Terminal** - Integrated terminal for live, colorized compose command output.
-- **Developer & Testing Tools** - Unit tests and CI workflows to help contributors and ensure quality.
+- **Web Terminal** - Integrated ttyd terminal for live, colorized compose command output; also supports a basic output mode.
+- **Profiles** - Full support for Docker Compose profiles, including multi-profile selection per action.
+- **External Paths** - Compose files and env files can live outside the default projects folder (external compose path and env path per stack).
+- **Override File Management** - Centralized management of `compose.override.yaml` files, including service rename handling.
+- **Stack Editor** - Full-screen modal editor with four tabs: Compose (YAML with live validation), ENV, Web UI Labels (icon/WebUI/shell per service via override file), and Settings (name, description, icon URL, WebUI URL, default profile, external paths). Ctrl+S to save, Esc to close.
+- **Basic / Advanced View Toggle** - Toggle between a compact view and an advanced view exposing additional columns (SHA diffs, force-update links) — scoped to the Compose tab to avoid affecting the Docker tab.
+- **Compose File Discovery** - Automatically detects all four standard compose file names (`compose.yaml`, `docker-compose.yaml`, `compose.yml`, `docker-compose.yml`).
+- **Build Stack Support** - Stacks with a `build:` section in the compose file are detected automatically; context menu and update labels adapt ("Build", "Build & Up", "Update & Rebuild").
+- **Indirect Stack Support** - Register a stack pointing to a compose file stored anywhere on the array (outside the projects folder) using an "Indirect Path".
+- **Security Hardening** - Path traversal prevention, shell injection hardening with safe argument arrays, XSS escaping throughout, and strict input validation.
+- **Developer & Testing Tools** - Unit tests (PHPUnit), integration tests (BATS), static analysis (PHPStan), and CI workflows.
 
 ## Installation
 
-~~Install via the Community Applications plugin in unRAID~~, or manually install by navigating to:
+Install via the **Community Applications** plugin in unRAID, or manually by navigating to:
 
 **Plugins → Install Plugin** and entering the plugin URL:
 
@@ -56,33 +71,95 @@ Access **Settings → Compose** in the unRAID web UI. Key options:
 
 - **Output Style** — Terminal (ttyd) for live, colorized command output or Basic for simpler logs.
 - **Projects Folder** — Default: `/boot/config/plugins/compose.manager/projects`. Changing it does not move existing projects.
+- **Show in Header Menu** — Adds a "Docker Compose" entry to the unRAID header navigation bar.
+- **Show Dashboard Tile** — Show or hide the Compose stacks summary tile on the unRAID dashboard.
 - **Autostart** — Enable per-stack autostart; optional force recreate and wait-for-Docker behavior with configurable timeouts.
-- **Hide Compose Containers** — Patch (Unraid 6.12–7.2) that removes Compose-managed containers from the Docker page and Dashboard tile to avoid duplicate entries.
+- **Shutdown Timeout** — How long (seconds) to wait for stacks to stop gracefully during array shutdown.
+- **Auto-Check for Updates** — Automatically check all stacks for image updates on a configurable interval (days).
+- **Run in Background (Default)** — When enabled, action dialogs default the "Run in background" checkbox to checked.
+- **Stacks Default Expanded** — Expand all stack detail rows automatically when the page loads.
+- **Only Expand Running Stacks** — When "Default Expanded" is on, skip stopped stacks.
+- **Hide Compose Containers** — Toggle that removes Compose-managed containers from the Docker page and Dashboard tile to avoid duplicate entries.
+- **Backup** — Scheduled or manual backups with configurable retention and destination.
 - **Debug to Log** — Send debug output to syslog for troubleshooting.
 
 ## Usage
 
 ### Creating a Stack
 
-1. Navigate to **Docker → Compose** (or **Docker Compose** if header menu option is enabled)
+1. Navigate to **Docker → Compose** (or **Compose** if the header menu option is enabled)
 2. Click **Add Stack**
 3. Enter a name and optionally a description
-4. Edit the compose.yaml file using the built-in editor
-5. Click **Compose Up** to start the stack
+4. Optionally expand **Advanced Options** and enter an **Indirect Path** if the compose file lives outside the default projects folder
+5. The stack editor opens automatically — add your `compose.yaml` content
+6. Click **Compose Up** to start the stack
 
 ### Managing Stacks
 
-Each stack provides the following actions:
+#### Context Menu
 
-- **Compose Up** - Start the stack (with optional profile selection)
-- **Compose Down** - Stop and remove containers
-- **Update Stack** - Pull latest images and recreate containers
-- **Edit Stack** - Modify the compose.yaml file
-- **Remove Stack** - Delete the stack configuration
+Right-click (or left-click) the stack icon to open the context menu. Available actions depend on the stack's current state:
+
+**When Running:**
+
+- **WebUI** — Opens the configured WebUI URL in a new tab (if set)
+- **Compose Down** — Stop and remove all containers
+- **Compose Stop** — Stop containers without removing them
+- **Compose Restart** — Recreate containers without pulling
+- **Update** / **Update & Rebuild** — Pull latest images and recreate (shown when updates are detected; label changes to "Update & Rebuild" for build stacks)
+- **Force Update** / **Force Update & Rebuild** — Pull and recreate even when no updates are detected
+- **Check for Updates** — Run an immediate SHA-256 digest check for this stack
+- **Edit Stack** — Open the full editor modal
+- **View Logs** — Open a live `docker compose logs -f` terminal window
+- **View Last Cmd Log** — Show the saved output of the last command run for this stack
+- **Delete Stack** *(disabled while running)*
+
+**When Stopped:**
+
+- **Compose Up** — Create and start all containers
+- **Pull** / **Build** — Pull or build images without starting (label is "Build" for build stacks)
+- **Pull & Up** / **Build & Up** — Pull/build and then start
+- **Check for Updates**, **Edit Stack**, **View Logs**, **View Last Cmd Log**, **Delete Stack**
+
+All actions that support Docker Compose profiles will show a profile selector when profiles are defined.
+
+#### Container Context Menu
+
+Expand a stack row and right-click (or left-click) a container's icon:
+
+- **WebUI** — Open the container's WebUI (if configured and running)
+- **Console** — Open a live interactive terminal inside the container via ttyd
+- **Stop / Pause / Restart** — Manage the individual container
+- **Start / Resume** — For stopped or paused containers
+- **Logs** — Open a `docker logs -f` terminal window for this container
+
+#### Action Dialogs
+
+When confirming a stack action, the dialog shows all containers with their current image tag, update status, and a SHA-256 diff (current → new) for any pending updates. A **Run in background** checkbox lets you dispatch the command without a terminal window; a notification pops up when it finishes.
+
+### Auto-Updates
+
+Navigate to the **Auto-Updates** section (toolbar button on the Compose page) to configure per-stack automatic updates:
+
+- Enable or disable the scheduler globally
+- Set a schedule per stack (daily, weekly, etc.)
+- Use **Toggle All** to enable/disable all stacks at once
+- Use **Run Now** to trigger an immediate update check for a stack
+- Requests are serialized to avoid overwhelming the server
+
+The runner (`autoupdate_runner.php`) is invoked by cron and compares image digests before pulling, so updates only happen when a new image is actually available.
+
+### Image Pinning
+
+If a service in your `compose.yaml` references an image with a digest (e.g. `redis:7@sha256:abc123...`), Compose Manager automatically marks it as **pinned**. Pinned containers display a cyan thumbtack badge in the update column and are skipped during update checks.
+
+### Bulk Actions
+
+The toolbar provides **Start All**, **Stop All**, and **Update All** buttons. An **Autostart Only** toggle filters these operations to stacks that have autostart enabled.
 
 ### Autostart
 
-Enable autostart for a stack by clicking the autostart toggle. Stacks will automatically start when the unRAID array starts.
+Enable autostart for a stack by clicking the autostart toggle. Stacks will automatically start when the unRAID array starts, with optional force-recreate and configurable wait timeouts.
 
 ## Documentation
 
