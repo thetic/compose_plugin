@@ -56,7 +56,7 @@ Install via the **Community Applications** plugin in unRAID, or manually by navi
 
 **Plugins → Install Plugin** and entering the plugin URL:
 
-```
+```link
 https://raw.githubusercontent.com/mstrhakr/compose_plugin/main/compose.manager.plg
 ```
 
@@ -190,6 +190,37 @@ Static analysis:
 - `composer run analyse` (runs PHPStan configured for this project).
 
 For full developer setup, test running, and contribution guidelines see `docs/development.md`. (Contains examples for coverage, CI notes, and integration testing tips.)
+
+## Release Process
+
+Releases are fully automated via GitHub Actions. **No local scripts or manual tagging required.**
+
+### How it works
+
+1. **Merge a PR to `main` (stable) or `dev` (beta).**
+2. The `tag-release.yml` workflow automatically:
+   - Generates a date-based version tag (`v2026.03.15` for stable, `v2026.03.15-dev.HHMM` for beta)
+   - Updates the PLG changelog from conventional commit messages
+   - Pushes the tag
+3. The tag triggers `build.yml`, which:
+   - Builds the TXZ package in a Slackware Docker container
+   - Creates a GitHub Release with the package attached
+   - Updates the PLG file version and MD5 hash in the target branch
+
+### Branching model
+
+| Branch | Purpose | Release type | Tag format |
+| ------ | ------- | ------------ | ---------- |
+| `main` | Stable releases | Full release | `v2026.03.15`, `v2026.03.15a` |
+| `dev` | Beta/testing | Pre-release | `v2026.03.15-dev.1430` |
+
+- Work on `dev`, open a PR to `main` when ready to promote to stable.
+- Same-day stable releases get an auto-incrementing letter suffix (`a`, `b`, `c`, ...).
+- Beta releases use a UTC timestamp suffix for uniqueness.
+
+### Manual override
+
+Use the `workflow_dispatch` trigger on `build.yml` in the Actions tab to manually build any version without tagging.
 
 Contributions are welcome — we added issue and PR templates to guide reports and pull requests. Please follow the templates when submitting issues or PRs.
 

@@ -94,3 +94,43 @@ Adjust PHPStan rules or baseline as needed when adding new code.
 
 - If vendor binaries are missing, re-run `composer install`.
 - If integration tests fail with environment errors, confirm the plugin-tests environment variables and the unRAID test instance are correct.
+
+## Release Process
+
+Releases are fully automated — merging code triggers the entire build-and-release pipeline.
+
+### Flow
+
+```text
+PR merged to main or dev
+  → tag-release.yml: generates date-based tag, updates PLG changelog, pushes tag
+    → build.yml: builds TXZ, creates GitHub Release, updates PLG version/MD5
+```
+
+### Branches
+
+| Branch | Channel | Tag example |
+| ------ | ------- | ----------- |
+| `main` | Stable | `v2026.03.15`, `v2026.03.15a` |
+| `dev` | Beta | `v2026.03.15-dev.1430` |
+
+### Day-to-day workflow
+
+1. Develop on `dev` (or feature branches merged into `dev`).
+2. Each merge to `dev` automatically creates a beta pre-release.
+3. When the beta is validated, open a PR from `dev` → `main`.
+4. Merging the PR to `main` automatically creates a stable release.
+
+### Bot commit loop prevention
+
+Three workflows push commits back to `main`/`dev`. Each guards against re-triggering the others:
+
+| Workflow | Commit message | Guard |
+| -------- | ------------- | ----- |
+| `tag-release.yml` | `chore: update changelog for vX.Y.Z [skip ci]` | Skips `[skip ci]`, `Release v*`, and bot actor |
+| `build.yml` | `Release vX.Y.Z [skip ci]` | Only runs on tag push (not branch push) |
+| `sync-plugin-url.yml` | `chore: sync pluginURL ... [skip ci]` | Skips `[skip ci]` and `Release v*` |
+
+### Manual builds
+
+Use **Actions → Build & Release Plugin → Run workflow** to trigger a test build without creating a tag or release. Specify a version string or leave empty for a dev snapshot.

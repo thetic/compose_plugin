@@ -5,12 +5,15 @@
 # - Builds TXZ package using Docker (Slackware)
 # - Calculates MD5 for integrity verification
 # - Creates GitHub releases with package attached
-# - Updates PLG file in the appropriate branch (main for stable, dev for beta)
+# - Updates PLG file version/MD5 in the target branch (main or dev)
 #
 # Triggers:
-# - Stable release: tag like vYYYY.MM.DD or vYYYY.MM.DDa
-# - Beta release: tag like vYYYY.MM.DD-dev
+# - Automatically via tag-release.yml (creates tags on merge to main/dev)
 # - Manual workflow_dispatch for testing builds
+#
+# Tag format:
+# - Stable: vYYYY.MM.DD or vYYYY.MM.DDa
+# - Beta:   vYYYY.MM.DD-dev.HHMM
 
 name: Build & Release Plugin
 
@@ -224,5 +227,5 @@ jobs:
 
           # Commit and push
           git add ${{ env.PLUGIN_NAME }}.plg
-          git commit -m "Release v${VERSION}" || echo "No changes to commit"
+          git commit -m "Release v${VERSION} [skip ci]" || echo "No changes to commit"
           git push origin ${TARGET_BRANCH}

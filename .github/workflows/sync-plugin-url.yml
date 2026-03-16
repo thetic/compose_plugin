@@ -23,7 +23,9 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     # Skip if this is already a bot commit (prevents infinite loops)
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    if: >-
+      !contains(github.event.head_commit.message, '[skip ci]')
+      && !startsWith(github.event.head_commit.message, 'Release v')
     
     steps:
       - name: Checkout repository
