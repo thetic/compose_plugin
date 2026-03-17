@@ -18,7 +18,9 @@ $ui_patch_help_class = $option_patch_ui ? "hidden" : "inline_help"; // hide help
 $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc -l")) != 0;
 ?>
 <link type="text/css" rel="stylesheet" href="<? autov('/webGui/styles/jquery.switchbutton.css') ?>">
+<link type="text/css" rel="stylesheet" href="<? autov('/webGui/styles/jquery.filetree.css') ?>">
 <script src="<? autov('/webGui/javascript/jquery.switchbutton.js') ?>"></script>
+<script src="<? autov('/webGui/javascript/jquery.filetree.js') ?>" charset="utf-8"></script>
 <style>
     <?php
     if ($option_patch_ui) {
@@ -540,6 +542,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     $(function() {
+        // Attach Unraid folder/file browser to all path inputs on settings page
+        if ($.fn.fileTreeAttach) {
+            $('input[data-pickroot]').fileTreeAttach();
+        }
+
         var _ignorePatchUIChange = true; // prevent change handler from firing during initialization
         $('#PROJECTS_FOLDER').on("input", null, null, checkProjectFolder);
 

@@ -1588,7 +1588,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         <details>
                             <summary>Advanced Options</summary></br>
                             <div style="font-weight:bold;margin-bottom:8px;">Indirect Path</div>
-                            <input type="text" id="compose-stack-indirect" placeholder="/mnt/user/compose/stackFolder">
+                            <input type="text" id="compose-stack-indirect" placeholder="/mnt/user/compose/stackFolder" data-pickroot="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
                         </details>
                     
                     </div>
@@ -5384,7 +5384,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                         <div class="settings-field">
                             <label for="settings-external-compose-path">External Compose Path</label>
-                            <input type="text" id="settings-external-compose-path" placeholder="Default (uses compose file in project folder)">
+                            <input type="text" id="settings-external-compose-path" placeholder="Default (uses compose file in project folder)" data-pickroot="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
                             <div class="settings-field-help">Path to an external folder containing your compose file(s) (e.g., /mnt/user/appdata/myapp/). The folder must contain a file matching *compose*.yml. Leave empty to use the compose file stored in the project folder.</div>
                             <div id="settings-invalid-indirect-warning" style="margin-top:8px;display:none;padding:8px 12px;background:#4a1c1c;border:1px solid #f44336;border-radius:4px;">
                                 <span style="color:#f44336;font-size:0.9em;"><i class="fa fa-exclamation-triangle"></i> <strong>Invalid external path.</strong> The path shown above is broken or the directory was not found. Correct the path and save to restore the stack, or clear it to use a local compose file instead.</span>
@@ -5396,7 +5396,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                         <div class="settings-field">
                             <label for="settings-env-path">External ENV File Path</label>
-                            <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)">
+                            <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)" data-pickroot="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
                             <div class="settings-field-help">Path to an external .env file (e.g., /mnt/user/appdata/myapp/.env). Leave empty to use the default .env file in the project folder.</div>
                         </div>
 
@@ -5441,6 +5441,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 initEditorModal();
             } catch (e) {
                 console.warn('Compose Manager: editor init error (non-fatal):', e);
+            }
+            // Attach Unraid folder/file browser to all path inputs on the page
+            if ($.fn.fileTreeAttach) {
+                $('input[data-pickroot]').fileTreeAttach();
             }
         });
 
