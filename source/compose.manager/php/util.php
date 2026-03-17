@@ -964,6 +964,8 @@ class StackInfo
     public ?string $composeFilePath;
     /** @var bool Whether this stack uses an indirect compose path */
     public bool $isIndirect;
+    /** @var string|null Path from a renamed indirect.invalid file, if present (needs user fix) */
+    public ?string $invalidIndirectPath;
     /** @var OverrideInfo Resolved override info (eager) */
     public OverrideInfo $overrideInfo;
 
@@ -1017,11 +1019,19 @@ class StackInfo
         // Resolve indirect path and compose source (indirect if present, else direct)
         $this->isIndirect = $this->isIndirect();
         $this->indirectPath = $this->readMetadata('indirect');
+        $this->invalidIndirectPath = $this->readInvalidIndirect();
         $this->composeSource = $this->isIndirect ? $this->indirectPath : $this->path;
 
         // Resolve compose file
         $this->composeFilePath = self::getComposeFilePath($this->composeSource);
         if ($this->composeFilePath === null) {
+            if ($this->invalidIndirectPath !== null) {
+                // Stack has a broken indirect reference — allow degraded construction
+                // so the user can fix it in the Settings editor.
+                clientDebug("[stack] Stack $this->projectFolder has an invalid indirect path; loading in degraded mode", null, 'daemon', 'warning');
+                $this->overrideInfo = OverrideInfo::fromStackInfo($this);
+                return;
+            }
             throw new \RuntimeException("Not a valid compose stack: no compose file found at $this->composeSource");
         }
 
@@ -1100,15 +1110,42 @@ class StackInfo
             || !Path::hasSeparator($indirectPath)
             || Path::hasWindowsStylePath($indirectPath)
             || Path::hasTraversal($indirectPath)
-            || !is_dir($indirectPath)
             ) {
-                @unlink("$this->path/indirect"); // Remove invalid indirect file to prevent repeated issues
-                unset($this->metadataCache['indirect']); // Clear cache to ensure state is updated on next access
+                // Path is structurally invalid — rename so the user can fix it in Settings.
+                @rename("$this->path/indirect", "$this->path/indirect.invalid");
+                unset($this->metadataCache['indirect']);
+                clientDebug("[stack] Renamed structurally invalid indirect file at $this->path to indirect.invalid", null, 'daemon', 'warning');
+                return false;
+            }
+            if (!is_dir($indirectPath)) {
+                // Directory doesn't exist — may be a temporarily unmounted share (NFS, etc.).
+                // Rename so the stack won't try to load from a missing path, but the user can fix it.
+                @rename("$this->path/indirect", "$this->path/indirect.invalid");
+                unset($this->metadataCache['indirect']);
+                clientDebug("[stack] Indirect path not found, renamed to indirect.invalid (may be temporarily unavailable): " . sanitizeLogText($indirectPath), null, 'daemon', 'warning');
                 return false;
             }
             return true;
         }
         return false;
+    }
+
+    /**
+     * Read the indirect.invalid file if present.
+     *
+     * This file is created when isIndirect() renames a broken indirect file.
+     * The value can be shown in the Settings editor so the user can fix it.
+     *
+     * @return string|null The path stored in indirect.invalid, or null if not present
+     */
+    private function readInvalidIndirect(): ?string
+    {
+        $invalidFile = "$this->path/indirect.invalid";
+        if (is_file($invalidFile)) {
+            $content = @file_get_contents($invalidFile);
+            return $content !== false ? trim($content) : null;
+        }
+        return null;
     }
 
     /**

@@ -81,7 +81,9 @@ switch ($_POST['action']) {
         }
         $folderName = "$compose_root/$stackName";
         $isIndirect = is_file("$folderName/indirect");
-        $filesRemain = $isIndirect ? file_get_contents("$folderName/indirect") : "";
+        $isInvalidIndirect = !$isIndirect && is_file("$folderName/indirect.invalid");
+        $filesRemain = $isIndirect ? file_get_contents("$folderName/indirect")
+            : ($isInvalidIndirect ? file_get_contents("$folderName/indirect.invalid") : "");
         clientDebug("[stack] Deleting stack: $stackName", null, 'daemon', 'info');
         exec("rm -rf " . escapeshellarg($folderName));
         if ($filesRemain == "") {
@@ -339,7 +341,9 @@ switch ($_POST['action']) {
 
         // Get external compose path (indirect)
         $indirectFile = "$compose_root/$script/indirect";
+        $invalidIndirectFile = "$compose_root/$script/indirect.invalid";
         $externalComposePath = is_file($indirectFile) ? trim(file_get_contents($indirectFile)) : "";
+        $invalidIndirectPath = is_file($invalidIndirectFile) ? trim(file_get_contents($invalidIndirectFile)) : "";
 
         // Get available profiles from the profiles file
         $profilesFile = "$compose_root/$script/profiles";
@@ -358,6 +362,7 @@ switch ($_POST['action']) {
             'webuiUrl' => $webuiUrl,
             'defaultProfile' => $defaultProfile,
             'externalComposePath' => $externalComposePath,
+            'invalidIndirectPath' => $invalidIndirectPath,
             'availableProfiles' => $availableProfiles
         ]);
         break;
@@ -443,6 +448,7 @@ switch ($_POST['action']) {
 
         // Set external compose path (indirect)
         $indirectFile = "$compose_root/$script/indirect";
+        $invalidIndirectFile = "$compose_root/$script/indirect.invalid";
         if (empty($externalComposePath)) {
             // Removing indirect: move compose file back to project folder if it only exists externally
             if (is_file($indirectFile)) {
@@ -454,8 +460,16 @@ switch ($_POST['action']) {
                 }
                 @unlink($indirectFile);
             }
+            // Also clean up any invalid indirect file when clearing the path
+            if (is_file($invalidIndirectFile)) {
+                @unlink($invalidIndirectFile);
+            }
         } else {
             file_put_contents($indirectFile, $externalComposePath);
+            // Clean up the invalid file now that we have a corrected path
+            if (is_file($invalidIndirectFile)) {
+                @unlink($invalidIndirectFile);
+            }
             // Remove local compose file if it exists since we're now using external
             $localCompose = findComposeFile("$compose_root/$script");
             if ($localCompose) {

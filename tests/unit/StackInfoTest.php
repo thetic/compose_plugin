@@ -86,6 +86,76 @@ class StackInfoTest extends TestCase
         $this->assertSame($stackDir, $info->composeSource);
     }
 
+    public function testStructurallyInvalidIndirectRenamedToInvalid(): void
+    {
+        $stack = 'bad-indirect';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        // Structurally invalid path (has directory traversal)
+        file_put_contents("$stackDir/indirect", '/mnt/user/../etc/passwd');
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertFalse($info->isIndirect);
+        // indirect file should be renamed, not deleted
+        $this->assertFileDoesNotExist("$stackDir/indirect");
+        $this->assertFileExists("$stackDir/indirect.invalid");
+        $this->assertSame('/mnt/user/../etc/passwd', trim(file_get_contents("$stackDir/indirect.invalid")));
+        $this->assertSame('/mnt/user/../etc/passwd', $info->invalidIndirectPath);
+    }
+
+    public function testMissingDirIndirectRenamedToInvalid(): void
+    {
+        $stack = 'missing-dir-indirect';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        // Valid-looking path but directory doesn't exist
+        file_put_contents("$stackDir/indirect", '/mnt/user/nonexistent_share');
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertFalse($info->isIndirect);
+        $this->assertFileDoesNotExist("$stackDir/indirect");
+        $this->assertFileExists("$stackDir/indirect.invalid");
+        $this->assertSame('/mnt/user/nonexistent_share', $info->invalidIndirectPath);
+    }
+
+    public function testInvalidIndirectLoadsDegradedWithNoLocalCompose(): void
+    {
+        $stack = 'degraded-indirect';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        // Path to nonexistent directory, no local compose file
+        file_put_contents("$stackDir/indirect", '/mnt/user/gone');
+
+        // Should NOT throw — constructs in degraded mode
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertFalse($info->isIndirect);
+        $this->assertNull($info->composeFilePath);
+        $this->assertSame('/mnt/user/gone', $info->invalidIndirectPath);
+        $this->assertInstanceOf(\OverrideInfo::class, $info->overrideInfo);
+    }
+
+    public function testValidIndirectHasNoInvalidPath(): void
+    {
+        $stack = 'valid-indirect';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        $indirectTarget = $this->tempRoot . '/valid_source';
+        mkdir($stackDir);
+        mkdir($indirectTarget);
+        file_put_contents("$stackDir/indirect", $indirectTarget);
+        file_put_contents("$indirectTarget/compose.yaml", "services:\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertTrue($info->isIndirect);
+        $this->assertNull($info->invalidIndirectPath);
+        $this->assertFileDoesNotExist("$stackDir/indirect.invalid");
+    }
+
     // ===========================================
     // Compose File Resolution Tests
     // ===========================================

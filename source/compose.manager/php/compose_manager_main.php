@@ -3276,12 +3276,23 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                     // External compose path
                     var externalComposePath = response.externalComposePath || '';
-                    $('#settings-external-compose-path').val(externalComposePath);
-                    editorModal.originalSettings['external-compose-path'] = externalComposePath;
-                    if (externalComposePath) {
-                        $('#settings-external-compose-info').show();
-                    } else {
+                    var invalidIndirectPath = response.invalidIndirectPath || '';
+                    if (!externalComposePath && invalidIndirectPath) {
+                        // Pre-populate with the broken path so the user can fix it
+                        $('#settings-external-compose-path').val(invalidIndirectPath);
+                        editorModal.originalSettings['external-compose-path'] = '';
+                        editorModal.modifiedSettings.add('external-compose-path');
+                        $('#settings-invalid-indirect-warning').show();
                         $('#settings-external-compose-info').hide();
+                    } else {
+                        $('#settings-external-compose-path').val(externalComposePath);
+                        editorModal.originalSettings['external-compose-path'] = externalComposePath;
+                        $('#settings-invalid-indirect-warning').hide();
+                        if (externalComposePath) {
+                            $('#settings-external-compose-info').show();
+                        } else {
+                            $('#settings-external-compose-info').hide();
+                        }
                     }
 
                     // Default profile
@@ -3313,6 +3324,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             $('#settings-icon-preview').hide();
             $('#settings-available-profiles').hide();
             $('#settings-external-compose-info').hide();
+            $('#settings-invalid-indirect-warning').hide();
         });
     }
 
@@ -3946,6 +3958,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $('#settings-icon-preview').hide();
         $('#settings-available-profiles').hide();
         $('#settings-external-compose-info').hide();
+        $('#settings-invalid-indirect-warning').hide();
 
         // Clear labels container
         $('#labels-services-container').html('');
@@ -5373,6 +5386,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                             <label for="settings-external-compose-path">External Compose Path</label>
                             <input type="text" id="settings-external-compose-path" placeholder="Default (uses compose file in project folder)">
                             <div class="settings-field-help">Path to an external folder containing your compose file(s) (e.g., /mnt/user/appdata/myapp/). The folder must contain a file matching *compose*.yml. Leave empty to use the compose file stored in the project folder.</div>
+                            <div id="settings-invalid-indirect-warning" style="margin-top:8px;display:none;padding:8px 12px;background:#4a1c1c;border:1px solid #f44336;border-radius:4px;">
+                                <span style="color:#f44336;font-size:0.9em;"><i class="fa fa-exclamation-triangle"></i> <strong>Invalid external path.</strong> The path shown above is broken or the directory was not found. Correct the path and save to restore the stack, or clear it to use a local compose file instead.</span>
+                            </div>
                             <div id="settings-external-compose-info" style="margin-top:8px;display:none;">
                                 <span style="color:#c80;font-size:0.9em;"><i class="fa fa-info-circle"></i> This stack uses an external compose file. The Compose editor tab will load the file from the external path.</span>
                             </div>
