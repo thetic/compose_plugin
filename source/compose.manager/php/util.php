@@ -13,39 +13,41 @@ require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
  * main plugin code and the AJAX action handlers.
  */
 
-function clientDebug($message, $data = null, $type = 'daemon', $level = 'info')
-{
-    if ($type == '' || $type == null) {
-        $type = 'daemon';
-    }
-    switch ($level) {
-        case 'debug':
-            $logLevel = "$type.debug";
-            break;
-        case 'error':
-        case 'err':
-            $logLevel = "$type.err";
-            break;
-        case 'warning':
-        case 'warn':
-            $logLevel = "$type.warning";
-            break;
-        case 'info':
-        default:
-            $logLevel = "$type.info";
-    }
-    $cfg = @parse_ini_file("/boot/config/plugins/compose.manager/compose.manager.cfg", true, INI_SCANNER_RAW);
-    // Skip debug messages if debug logging is disabled in plugin settings
-    if ((($cfg['DEBUG_TO_LOG'] ?? 'false') == 'false') && $level == 'debug') {
-        return;
-    }
-    if ($data !== null && $data !== '' && $data !== 'null') {
-        if (is_array($data) || is_object($data)) {
-            $data = json_encode($data);
+if (!function_exists('clientDebug')) {
+    function clientDebug($message, $data = null, $type = 'daemon', $level = 'info')
+    {
+        if ($type == '' || $type == null) {
+            $type = 'daemon';
         }
-        exec("logger -t 'compose.manager' -p '$logLevel' " . escapeshellarg($message) . ' - Data: ' . escapeshellarg($data));
-    } else {
-        exec("logger -t 'compose.manager' -p '$logLevel' " . escapeshellarg($message));
+        switch ($level) {
+            case 'debug':
+                $logLevel = "$type.debug";
+                break;
+            case 'error':
+            case 'err':
+                $logLevel = "$type.err";
+                break;
+            case 'warning':
+            case 'warn':
+                $logLevel = "$type.warning";
+                break;
+            case 'info':
+            default:
+                $logLevel = "$type.info";
+        }
+        $cfg = @parse_ini_file("/boot/config/plugins/compose.manager/compose.manager.cfg", true, INI_SCANNER_RAW);
+        // Skip debug messages if debug logging is disabled in plugin settings
+        if ((($cfg['DEBUG_TO_LOG'] ?? 'false') == 'false') && $level == 'debug') {
+            return;
+        }
+        if ($data !== null && $data !== '' && $data !== 'null') {
+            if (is_array($data) || is_object($data)) {
+                $data = json_encode($data);
+            }
+            exec("logger -t 'compose.manager' -p '$logLevel' " . escapeshellarg($message) . ' - Data: ' . escapeshellarg($data));
+        } else {
+            exec("logger -t 'compose.manager' -p '$logLevel' " . escapeshellarg($message));
+        }
     }
 }
 
@@ -603,7 +605,7 @@ class OverrideInfo
         if (!empty($result['migrations'])) {
             file_put_contents($overridePath, $newOverrideContent);
             $result['migrated'] = true;
-            
+
             $migrationLog = array_map(fn($m) => "{$m['from']} -> {$m['to']}", $result['migrations']);
             clientDebug(
                 "[override] Migrated renamed services: " . implode(', ', $migrationLog),
@@ -1008,14 +1010,14 @@ class StackInfo
         // Ensure the folder name is a valid project string.
         // Only rename if the folder itself needs sanitization (e.g. contains uppercase, spaces, etc).
         $sanitizedFolder = self::sanitizeProjectString($this->projectFolder);
-        if ($sanitizedFolder !== $this->projectFolder) { 
+        if ($sanitizedFolder !== $this->projectFolder) {
 
             $this->updatePath($sanitizedFolder);
         }
 
         // Resolve display name from metadata (or default to folder name).
         $this->displayName = $this->getDisplayName();
-        
+
         // Resolve indirect path and compose source (indirect if present, else direct)
         $this->isIndirect = $this->isIndirect();
         $this->indirectPath = $this->readMetadata('indirect');
@@ -1102,14 +1104,15 @@ class StackInfo
      * @return bool True if the stack is indirect, false otherwise
      */
     private function isIndirect(): bool
-    {   
+    {
         $indirectPath = $this->readMetadata('indirect');
         if ($indirectPath !== null) {
-            if ($indirectPath === ''
-            || Path::hasNewline($indirectPath)
-            || !Path::hasSeparator($indirectPath)
-            || Path::hasWindowsStylePath($indirectPath)
-            || Path::hasTraversal($indirectPath)
+            if (
+                $indirectPath === ''
+                || Path::hasNewline($indirectPath)
+                || !Path::hasSeparator($indirectPath)
+                || Path::hasWindowsStylePath($indirectPath)
+                || Path::hasTraversal($indirectPath)
             ) {
                 // Path is structurally invalid — rename so the user can fix it in Settings.
                 @rename("$this->path/indirect", "$this->path/indirect.invalid");
@@ -1241,8 +1244,10 @@ class StackInfo
     public function getIconUrl(): ?string
     {
         $url = $this->readMetadata('icon_url');
-        if ($url !== null && filter_var($url, FILTER_VALIDATE_URL)
-            && (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0)) {
+        if (
+            $url !== null && filter_var($url, FILTER_VALIDATE_URL)
+            && (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0)
+        ) {
             return $url;
         }
         return null;
@@ -1255,8 +1260,10 @@ class StackInfo
     public function getWebUIUrl(): ?string
     {
         $url = $this->readMetadata('webui_url');
-        if ($url !== null && filter_var($url, FILTER_VALIDATE_URL)
-            && (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0)) {
+        if (
+            $url !== null && filter_var($url, FILTER_VALIDATE_URL)
+            && (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0)
+        ) {
             return $url;
         }
         return null;
@@ -1603,7 +1610,7 @@ class StackInfo
         $this->projectFolder = $newProject;
         $this->setPath();
         // Attempt to rename the directory to match the new project name
-        if (is_dir($oldPath)){
+        if (is_dir($oldPath)) {
             if (!is_dir($this->path)) {
                 @rename($oldPath, $this->path);
                 clientDebug("Renamed project directory from '$oldPath' to '$this->path' to match sanitized project name '$newProject'.", ['from' => $oldPath, 'to' => $this->path], 'daemon', 'info');
@@ -1667,7 +1674,7 @@ class StackInfo
         if ($realComposeRoot === false) {
             throw new \RuntimeException("Invalid compose root directory.");
         }
-        
+
         // For new folders, check that the parent resolves correctly
         $resolvedParent = realpath(dirname($path));
         if ($resolvedParent === false || strpos($resolvedParent, $realComposeRoot) !== 0) {
@@ -1680,7 +1687,7 @@ class StackInfo
         } catch (\RuntimeException $e) {
             throw new \RuntimeException("Failed to create stack: " . $e->getMessage());
         }
-        
+
         // Create the directory
         if (!mkdir($path, 0755, true) && !is_dir($path)) {
             throw new \RuntimeException("Failed to create stack directory: $path");

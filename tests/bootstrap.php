@@ -18,6 +18,15 @@ if (!function_exists('logger')) {
     }
 }
 
+// Stub clientDebug before source files are loaded.
+// It calls exec("logger ...") internally which doesn't exist on Windows.
+if (!function_exists('clientDebug')) {
+    function clientDebug($message, $data = null, $type = 'daemon', $level = 'info'): void
+    {
+        // no-op in test environment
+    }
+}
+
 // Load the plugin-tests framework
 require_once __DIR__ . '/framework/src/php/bootstrap.php';
 
