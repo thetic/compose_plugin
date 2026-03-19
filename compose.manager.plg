@@ -28,12 +28,14 @@
 >
 
 <CHANGES>
-###2026.03.16-dev.1101
-- Features: update tag-release workflow to call build.yml via workflow_call for improved release process
-- Features: update date command to use local timezone for beta tag generation
-- Features: add background execution option for stack operations in compose manager
+###2026.03.19-dev.1629
+- Features: enhance file tree integration and styling for path inputs in settings and editor modal
+- Features: add Unraid folder browser to all path inputs
+- Bug Fixes: ensure clientDebug function is stubbed in test environment
+- Bug Fixes: rename invalid indirect files instead of deleting them
+- Refactoring: update cron management to use plugin-owned cron file and sync with update_cron
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.16-dev.1101)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.19-dev.1629)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
