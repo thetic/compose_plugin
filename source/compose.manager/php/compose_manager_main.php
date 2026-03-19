@@ -540,6 +540,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
     }
 
+    // Shared helpers for file-tree picker positioning and scroll tracking are now in common.js
+    // Please reference composePositionFileTreeForInput, composeTrackFileTreeForInput, composeBindFileTreeInputs from common.js
+
     // Initialize editor modal
     function initEditorModal() {
         // Initialize Ace editors for compose and env tabs only
@@ -584,7 +587,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
 
         // Initialize settings field change tracking
-        $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path').on('input', function() {
+        $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path').on('input change', function() {
             var fieldId = this.id.replace('settings-', '');
             var currentValue = $(this).val();
             var originalValue = editorModal.originalSettings[fieldId] || '';
@@ -1588,7 +1591,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         <details>
                             <summary>Advanced Options</summary></br>
                             <div style="font-weight:bold;margin-bottom:8px;">Indirect Path</div>
-                            <input type="text" id="compose-stack-indirect" placeholder="/mnt/user/compose/stackFolder" data-pickroot="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
+                            <input type="text" id="compose-stack-indirect" placeholder="/mnt/user/compose/stackFolder" data-pickroot="/" data-picktop="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
                         </details>
                     
                     </div>
@@ -1608,6 +1611,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var tempDiv = document.createElement('div');
         tempDiv.innerHTML = modalHtml;
         document.body.appendChild(tempDiv.firstElementChild);
+
+        // The add-stack modal is created dynamically, so attach the picker after insertion.
+        if ($.fn.fileTreeAttach) {
+            var $indirectInput = $('#compose-stack-indirect');
+            composeBindFileTreeInputs($indirectInput, {
+                zIndex: 100010,
+                minWidth: 320,
+                addClass: false
+            });
+        }
 
         window.closeComposeStackModal = function() {
             var overlay = document.getElementById('compose-stack-modal-overlay');
@@ -3960,6 +3973,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $('#settings-external-compose-info').hide();
         $('#settings-invalid-indirect-warning').hide();
 
+        // Hide any open file-tree pickers (so they don't float outside the modal)
+        $('.fileTree').slideUp('fast');
+
         // Clear labels container
         $('#labels-services-container').html('');
 
@@ -5384,7 +5400,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                         <div class="settings-field">
                             <label for="settings-external-compose-path">External Compose Path</label>
-                            <input type="text" id="settings-external-compose-path" placeholder="Default (uses compose file in project folder)" data-pickroot="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
+                            <input type="text" id="settings-external-compose-path" placeholder="Default (uses compose file in project folder)" data-pickroot="/" data-picktop="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
                             <div class="settings-field-help">Path to an external folder containing your compose file(s) (e.g., /mnt/user/appdata/myapp/). The folder must contain a file matching *compose*.yml. Leave empty to use the compose file stored in the project folder.</div>
                             <div id="settings-invalid-indirect-warning" style="margin-top:8px;display:none;padding:8px 12px;background:#4a1c1c;border:1px solid #f44336;border-radius:4px;">
                                 <span style="color:#f44336;font-size:0.9em;"><i class="fa fa-exclamation-triangle"></i> <strong>Invalid external path.</strong> The path shown above is broken or the directory was not found. Correct the path and save to restore the stack, or clear it to use a local compose file instead.</span>
@@ -5396,7 +5412,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                         <div class="settings-field">
                             <label for="settings-env-path">External ENV File Path</label>
-                            <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)" data-pickroot="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
+                            <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)" data-pickroot="/" data-picktop="/mnt" data-pickcloseonfile="true">
                             <div class="settings-field-help">Path to an external .env file (e.g., /mnt/user/appdata/myapp/.env). Leave empty to use the default .env file in the project folder.</div>
                         </div>
 
@@ -5442,9 +5458,15 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             } catch (e) {
                 console.warn('Compose Manager: editor init error (non-fatal):', e);
             }
-            // Attach Unraid folder/file browser to all path inputs on the page
+            // Attach Unraid folder/file browser to all path inputs on the page.
+            // The picker popup needs manual positioning for modals and overlay stacks.
             if ($.fn.fileTreeAttach) {
-                $('input[data-pickroot]').fileTreeAttach();
+                var $pathInputs = $('input[data-pickroot]');
+                composeBindFileTreeInputs($pathInputs, {
+                    zIndex: 100010,
+                    minWidth: 320,
+                    addClass: true
+                });
             }
         });
 
