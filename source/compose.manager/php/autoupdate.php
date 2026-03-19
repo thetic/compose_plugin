@@ -82,42 +82,27 @@ switch ($action) {
                 echo json_encode(array('error' => 'Failed to write cron file'));
             }
         } else {
-            // Default behavior: manage root's crontab with a marker block so it survives reboots.
+            // Default behavior: use plugin-owned cron file and let update_cron sync it to the system
+            $pluginCron = '/boot/config/plugins/compose.manager/compose.manager.cron';
             $runner = escapeshellarg($plugin_root . "php/autoupdate_runner.php");
-            $markerStart = "# COMPOSE_MANAGER_AUTOUPDATE START";
-            $markerEnd   = "# COMPOSE_MANAGER_AUTOUPDATE END";
-            $cronLine = "*/15 * * * * php " . $runner . " >/dev/null 2>&1";
+            $line = "*/15 * * * * root php " . $runner . " >/dev/null 2>&1\n";
 
-            $existing = shell_exec('crontab -l 2>/dev/null');
-            if ($existing === null) {
-                $existing = '';
+            if (!is_dir(dirname($pluginCron))) {
+                @mkdir(dirname($pluginCron), 0755, true);
             }
-
-            // Remove any existing autoupdate block.
-            $pattern = '/# COMPOSE_MANAGER_AUTOUPDATE START.*?# COMPOSE_MANAGER_AUTOUPDATE END\s*/s';
-            $cleaned = preg_replace($pattern, '', $existing);
-            if ($cleaned === null) {
-                $cleaned = $existing;
-            }
-
-            $newBlock = $markerStart . "\n" . $cronLine . "\n" . $markerEnd . "\n";
-            $newCron = trim($cleaned) . "\n" . $newBlock;
-
-            $tmpFile = tempnam(sys_get_temp_dir(), 'cm_cron_');
-            if ($tmpFile === false || file_put_contents($tmpFile, rtrim($newCron) . "\n") === false) {
+            if (file_put_contents($pluginCron, $line) === false) {
                 http_response_code(500);
-                echo json_encode(array('error' => 'Failed to prepare cron file'));
+                echo json_encode(array('error' => 'Failed to write plugin cron file'));
                 break;
             }
 
-            exec('crontab ' . escapeshellarg($tmpFile), $output, $returnVar);
-            unlink($tmpFile);
-
+            // Sync into /etc/cron.d
+            exec('/usr/local/sbin/update_cron 2>/dev/null', $output, $returnVar);
             if ($returnVar === 0) {
                 echo json_encode(array('ok' => true));
             } else {
                 http_response_code(500);
-                echo json_encode(array('error' => 'Failed to install cron job'));
+                echo json_encode(array('error' => 'Failed to update cron (update_cron)'));
             }
         }
         break;
@@ -130,36 +115,18 @@ switch ($action) {
             if (is_file($cronFile)) unlink($cronFile);
             echo json_encode(array('ok' => true));
         } else {
-            // Default behavior: remove the marked block from root's crontab.
-            $existing = shell_exec('crontab -l 2>/dev/null');
-            if ($existing === null) {
-                $existing = '';
+            // Default behavior: remove the plugin cron file and sync via update_cron
+            $pluginCron = '/boot/config/plugins/compose.manager/compose.manager.cron';
+            if (is_file($pluginCron)) {
+                unlink($pluginCron);
             }
-
-            $pattern = '/# COMPOSE_MANAGER_AUTOUPDATE START.*?# COMPOSE_MANAGER_AUTOUPDATE END\s*/s';
-            $cleaned = preg_replace($pattern, '', $existing);
-            if ($cleaned === null) {
-                $cleaned = $existing;
+            exec('/usr/local/sbin/update_cron 2>/dev/null', $output, $returnVar);
+            if ($returnVar === 0) {
+                echo json_encode(array('ok' => true));
+            } else {
+                http_response_code(500);
+                echo json_encode(array('error' => 'Failed to update cron (update_cron)'));
             }
-
-            // If nothing changed, we are effectively done.
-            if ($cleaned !== $existing) {
-                $tmpFile = tempnam(sys_get_temp_dir(), 'cm_cron_');
-                if ($tmpFile === false || file_put_contents($tmpFile, rtrim($cleaned) . "\n") === false) {
-                    http_response_code(500);
-                    echo json_encode(array('error' => 'Failed to prepare temporary cron file'));
-                    break;
-                }
-
-                exec('crontab ' . escapeshellarg($tmpFile), $output, $returnVar);
-                unlink($tmpFile);
-                if ($returnVar !== 0) {
-                    http_response_code(500);
-                    echo json_encode(array('error' => 'Failed to update crontab'));
-                    break;
-                }
-            }
-            echo json_encode(array('ok' => true));
         }
         break;
     case 'getCronStatus':
@@ -170,13 +137,9 @@ switch ($action) {
             $cronFile = rtrim($cronDir, '/') . '/compose_manager_autoupdate';
             echo json_encode(array('installed' => is_file($cronFile)));
         } else {
-            // Default behavior: check whether the marker is present in root's crontab.
-            $existing = shell_exec('crontab -l 2>/dev/null');
-            if ($existing === null) {
-                $existing = '';
-            }
-            $installed = (strpos($existing, '# COMPOSE_MANAGER_AUTOUPDATE START') !== false);
-            echo json_encode(array('installed' => $installed));
+            // Default behavior: check for the plugin cron file.
+            $pluginCron = '/boot/config/plugins/compose.manager/compose.manager.cron';
+            echo json_encode(array('installed' => is_file($pluginCron)));
         }
         break;
     case 'runNow':
