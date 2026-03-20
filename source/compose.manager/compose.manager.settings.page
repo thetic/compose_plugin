@@ -234,11 +234,26 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         font-size: 0.9em;
     }
 
-    #compose_updates th:nth-child(1) { width: auto; }
-    #compose_updates th:nth-child(2) { width: 120px; text-align: center; }
-    #compose_updates th:nth-child(3) { width: 100px; }
-    #compose_updates th:nth-child(4) { width: 90px; }
-    #compose_updates th:nth-child(5) { width: 140px; }
+    #compose_updates th:nth-child(1) {
+        width: auto;
+    }
+
+    #compose_updates th:nth-child(2) {
+        width: 120px;
+        text-align: center;
+    }
+
+    #compose_updates th:nth-child(3) {
+        width: 100px;
+    }
+
+    #compose_updates th:nth-child(4) {
+        width: 90px;
+    }
+
+    #compose_updates th:nth-child(5) {
+        width: 140px;
+    }
 
     /* Toggle All button in header */
     #compose_updates th .toggle-all-btn {
@@ -303,7 +318,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     /* Alternating row colors for updates table */
     #compose_updates tbody tr:nth-child(odd) {
-        background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color, rgba(0,0,0,0.05));
+        background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color, rgba(0, 0, 0, 0.05));
     }
 
     #compose_updates tbody tr:nth-child(even) {
@@ -561,7 +576,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         if ($.fn.fileTreeAttach && typeof composeBindFileTreeInputs === 'function') {
             var $pathInputs = $('input[data-pickroot]');
             // Use zIndex 95 to keep below global fixed header, minWidth 320.
-            composeBindFileTreeInputs($pathInputs, { zIndex: 95, minWidth: 320, addClass: false });
+            composeBindFileTreeInputs($pathInputs, {
+                zIndex: 95,
+                minWidth: 320,
+                addClass: false
+            });
         }
 
         var _ignorePatchUIChange = true; // prevent change handler from firing during initialization
@@ -704,7 +723,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 }
             }
         }
-        
+
         // Handle dashboard tile toggle -> disable/enable hide containers option
         function toggleExpandByDefault() {
             var stacksDefaultExpanded = $('#STACKS_DEFAULT_EXPANDED').is(':checked');
@@ -831,7 +850,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         // Set only the correct tab and content as active
         $('.compose-tab[data-tab="' + savedTab + '"]').addClass('active');
         $('#compose-tab-' + savedTab).addClass('active');
-        
+
         // If the default tab is backup, load the backup list immediately
         if (savedTab === 'backup') {
             loadBackupArchives();
@@ -900,7 +919,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     function escapeAttr(text) {
-        return String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        return String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     function startLogRefresh() {
@@ -1370,8 +1389,12 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     function loadUpdatesUI() {
         $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>');
-        $.post('/plugins/compose.manager/php/exec.php', {action: 'listProjects'}, function(projects) {
-            $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getConfig'}, function(cfg) {
+        $.post('/plugins/compose.manager/php/exec.php', {
+            action: 'listProjects'
+        }, function(projects) {
+            $.post('/plugins/compose.manager/php/autoupdate.php', {
+                action: 'getConfig'
+            }, function(cfg) {
                 // Response is already parsed as JSON by jQuery due to Content-Type header
                 if (typeof cfg !== 'object' || cfg === null) cfg = {};
                 $('#updates-tbody').empty();
@@ -1384,11 +1407,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     var time = entry.time || '02:00';
                     var weekday = (entry.weekday !== undefined) ? entry.weekday : 0;
                     var monthday = (entry.monthday !== undefined) ? entry.monthday : 1;
-                    var row = '<tr class="sortable" data-path="'+escapeAttr(key)+'">';
-                    row += '<td>'+escapeHtml(p.name)+'</td>';
-                    row += '<td><input type="checkbox" class="au-enabled compose-toggle" '+enabled+'></td>';
+                    var row = '<tr class="sortable" data-path="' + escapeAttr(key) + '">';
+                    row += '<td>' + escapeHtml(p.name) + '</td>';
+                    row += '<td><input type="checkbox" class="au-enabled compose-toggle" ' + enabled + '></td>';
                     row += '<td><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
-                    row += '<td><input type="time" class="au-time" value="'+escapeAttr(time)+'"></td>';
+                    row += '<td><input type="time" class="au-time" value="' + escapeAttr(time) + '"></td>';
                     row += '<td>';
                     row += '<span class="au-placeholder">---</span>';
                     row += '<select class="au-weekday">';
@@ -1400,7 +1423,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     row += '<option value="5">_(Friday)_</option>';
                     row += '<option value="6">_(Saturday)_</option>';
                     row += '</select>';
-                    row += '<input type="number" class="au-monthday" min="1" max="31" step="1" value="'+escapeAttr(String(monthday))+'">';
+                    row += '<input type="number" class="au-monthday" min="1" max="31" step="1" value="' + escapeAttr(String(monthday)) + '">';
                     row += '</td>';
                     row += '</tr>';
                     $('#updates-tbody').append(row);
@@ -1429,7 +1452,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     function refreshCronStatus() {
-        $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'getCronStatus'}, function(r){
+        $.post('/plugins/compose.manager/php/autoupdate.php', {
+            action: 'getCronStatus'
+        }, function(r) {
             // Response is already parsed as JSON by jQuery due to Content-Type header
             var installed = r && r.installed;
             var $cb = $('#AUTOUPDATE_ENABLED');
@@ -1463,7 +1488,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var $el = $('#updates-status');
         $el.removeClass('success error info').addClass(type).text(message).show();
         if (type === 'success') {
-            setTimeout(function() { $el.fadeOut(); }, 8000);
+            setTimeout(function() {
+                $el.fadeOut();
+            }, 8000);
         }
     }
 
@@ -1482,52 +1509,54 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     // Initialize Updates tab when it's shown
     $(function() {
         // Apply default schedule/time to all rows
-        $('#apply-default').on('click', function(){
+        $('#apply-default').on('click', function() {
             var s = $('#default-schedule').val();
             var t = $('#default-time').val();
-            $('#updates-tbody tr').each(function(){
+            $('#updates-tbody tr').each(function() {
                 $(this).find('.au-schedule').val(s);
                 $(this).find('.au-time').val(t);
                 updateScheduleControls($(this));
             });
         });
 
-        $(document).on('change', '#updates-tbody .au-schedule', function(){
+        $(document).on('change', '#updates-tbody .au-schedule', function() {
             updateScheduleControls($(this).closest('tr'));
         });
 
         // Toggle all auto-updates on/off
-        $(document).on('click', '#toggle-all-updates', function(){
+        $(document).on('click', '#toggle-all-updates', function() {
             var $checkboxes = $('#updates-tbody .au-enabled');
             if ($checkboxes.length === 0) return;
-            
+
             // Determine if we should turn all ON or OFF (if any are off, turn all on)
-            var anyOff = $checkboxes.filter(function(){ return !$(this).is(':checked'); }).length > 0;
+            var anyOff = $checkboxes.filter(function() {
+                return !$(this).is(':checked');
+            }).length > 0;
             var targetState = anyOff; // true = turn all on, false = turn all off
-            
-            $checkboxes.each(function(){
+
+            $checkboxes.each(function() {
                 if ($(this).is(':checked') !== targetState) {
                     // Click the switch-button-background sibling to toggle
                     var switchBg = $(this).next('.switch-button-background')[0];
                     if (switchBg) switchBg.click();
                 }
             });
-            
+
             // Update the toggle-all icon
             updateToggleAllIcon();
         });
 
         // Sync toggle-all state when individual toggles change
-        $(document).on('change', '#updates-tbody .au-enabled', function(){
+        $(document).on('change', '#updates-tbody .au-enabled', function() {
             updateToggleAllState();
         });
 
         // Save auto-update settings (includes scheduler enable/disable)
-        $('#save-updates').on('click', function(){
+        $('#save-updates').on('click', function() {
             setUpdatesSpinner(true);
-            
+
             var cfg = {};
-            $('#updates-tbody tr').each(function(){
+            $('#updates-tbody tr').each(function() {
                 var path = $(this).data('path');
                 if (!path) return;
                 var enabled = $(this).find('.au-enabled').is(':checked');
@@ -1537,41 +1566,55 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 var monthday = parseInt($(this).find('.au-monthday').val(), 10);
                 if (isNaN(weekday) || weekday < 0 || weekday > 6) weekday = 0;
                 if (isNaN(monthday) || monthday < 1 || monthday > 31) monthday = 1;
-                cfg[path] = { enabled: enabled, schedule: schedule, time: time, weekday: weekday, monthday: monthday };
+                cfg[path] = {
+                    enabled: enabled,
+                    schedule: schedule,
+                    time: time,
+                    weekday: weekday,
+                    monthday: monthday
+                };
             });
-            var defaults = { schedule: $('#default-schedule').val(), time: $('#default-time').val() };
+            var defaults = {
+                schedule: $('#default-schedule').val(),
+                time: $('#default-time').val()
+            };
             cfg['defaults'] = defaults;
-            
+
             var schedulerEnabled = $('#AUTOUPDATE_ENABLED').is(':checked');
-            
+
             // Save config first
-            $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'saveConfig', data: JSON.stringify(cfg)}, function(resp){
+            $.post('/plugins/compose.manager/php/autoupdate.php', {
+                action: 'saveConfig',
+                data: JSON.stringify(cfg)
+            }, function(resp) {
                 if (!resp || !resp.ok) {
                     setUpdatesSpinner(false);
                     showUpdatesStatus('Failed to save settings.', 'error');
                     return;
                 }
-                
+
                 // Then update scheduler
                 var schedulerAction = schedulerEnabled ? 'installCron' : 'removeCron';
-                $.post('/plugins/compose.manager/php/autoupdate.php', {action: schedulerAction}, function(d){
+                $.post('/plugins/compose.manager/php/autoupdate.php', {
+                    action: schedulerAction
+                }, function(d) {
                     setUpdatesSpinner(false);
                     refreshCronStatus();
                     showUpdatesStatus('Auto-update settings saved.', 'success');
-                }, 'json').fail(function(){
+                }, 'json').fail(function() {
                     setUpdatesSpinner(false);
                     showUpdatesStatus('Settings saved but scheduler update failed.', 'error');
                 });
-            }, 'json').fail(function(){
+            }, 'json').fail(function() {
                 setUpdatesSpinner(false);
                 showUpdatesStatus('Failed to save settings.', 'error');
             });
         });
 
         // Run auto-update now for enabled stacks (serialized to avoid overwhelming the server)
-        $('#run-now').on('click', function(){
+        $('#run-now').on('click', function() {
             var paths = [];
-            $('#updates-tbody tr').each(function(){
+            $('#updates-tbody tr').each(function() {
                 var path = $(this).data('path');
                 var enabled = $(this).find('.au-enabled').is(':checked');
                 if (enabled && path) {
@@ -1582,21 +1625,25 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 swal('Info', 'No stacks are enabled for auto-update.', 'info');
                 return;
             }
-            
+
             showUpdatesStatus('Running auto-update for ' + paths.length + ' stack(s)...', 'info');
-            
+
             var idx = 0;
             var completed = 0;
+
             function runNext() {
                 if (idx >= paths.length) {
                     showUpdatesStatus('Auto-update completed for ' + completed + ' stack(s).', 'success');
                     return;
                 }
                 var p = paths[idx++];
-                $.post('/plugins/compose.manager/php/autoupdate.php', {action: 'runNow', path: p}, function(data){
+                $.post('/plugins/compose.manager/php/autoupdate.php', {
+                    action: 'runNow',
+                    path: p
+                }, function(data) {
                     completed++;
                     runNext();
-                }, 'json').fail(function(){
+                }, 'json').fail(function() {
                     console.log('runNow failed for path', p);
                     runNext();
                 });
@@ -1945,7 +1992,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                         </tr>
                     </thead>
                     <tbody id="updates-tbody">
-                        <tr><td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>
+                        <tr>
+                            <td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td>
+                        </tr>
                     </tbody>
                 </table>
             </dd>
@@ -2184,44 +2233,44 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     </div>
 
     <script>
-        (function(){
+        (function() {
             var repo = 'mstrhakr/compose_plugin';
             var perPage = 10;
             var $list = $('#contributors-list');
 
-            function showFallback(){
-                $list.html('<p>Unable to load contributors. View on GitHub: <a href="https://github.com/'+repo+'/graphs/contributors" target="_blank" rel="noopener noreferrer">'+repo+' — Contributors</a></p>');
+            function showFallback() {
+                $list.html('<p>Unable to load contributors. View on GitHub: <a href="https://github.com/' + repo + '/graphs/contributors" target="_blank" rel="noopener noreferrer">' + repo + ' — Contributors</a></p>');
             }
 
             // Use GitHub public contributors API (CORS-enabled). Limit to top N contributors.
-            $.getJSON('https://api.github.com/repos/'+repo+'/contributors?per_page='+perPage)
-            .done(function(data){
-                if(!data || !data.length){
-                    $list.html('<p>No contributors found. <a href="https://github.com/'+repo+'/graphs/contributors" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>');
-                    return;
-                }
+            $.getJSON('https://api.github.com/repos/' + repo + '/contributors?per_page=' + perPage)
+                .done(function(data) {
+                    if (!data || !data.length) {
+                        $list.html('<p>No contributors found. <a href="https://github.com/' + repo + '/graphs/contributors" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>');
+                        return;
+                    }
 
-                var html = '<ul style="list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:10px;">';
-                data.forEach(function(u){
-                    var login = u.login || '';
-                    var url = u.html_url || 'https://github.com/'+login;
-                    var avatar = (u.avatar_url || '').replace(/&s=\d+/,'') + '&s=96';
-                    var contributions = u.contributions || 0;
+                    var html = '<ul style="list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:10px;">';
+                    data.forEach(function(u) {
+                        var login = u.login || '';
+                        var url = u.html_url || 'https://github.com/' + login;
+                        var avatar = (u.avatar_url || '').replace(/&s=\d+/, '') + '&s=96';
+                        var contributions = u.contributions || 0;
 
-                    html += '<li style="width:220px;border:1px solid rgba(0,0,0,0.06);padding:8px;border-radius:6px;display:flex;gap:8px;align-items:center;">'
-                        + '<a href="'+url+'" target="_blank" rel="noopener noreferrer"><img src="'+avatar+'" alt="'+login+'" style="width:48px;height:48px;border-radius:4px;"></a>'
-                        + '<div style="flex:1;min-width:0;overflow:hidden;">'
-                            + '<a href="'+url+'" target="_blank" rel="noopener noreferrer" style="font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+login+'</a>'
-                            + '<span style="color:#666;font-size:0.9em;">'+contributions+' contributions</span>'
-                        + '</div>'
-                    + '</li>';
+                        html += '<li style="width:220px;border:1px solid rgba(0,0,0,0.06);padding:8px;border-radius:6px;display:flex;gap:8px;align-items:center;">' +
+                            '<a href="' + url + '" target="_blank" rel="noopener noreferrer"><img src="' + avatar + '" alt="' + login + '" style="width:48px;height:48px;border-radius:4px;"></a>' +
+                            '<div style="flex:1;min-width:0;overflow:hidden;">' +
+                            '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + login + '</a>' +
+                            '<span style="color:#666;font-size:0.9em;">' + contributions + ' contributions</span>' +
+                            '</div>' +
+                            '</li>';
+                    });
+                    html += '</ul>';
+                    $list.html(html);
+                })
+                .fail(function() {
+                    showFallback();
                 });
-                html += '</ul>';
-                $list.html(html);
-            })
-            .fail(function(){
-                showFallback();
-            });
         })();
     </script>
 
