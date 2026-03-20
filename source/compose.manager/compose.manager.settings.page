@@ -543,6 +543,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     $(function() {
+        // Keep the initial states to determine if a safety confirmation is needed on save
+        var origDisableActionWarnings = $('#DISABLE_ACTION_WARNINGS').is(':checked');
+        var origRunInBackgroundDefault = $('#RUN_IN_BACKGROUND_DEFAULT').is(':checked');
+
         // Attach Unraid folder/file browser to all path inputs on settings page using shared helpers from common.js
         // Ensure common.js is loaded before this script
         if ($.fn.fileTreeAttach && typeof composeBindFileTreeInputs === 'function') {
@@ -714,27 +718,52 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         }
 
         // Convert checkbox values to true/false strings before form submission
-        $('form[name="compose_manager_settings"]').on('submit', function(e) {
-            var $form = $(this);
-
+        function serializeSettingsForm($form) {
             $('.compose-toggle').each(function() {
                 var $checkbox = $(this);
                 var name = $checkbox.attr('name');
                 // Remove any existing hidden field for this setting
                 $('input[type="hidden"][name="' + name + '"]').remove();
-                // Determine the value based on the setting type
                 var value;
                 if (name === 'OUTPUTSTYLE') {
                     value = $checkbox.is(':checked') ? 'ttyd' : 'basic';
                 } else {
                     value = $checkbox.is(':checked') ? 'true' : 'false';
                 }
-                // Add hidden field with the appropriate value
                 $checkbox.before('<input type="hidden" name="' + name + '" value="' + value + '">');
-                // Remove name from checkbox so it doesn't submit
                 $checkbox.removeAttr('name');
             });
+        }
 
+        $('form[name="compose_manager_settings"]').on('submit', function(e) {
+            var $form = $(this);
+            var currentDisableActionWarnings = $('#DISABLE_ACTION_WARNINGS').is(':checked');
+            var currentRunInBackgroundDefault = $('#RUN_IN_BACKGROUND_DEFAULT').is(':checked');
+            var isCrossed = currentDisableActionWarnings && currentRunInBackgroundDefault;
+            var isOrigCrossed = origDisableActionWarnings && origRunInBackgroundDefault;
+            var eitherChanged = (currentDisableActionWarnings !== origDisableActionWarnings) || (currentRunInBackgroundDefault !== origRunInBackgroundDefault);
+
+            if (isCrossed && eitherChanged) {
+                e.preventDefault();
+                swal({
+                    title: 'Confirm aggressive mode',
+                    text: 'Both Disable action warnings and Run in background are enabled and one or both have changed. This means actions will execute immediately in background. Proceed?',
+                    type: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, apply'
+                }, function(confirmed) {
+                    if (!confirmed) {
+                        // do nothing; keep user on settings page
+                        return;
+                    }
+                    serializeSettingsForm($form);
+                    $form.off('submit');
+                    $form.submit();
+                });
+                return;
+            }
+
+            serializeSettingsForm($form);
         });
 
         // Tab switching
@@ -1609,7 +1638,18 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         </dl>
 
         <dl>
-            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Run in Background by Default)_:</dt>
+            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Disable action warnings/confirmations)_:</dt>
+            <dd>
+                <input type="checkbox" name="DISABLE_ACTION_WARNINGS" class="compose-toggle" <?= ($cfg['DISABLE_ACTION_WARNINGS'] ?? 'false') == 'true' ? 'checked' : '' ?>>
+                <blockquote class="inline_help">
+                    When enabled, Compose actions (Up/Down/Stop/Restart/Pull/Update and all-stack actions) run immediately without confirmation dialogs.
+                    Background behavior is still controlled by the Run in Background setting.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt style="cursor: help;" onclick="toggleHelp(this)"><?= ($cfg['DISABLE_ACTION_WARNINGS'] ?? 'false') == 'true' ? '_(Always run in background)_' : '_(Run in Background by Default)_' ?>:</dt>
             <dd>
                 <input type="checkbox" name="RUN_IN_BACKGROUND_DEFAULT" class="compose-toggle" <?= ($cfg['RUN_IN_BACKGROUND_DEFAULT'] ?? 'false') == 'true' ? 'checked' : '' ?>>
                 <blockquote class="inline_help">
@@ -1618,6 +1658,16 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 </blockquote>
             </dd>
         </dl>
+
+        <?php if (($cfg['DISABLE_ACTION_WARNINGS'] ?? 'false') == 'true' && ($cfg['RUN_IN_BACKGROUND_DEFAULT'] ?? 'false') == 'true'): ?>
+        <dl>
+            <dd>
+                <div class="alert alert-warning" style="margin-bottom:12px;">
+                    <strong>Warning:</strong> Action confirmations are disabled and commands default to background mode. Use with caution as operations execute immediately.
+                </div>
+            </dd>
+        </dl>
+        <?php endif; ?>
 
         <dl>
             <dt style="cursor: help;" onclick="toggleHelp(this)">_(Recreate During Autostart)_:</dt>

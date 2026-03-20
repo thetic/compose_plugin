@@ -1005,6 +1005,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         getConfig().then(function(pluginCfg) {
             var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+            var disableWarnings = pluginCfg && pluginCfg.DISABLE_ACTION_WARNINGS === 'true';
+
+            if (disableWarnings) {
+                executeUpdateAllStacks(stacks, bgDefault, bgDefault);
+                return;
+            }
 
             swal({
                 title: title,
@@ -1030,7 +1036,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
     }
 
-    function executeUpdateAllStacks(stacks, background) {
+    function executeUpdateAllStacks(stacks, background, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -1061,7 +1067,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }, function(data) {
                 var parsed = tryParseJson(data);
                 if (parsed && parsed.background) {
-                    notifyBackgroundStarted('Update All Stacks');
+                    notifyBackgroundStarted('Update All Stacks', !suppressBackgroundNotification);
                     stacks.forEach(function(s) {
                         pollBackgroundCompletion(s.project);
                     });
@@ -1929,7 +1935,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     // Show a brief swal when a background command is dispatched
-    function notifyBackgroundStarted(label) {
+    function notifyBackgroundStarted(label, shouldNotify = true) {
+        if (!shouldNotify) return;
+
         swal({
             title: 'Running in background',
             text: label + ' has been started in the background.\nYou will receive a notification when it completes.',
@@ -1992,7 +2000,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     // Confirmed action handlers (no dialog, just execute)
-    function ComposeUpConfirmed(path, profile = "", background = false) {
+    function ComposeUpConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -2009,7 +2017,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(data) {
             var parsed = tryParseJson(data);
             if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Up: ' + basename(path));
+                notifyBackgroundStarted('Compose Up: ' + basename(path), !suppressBackgroundNotification);
                 pollBackgroundCompletion(stackNameForReload);
             } else if (data) {
                 openBox(data, "Compose Up: " + basename(path), height, width, true);
@@ -2037,7 +2045,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         showStackActionDialog('up', path, profile);
     }
 
-    function ComposeDownConfirmed(path, profile = "", background = false) {
+    function ComposeDownConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -2054,7 +2062,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(data) {
             var parsed = tryParseJson(data);
             if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Down: ' + basename(path));
+                notifyBackgroundStarted('Compose Down: ' + basename(path), !suppressBackgroundNotification);
                 pollBackgroundCompletion(stackNameForReloadDown);
             } else if (data) {
                 openBox(data, "Compose Down: " + basename(path), height, width, true);
@@ -2067,7 +2075,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     // Stop stack without removing containers
-    function ComposeStopConfirmed(path, profile = "", background = false) {
+    function ComposeStopConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -2084,7 +2092,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(data) {
             var parsed = tryParseJson(data);
             if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Stop: ' + basename(path));
+                notifyBackgroundStarted('Compose Stop: ' + basename(path), !suppressBackgroundNotification);
                 pollBackgroundCompletion(stackNameForStop);
             } else if (data) {
                 openBox(data, "Compose Stop: " + basename(path), height, width, true);
@@ -2097,7 +2105,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     // Restart stack (recreate containers without pulling)
-    function ComposeRestartConfirmed(path, profile = "", background = false) {
+    function ComposeRestartConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -2114,7 +2122,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(data) {
             var parsed = tryParseJson(data);
             if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Restart: ' + basename(path));
+                notifyBackgroundStarted('Compose Restart: ' + basename(path), !suppressBackgroundNotification);
                 pollBackgroundCompletion(stackNameForRestart);
             } else if (data) {
                 openBox(data, "Compose Restart: " + basename(path), height, width, true);
@@ -2127,7 +2135,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     // Force update stack (pull and rebuild even without detected updates)
-    function ForceUpdateStackConfirmed(path, profile = "", background = false) {
+    function ForceUpdateStackConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -2148,7 +2156,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }, function(data) {
                 var parsed = tryParseJson(data);
                 if (parsed && parsed.background) {
-                    notifyBackgroundStarted('Force Update: ' + basename(path));
+                    notifyBackgroundStarted('Force Update: ' + basename(path), !suppressBackgroundNotification);
                     pollBackgroundCompletion(stackName);
                 } else if (data) {
                     openBox(data, "Force Update: " + basename(path), height, width, true);
@@ -2486,6 +2494,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         getConfig().then(function(pluginCfg) {
             var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+            var disableWarnings = pluginCfg && pluginCfg.DISABLE_ACTION_WARNINGS === 'true';
+
+            if (disableWarnings) {
+                executeStartAllStacks(stacks, bgDefault, bgDefault);
+                return;
+            }
 
             swal({
                 title: title,
@@ -2509,7 +2523,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
     }
 
-    function executeStartAllStacks(stacks, background) {
+    function executeStartAllStacks(stacks, background, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -2536,7 +2550,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(data) {
             var parsed = tryParseJson(data);
             if (parsed && parsed.background) {
-                notifyBackgroundStarted('Start All Stacks');
+                notifyBackgroundStarted('Start All Stacks', !suppressBackgroundNotification);
                 stacks.forEach(function(s) {
                     pollBackgroundCompletion(s.project);
                 });
@@ -2597,6 +2611,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         getConfig().then(function(pluginCfg) {
             var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+            var disableWarnings = pluginCfg && pluginCfg.DISABLE_ACTION_WARNINGS === 'true';
+
+            if (disableWarnings) {
+                executeStopAllStacks(stacks, bgDefault, bgDefault);
+                return;
+            }
 
             swal({
                 title: title,
@@ -2620,7 +2640,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
     }
 
-    function executeStopAllStacks(stacks, background) {
+    function executeStopAllStacks(stacks, background, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -2647,7 +2667,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(data) {
             var parsed = tryParseJson(data);
             if (parsed && parsed.background) {
-                notifyBackgroundStarted('Stop All Stacks');
+                notifyBackgroundStarted('Stop All Stacks', !suppressBackgroundNotification);
                 stacks.forEach(function(s) {
                     pollBackgroundCompletion(s.project);
                 });
@@ -2895,9 +2915,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         html += bgCheckboxHtml;
         html += '</div>';
 
-        // Fetch config to determine default checkbox state, then show swal
+        // Fetch config to determine default checkbox state, then show swal (or skip warnings)
         getConfig().then(function(pluginCfg) {
             var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+            var disableWarnings = pluginCfg && pluginCfg.DISABLE_ACTION_WARNINGS === 'true';
+
+            if (disableWarnings) {
+                // In default background mode (warnings disabled and background enabled), don't show toast if background is used
+                cfg.confirmedFn(path, profile, bgDefault, bgDefault);
+                return;
+            }
 
             // Use native swal (SweetAlert 1.x) with callback style
             swal({
@@ -2955,7 +2982,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
     }
 
-    function ComposePullConfirmed(path, profile = "", background = false) {
+    function ComposePullConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
         $.post(compURL, {
@@ -2966,7 +2993,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(data) {
             var parsed = tryParseJson(data);
             if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Pull: ' + basename(path));
+                notifyBackgroundStarted('Compose Pull: ' + basename(path), !suppressBackgroundNotification);
                 pollBackgroundCompletion(basename(path));
             } else if (data) {
                 openBox(data, "Compose Pull: " + basename(path), height, width, true);
