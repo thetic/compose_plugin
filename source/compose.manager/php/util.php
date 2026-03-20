@@ -1609,6 +1609,10 @@ class StackInfo
         $oldPath = $this->path;
         $this->projectFolder = $newProject;
         $this->setPath();
+        if (strtolower($oldPath) === strtolower($this->path)) {
+            clientDebug("New project name '$newProject' is the same as the current project name '$this->projectFolder' (case-insensitive); skipping rename.", ['current' => $this->projectFolder, 'new' => $newProject], 'daemon', 'debug');
+            return;
+        }
         // Attempt to rename the directory to match the new project name
         if (is_dir($oldPath)) {
             if (!is_dir($this->path)) {
