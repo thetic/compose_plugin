@@ -998,22 +998,39 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var title = autostartOnly ? 'Update Autostart Stacks?' : 'Update All Stacks?';
         var confirmText = 'Yes, update ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
 
-        swal({
-            title: title,
-            html: true,
-            text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be updated:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p style="color:#f80;"><i class="fa fa-warning"></i> This will pull new images and recreate containers.</p></div>',
-            type: 'warning',
-            showCancelButton: true,
-            confirmButtonText: confirmText,
-            cancelButtonText: 'Cancel'
-        }, function(confirmed) {
-            if (confirmed) {
-                executeUpdateAllStacks(stacks);
-            }
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:8px;">' +
+            '<input type="checkbox" id="swal-run-bg-updateall" style="width:16px;height:16px;cursor:pointer;">' +
+            '<label for="swal-run-bg-updateall" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
+            '</div>';
+
+        getConfig().then(function(pluginCfg) {
+            var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+
+            swal({
+                title: title,
+                html: true,
+                text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be updated:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p style="color:#f80;"><i class="fa fa-warning"></i> This will pull new images and recreate containers.</p></div>' + bgCheckboxHtml,
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonText: confirmText,
+                cancelButtonText: 'Cancel'
+            }, function(confirmed) {
+                if (confirmed) {
+                    var runInBackground = $('#swal-run-bg-updateall').is(':checked');
+                    executeUpdateAllStacks(stacks, runInBackground);
+                }
+            });
+
+            setTimeout(function() {
+                var $cb = $('#swal-run-bg-updateall');
+                if ($cb.length) {
+                    $cb.prop('checked', bgDefault);
+                }
+            }, 50);
         });
     }
 
-    function executeUpdateAllStacks(stacks) {
+    function executeUpdateAllStacks(stacks, background) {
         var height = 800;
         var width = 1200;
 
@@ -1039,9 +1056,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function() {
             $.post(compURL, {
                 action: 'composeUpdateMultiple',
-                paths: JSON.stringify(paths)
+                paths: JSON.stringify(paths),
+                background: background ? 1 : 0
             }, function(data) {
-                if (data) {
+                var parsed = tryParseJson(data);
+                if (parsed && parsed.background) {
+                    notifyBackgroundStarted('Update All Stacks');
+                    stacks.forEach(function(s) {
+                        pollBackgroundCompletion(s.project);
+                    });
+                } else if (data) {
                     openBox(data, 'Update All Stacks', height, width, true);
                 }
             });
@@ -5217,7 +5241,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         <input type='button' value='Start All' onclick='startAllStacks();' id='startAllBtn'>
         <input type='button' value='Stop All' onclick='stopAllStacks();' id='stopAllBtn'>
         <input type='button' value='Check for Updates' onclick='checkAllUpdates();' id='checkUpdatesBtn'>
-        <input type='button' value='Update All' onclick='updateAllStacks();' id='updateAllBtn' disabled>
+        <input type='button' value='Update All' onclick='updateAllStacks();' id='updateAllBtn' disabled title='Show dialog with run-in-background checkbox, then update selected stacks'>
         <label style='margin-left:10px;cursor:pointer;vertical-align:middle;' title='When enabled, only stacks with Autostart enabled will be affected'>
             <input type='checkbox' id='autostartOnlyToggle' style='vertical-align:middle;'>
             <span style='vertical-align:middle;'>Autostart only</span>
