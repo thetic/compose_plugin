@@ -327,30 +327,6 @@
     margin-right: 8px;
   }
 
-  /* Local spinner overlay for Compose list (keeps behaviour separate from global spinner.fixed) */
-  .compose-local-spinner {
-    position: absolute;
-    right: 12px;
-    top: 8px;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
-    padding: 6px 10px;
-    border-radius: 6px;
-    z-index: 99999;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.95rem;
-  }
-
-  .compose-local-spinner i {
-    font-size: 1.1rem;
-  }
-
-  .compose-local-spinner-text {
-    color: #fff;
-  }
-
   /* Spinner that overlays container image icons */
   .compose-container-spinner {
     position: absolute;

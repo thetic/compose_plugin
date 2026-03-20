@@ -268,19 +268,30 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     // Timers for async operations (plugin-specific to avoid collision with Unraid's global timers)
     var composeTimers = {};
 
+    function showComposeSpinner() {
+        var $spinner = $('div.spinner.fixed');
+        if (!$spinner.length) {
+            return;
+        }
+        $spinner.css({'z-index': 100000});
+        $spinner.stop(true, true).show('slow');
+    }
+
+    function hideComposeSpinner() {
+        var $spinner = $('div.spinner.fixed');
+        if (!$spinner.length) {
+            return;
+        }
+        $spinner.stop(true, true).hide('slow');
+    }
+
     // Load stack list asynchronously (namespaced to avoid conflict with Docker tab's loadlist)
     function composeLoadlist() {
         // Return a Promise so callers can reliably .then() / .catch() on completion
         return new Promise(function(resolve, reject) {
             composeClientDebug('[composeLoadlist] start', null, 'daemon', 'debug');
-            // Ensure local spinner exists and show it after a short delay to avoid flash on fast loads
-            if ($('#compose-local-spinner').length === 0) {
-                // place spinner just above the list and ensure parent can position overlay if needed
-                $('#compose_list').before('<div id="compose-local-spinner" class="compose-local-spinner" style="display:none"><i class="fa fa-spin fa-circle-o-notch"></i> <span class="compose-local-spinner-text">Loading stack list...</span></div>');
-                $('#compose_list').parent().css('position', 'relative');
-            }
             composeTimers.load = setTimeout(function() {
-                $('#compose-local-spinner').fadeIn('fast');
+                showComposeSpinner('Loading stack list...');
             }, 500);
 
             $.get('/plugins/compose.manager/php/compose_list.php')
@@ -378,8 +389,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     });
                 } catch (e) {}
 
-                // Hide local spinner
-                $('#compose-local-spinner').fadeOut('fast');
+                // Hide compose spinner overlay
+                hideComposeSpinner();
 
                 // Show buttons now that content is loaded
                 $('input[type=button]').show();
@@ -396,7 +407,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     error: error
                 }, 'daemon', 'error');
                 clearTimeout(composeTimers.load);
-                $('#compose-local-spinner').fadeOut('fast');
+                hideComposeSpinner();
                 $('#compose_list').html('<tr><td colspan="7" style="text-align:center;padding:20px;color:#c00;">Failed to load stack list. Please refresh the page.</td></tr>');
 
                 // Reject the promise so callers can handle the error
@@ -2043,6 +2054,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             setStackActionInProgress(stackName, true, actionStateText);
         }
 
+        // Show centered compose action spinner for user feedback
+        showComposeSpinner(actionStateText || 'Processing...');
+
         payload.background = background ? 1 : 0;
 
         $.post(requestUrl, payload, function(data) {
@@ -2066,6 +2080,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             if (typeof onComplete === 'function') {
                 onComplete(parsed, data);
             }
+            hideComposeSpinner();
         }).fail(function() {
             if (stackName && !pendingReload) {
                 setStackActionInProgress(stackName, false);
@@ -4582,7 +4597,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                 // Apply the new shape and color
                 $icon.addClass('fa fa-' + shape + ' ' + colorClass + ' compose-status-icon');
-                
+
                 // Clear any saved orig-class since we've now applied the new state
                 if ($icon.data('orig-class')) {
                     $icon.removeData('orig-class');
