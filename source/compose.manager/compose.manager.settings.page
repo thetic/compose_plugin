@@ -268,6 +268,15 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         text-align: center;
     }
 
+    #compose_updates .au-placeholder {
+        display: inline-block;
+        color: var(--dynamix-tablesorter-text-color, #ccc);
+        font-style: italic;
+        min-width: 30px;
+        width: 100%;
+        text-align: center;
+    }
+
     #compose_updates .au-schedule {
         width: 100%;
         padding: 4px 6px;
@@ -1322,16 +1331,20 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var schedule = $row.find('.au-schedule').val();
         var $weekday = $row.find('.au-weekday');
         var $monthday = $row.find('.au-monthday');
+        var $placeholder = $row.find('.au-placeholder');
 
         if (schedule === 'weekly') {
             $weekday.show().prop('disabled', false);
             $monthday.hide().prop('disabled', true);
+            $placeholder.hide();
         } else if (schedule === 'monthly') {
             $weekday.hide().prop('disabled', true);
             $monthday.show().prop('disabled', false);
+            $placeholder.hide();
         } else {
             $weekday.hide().prop('disabled', true);
             $monthday.hide().prop('disabled', true);
+            $placeholder.show();
         }
     }
 
@@ -1377,6 +1390,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     row += '<td><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
                     row += '<td><input type="time" class="au-time" value="'+escapeAttr(time)+'"></td>';
                     row += '<td>';
+                    row += '<span class="au-placeholder">---</span>';
                     row += '<select class="au-weekday">';
                     row += '<option value="0">_(Sunday)_</option>';
                     row += '<option value="1">_(Monday)_</option>';
