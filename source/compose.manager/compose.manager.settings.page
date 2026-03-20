@@ -23,11 +23,6 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 <script src="<? autov('/webGui/javascript/jquery.filetree.js') ?>" charset="utf-8"></script>
 <script src="/plugins/compose.manager/javascript/common.js" type="text/javascript"></script>
 <style>
-    <?php
-    if ($option_patch_ui) {
-        echo "#compose-tab-settings dl:nth-last-of-type(2){display:none;}";
-    }
-    ?>
 
     /* Toggle switch overrides */
     #compose-tab-settings .switch-button-background,
@@ -602,6 +597,24 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             });
         }
 
+        function updateAggressiveModeWarning() {
+            var isAggressive = $('#DISABLE_ACTION_WARNINGS').is(':checked') && $('#RUN_IN_BACKGROUND_DEFAULT').is(':checked');
+            var $wrapper = $('#aggressive-mode-wrapper');
+            if (isAggressive) {
+                $wrapper.css({
+                    'border': '2px solid #f58220',
+                    'background-color': '#3e1400'
+                });
+                $('#aggressive-mode-warning').show();
+            } else {
+                $wrapper.css({
+                    'border': '2px solid transparent',
+                    'background-color': 'transparent'
+                });
+                $('#aggressive-mode-warning').hide();
+            }
+        }
+
 
         // Handle dashboard tile toggle -> disable/enable hide containers option
         function toggleHideContainers() {
@@ -825,6 +838,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
         // On page load, initialize toggles for all tabs only once
         initSwitchToggles($('.compose-tab-content'));
+
+        // Update inline warning when the aggressive-mode toggles change
+        $('#DISABLE_ACTION_WARNINGS, #RUN_IN_BACKGROUND_DEFAULT').change(updateAggressiveModeWarning);
+        updateAggressiveModeWarning();
 
         // Apply hide containers on load and on change
         toggleHideContainers();
@@ -1698,37 +1715,36 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             </dd>
         </dl>
 
-        <dl>
-            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Disable action warnings/confirmations)_:</dt>
-            <dd>
-                <input type="checkbox" name="DISABLE_ACTION_WARNINGS" class="compose-toggle" <?= ($cfg['DISABLE_ACTION_WARNINGS'] ?? 'false') == 'true' ? 'checked' : '' ?>>
-                <blockquote class="inline_help">
-                    When enabled, Compose actions (Up/Down/Stop/Restart/Pull/Update and all-stack actions) run immediately without confirmation dialogs.
-                    Background behavior is still controlled by the Run in Background setting.
-                </blockquote>
-            </dd>
-        </dl>
+        <div id="aggressive-mode-wrapper" style="border:2px solid transparent;border-radius:10px;padding:12px;margin-bottom:12px;transition:border-color 0.2s, background-color 0.2s;">
 
-        <dl>
-            <dt style="cursor: help;" onclick="toggleHelp(this)"><?= ($cfg['DISABLE_ACTION_WARNINGS'] ?? 'false') == 'true' ? '_(Always run in background)_' : '_(Run in Background by Default)_' ?>:</dt>
-            <dd>
-                <input type="checkbox" name="RUN_IN_BACKGROUND_DEFAULT" class="compose-toggle" <?= ($cfg['RUN_IN_BACKGROUND_DEFAULT'] ?? 'false') == 'true' ? 'checked' : '' ?>>
-                <blockquote class="inline_help">
-                    When enabled, the <em>Run in background</em> checkbox in action dialogs (Compose Up, Down, Update, etc.) will be checked by default.<br>
-                    Background runs skip the terminal window and send an Unraid notification on completion. The output is always saved to a per-stack log file viewable via the stack's context menu.
-                </blockquote>
-            </dd>
-        </dl>
+            <dl>
+                <dt style="cursor: help;" onclick="toggleHelp(this)">_(Disable action warnings/confirmations)_:</dt>
+                <dd>
+                    <input type="checkbox" name="DISABLE_ACTION_WARNINGS" id="DISABLE_ACTION_WARNINGS" class="compose-toggle" <?= ($cfg['DISABLE_ACTION_WARNINGS'] ?? 'false') == 'true' ? 'checked' : '' ?>>
+                    <blockquote class="inline_help">
+                        When enabled, Compose actions (Up/Down/Stop/Restart/Pull/Update and all-stack actions) run immediately without confirmation dialogs.
+                        Background behavior is still controlled by the Run in Background setting.
+                    </blockquote>
+                </dd>
+            </dl>
 
-        <?php if (($cfg['DISABLE_ACTION_WARNINGS'] ?? 'false') == 'true' && ($cfg['RUN_IN_BACKGROUND_DEFAULT'] ?? 'false') == 'true'): ?>
-        <dl>
-            <dd>
-                <div class="alert alert-warning" style="margin-bottom:12px;">
-                    <strong>Warning:</strong> Action confirmations are disabled and commands default to background mode. Use with caution as operations execute immediately.
-                </div>
-            </dd>
-        </dl>
-        <?php endif; ?>
+            <dl>
+                <dt style="cursor: help;" onclick="toggleHelp(this)">_(Run in Background by Default)_:</dt>
+                <dd>
+                    <input type="checkbox" name="RUN_IN_BACKGROUND_DEFAULT" id="RUN_IN_BACKGROUND_DEFAULT" class="compose-toggle" <?= ($cfg['RUN_IN_BACKGROUND_DEFAULT'] ?? 'false') == 'true' ? 'checked' : '' ?>>
+                    <blockquote class="inline_help">
+                        When enabled, the <em>Run in background</em> checkbox in action dialogs (Compose Up, Down, Update, etc.) will be checked by default.<br>
+                        Background runs skip the terminal window and send an Unraid notification on completion. The output is always saved to a per-stack log file viewable via the stack's context menu.
+                    </blockquote>
+                </dd>
+            </dl>
+
+            <div id="aggressive-mode-warning" class="alert alert-warning" style="text-align:center;font-weight:bold;line-height:1.4;display:none;margin-top:4px;padding:8px 10px;background: #f58220;color:#fff;border-radius:8px;border:1px solid #ffa33f;">
+                <span style="font-size:0.95em;">⚠️ <strong>Warning:</strong> action confirmations are disabled and commands default to background mode. Operations execute immediately in background.</span>
+            </div>
+
+        </div>
+
 
         <dl>
             <dt style="cursor: help;" onclick="toggleHelp(this)">_(Recreate During Autostart)_:</dt>
@@ -1897,21 +1913,27 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             </dd>
         </dl>
 
+        <?php if (!$option_patch_ui): ?>
         <dl>
             <dt style="cursor: help;" onclick="toggleHelp(this)">_(Patch Docker Page)_:</dt>
             <dd>
-                <input type="checkbox" name="PATCH_UI" class="compose-toggle" <?= $cfg['PATCH_UI'] == 'true' ? 'checked' : '' ?> <?= $option_patch_ui ? 'disabled' : '' ?>>
-                <?php if ($option_patch_ui) { ?>
-                    <span style="display:inline-block;margin-left:10px;color:#888;">Not needed on Unraid 6.12+ (compose integration is built-in)</span>
-                <?php } ?>
-                <input type=<?= $ui_patch_button_type ?> value="_(Patch Now)_" onclick="patchWebui()" class="slim-button" style="margin-left:15px;">
-                <input type=<?= $ui_unpatch_button_type ?> value="_(Unpatch)_" onclick="unpatchWebui()" class="slim-button" style="margin-left:15px;">
-                <blockquote class=<?= $ui_patch_help_class ?>>
-                    <strong>(Unraid 6.11 and earlier only)</strong> Patch the Docker page to better display compose-managed containers.<br>
-                    Not needed on Unraid 6.12+ where compose integration is built-in.
+                <input type="checkbox" name="PATCH_UI" class="compose-toggle" <?= $cfg['PATCH_UI'] == 'true' ? 'checked' : '' ?> >
+                <input type="button" value="_(Patch Now)_" onclick="patchWebui()" class="slim-button" style="margin-left:15px;">
+                <input type="button" value="_(Unpatch)_" onclick="unpatchWebui()" class="slim-button" style="margin-left:15px;">
+                <blockquote class="inline_help">
+                    <strong>(Unraid 6.11 and earlier only)</strong> Patch the Docker page to better display compose-managed containers.
                 </blockquote>
             </dd>
         </dl>
+        <?php endif; ?>
+
+        <?php if ($option_patch_ui): ?>
+        <dl>
+            <dd>
+                <span style="display:inline-block;margin-left:10px;color:#888;">Not needed on Unraid 6.12+ (compose integration is built-in)</span>
+            </dd>
+        </dl>
+        <?php endif; ?>
 
         <dl>
             <dt>&nbsp;</dt>
