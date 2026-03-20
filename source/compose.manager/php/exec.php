@@ -872,40 +872,40 @@ switch ($_POST['action']) {
 
                     // Only check updates for running containers
                     if ($containerName && $image && $state === 'running') {
-                                $image = normalizeImageForUpdateCheck($image);
+                        $image = normalizeImageForUpdateCheck($image);
 
-                                $DockerUpdate->reloadUpdateStatus($image);
-                                $updateStatus = $DockerUpdate->getUpdateStatus($image);
+                        $DockerUpdate->reloadUpdateStatus($image);
+                        $updateStatus = $DockerUpdate->getUpdateStatus($image);
 
-                                // Re-read status data (may have been updated by reloadUpdateStatus)
-                                $updateStatusData = DockerUtil::loadJSON($dockerManPaths['update-status']);
-                                $localSha = '';
-                                $remoteSha = '';
+                        // Re-read status data (may have been updated by reloadUpdateStatus)
+                        $updateStatusData = DockerUtil::loadJSON($dockerManPaths['update-status']);
+                        $localSha = '';
+                        $remoteSha = '';
 
-                                if (isset($updateStatusData[$image])) {
-                                    $localSha = $updateStatusData[$image]['local'] ?? '';
-                                    $remoteSha = $updateStatusData[$image]['remote'] ?? '';
-                                    // Shorten SHA for display (first 12 chars after sha256:)
-                                    if ($localSha && strpos($localSha, 'sha256:') === 0) {
-                                        $localSha = substr($localSha, 7, 12);
-                                    }
-                                    if ($remoteSha && strpos($remoteSha, 'sha256:') === 0) {
-                                        $remoteSha = substr($remoteSha, 7, 12);
-                                    }
-                                }
+                        if (isset($updateStatusData[$image])) {
+                            $localSha = $updateStatusData[$image]['local'] ?? '';
+                            $remoteSha = $updateStatusData[$image]['remote'] ?? '';
+                            // Shorten SHA for display (first 12 chars after sha256:)
+                            if ($localSha && strpos($localSha, 'sha256:') === 0) {
+                                $localSha = substr($localSha, 7, 12);
+                            }
+                            if ($remoteSha && strpos($remoteSha, 'sha256:') === 0) {
+                                $remoteSha = substr($remoteSha, 7, 12);
+                            }
+                        }
 
-                                $hasUpdate = ($updateStatus === false);
-                                if ($hasUpdate)
-                                    $hasStackUpdate = true;
+                        $hasUpdate = ($updateStatus === false);
+                        if ($hasUpdate)
+                            $hasStackUpdate = true;
 
-                                $stackUpdates[] = ContainerInfo::fromUpdateResponse([
-                                    'container' => $containerName,
-                                    'image' => $image,
-                                    'hasUpdate' => $hasUpdate,
-                                    'status' => ($updateStatus === null) ? 'unknown' : ($updateStatus ? 'up-to-date' : 'update-available'),
-                                    'localSha' => $localSha,
-                                    'remoteSha' => $remoteSha
-                                ])->toUpdateArray();
+                        $stackUpdates[] = ContainerInfo::fromUpdateResponse([
+                            'container' => $containerName,
+                            'image' => $image,
+                            'hasUpdate' => $hasUpdate,
+                            'status' => ($updateStatus === null) ? 'unknown' : ($updateStatus ? 'up-to-date' : 'update-available'),
+                            'localSha' => $localSha,
+                            'remoteSha' => $remoteSha
+                        ])->toUpdateArray();
                     }
                 }
             }
@@ -919,22 +919,19 @@ switch ($_POST['action']) {
         }
 
         // Save the update status for all stacks
-        $composeUpdateStatusFile = COMPOSE_UPDATE_STATUS_FILE;
         $savedStatus = $allUpdates;
         foreach ($savedStatus as $stackKey => &$stackData) {
             $stackData['lastChecked'] = time();
         }
-        file_put_contents($composeUpdateStatusFile, json_encode($savedStatus, JSON_PRETTY_PRINT));
+        file_put_contents(COMPOSE_UPDATE_STATUS_FILE, json_encode($savedStatus, JSON_PRETTY_PRINT));
 
-        if ($debugLog) {
-            $totalStacks = count($allUpdates);
-            $updatesFound = 0;
-            foreach ($allUpdates as $sn => $si) {
-                if ($si['hasUpdate'])
-                    $updatesFound++;
-            }
-            clientDebug("[update-check] Completed: $totalStacks stacks checked, $updatesFound with updates", null, 'daemon', 'info');
+        $totalStacks = count($allUpdates);
+        $updatesFound = 0;
+        foreach ($allUpdates as $sn => $si) {
+            if ($si['hasUpdate'])
+                $updatesFound++;
         }
+        clientDebug("[update-check] Completed: $totalStacks stacks checked, $updatesFound with updates", null, 'daemon', 'debug');
 
         echo json_encode(['result' => 'success', 'stacks' => $allUpdates]);
         break;
