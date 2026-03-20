@@ -4555,12 +4555,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 newState = anyRunning ? 'started' : (anyPaused ? 'paused' : 'stopped');
                 $stateEl.text(newState);
             }
-            composeClientDebug('[updateParentStackFromContainers] state', {
-                project: project,
-                newState: newState,
-                runningCount: runningCount,
-                totalCount: totalCount
-            }, 'daemon', 'debug');
 
             // Update the containers count cell (3rd column) to reflect cached values
             try {
@@ -4575,13 +4569,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var shape = newState === 'started' ? 'play' : (newState === 'paused' ? 'pause' : (newState === 'partial' ? 'exclamation-circle' : 'square'));
                 var colorClass = newState === 'started' ? 'green-text' : (newState === 'paused' || newState === 'partial' ? 'orange-text' : 'grey-text');
 
-                // Debug: record classes before we touch the icon
-                composeClientDebug('[updateParentStackFromContainers] icon-before-classes', {
-                    project: project,
-                    classes: $icon.attr('class'),
-                    origClass: $icon.data('orig-class')
-                }, 'daemon', 'debug');
-
                 // Remove spinner / temporary classes and any previous fa-<name> classes
                 $icon.removeClass('fa-refresh fa-spin compose-status-spinner');
                 // Use a regex that matches the full fa-<name> (including hyphens) to ensure
@@ -4590,22 +4577,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     return (cls.match(/fa-[^\s]+/g) || []).join(' ');
                 });
 
-                // Debug: record classes after removal
-                composeClientDebug('[updateParentStackFromContainers] icon-after-removal', {
-                    project: project,
-                    classes: $icon.attr('class')
-                }, 'daemon', 'debug');
-
                 // Remove any previous color classes
                 $icon.removeClass('green-text orange-text grey-text cyan-text');
 
                 // Apply the new shape and color
                 $icon.addClass('fa fa-' + shape + ' ' + colorClass + ' compose-status-icon');
-                // Debug: report final classes for diagnostic purposes
-                composeClientDebug('[updateParentStackFromContainers] icon-classes', {
-                    project: project,
-                    classes: $icon.attr('class')
-                }, 'daemon', 'debug');
+                
                 // Clear any saved orig-class since we've now applied the new state
                 if ($icon.data('orig-class')) {
                     $icon.removeData('orig-class');
