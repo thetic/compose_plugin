@@ -1060,19 +1060,23 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             action: 'markStackForRecheck',
             stacks: JSON.stringify(stackNames)
         }, function() {
-            $.post(compURL, {
-                action: 'composeUpdateMultiple',
-                paths: JSON.stringify(paths),
-                background: background ? 1 : 0
-            }, function(data) {
-                var parsed = tryParseJson(data);
-                if (parsed && parsed.background) {
-                    notifyBackgroundStarted('Update All Stacks', !suppressBackgroundNotification);
-                    stacks.forEach(function(s) {
-                        pollBackgroundCompletion(s.project);
-                    });
-                } else if (data) {
-                    openBox(data, 'Update All Stacks', height, width, true);
+            performComposeAction({
+                actionName: 'update',
+                title: 'Update All Stacks',
+                requestUrl: compURL,
+                payload: {
+                    action: 'composeUpdateMultiple',
+                    paths: JSON.stringify(paths)
+                },
+                background: background,
+                suppressBackgroundNotification: suppressBackgroundNotification,
+                pendingReload: false,
+                onComplete: function(parsed, data) {
+                    if (parsed && parsed.background) {
+                        stacks.forEach(function(s) {
+                            pollBackgroundCompletion(s.project);
+                        });
+                    }
                 }
             });
         });
@@ -1999,30 +2003,94 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         timeoutHandle = setTimeout(check, 2000);
     }
 
-    // Confirmed action handlers (no dialog, just execute)
-    function ComposeUpConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
-        var height = 800;
-        var width = 1200;
+    function composeActionStateText(actionName) {
+        var map = {
+            up: 'starting...',
+            down: 'stopping...',
+            stop: 'stopping...',
+            restart: 'restarting...',
+            pull: 'pulling...',
+            update: 'updating...',
+            forceUpdate: 'updating...',
+            composeUpPullBuild: 'pulling and rebuilding...'
+        };
+        return map[actionName] || 'checking...';
+    }
 
-        // Mark stack for local reload and show per-row spinner
-        var stackNameForReload = basename(path);
-        if (pendingComposeReloadStacks.indexOf(stackNameForReload) === -1) pendingComposeReloadStacks.push(stackNameForReload);
-        setStackActionInProgress(stackNameForReload, true);
+    function performComposeAction(opts) {
+        opts = opts || {};
+        var stackName = opts.stackName;
+        var actionName = opts.actionName || '';
+        var title = opts.title || (actionName ? actionName.replace(/([A-Z])/g, ' $1').trim() : 'Compose Action');
+        var requestUrl = opts.requestUrl || compURL;
+        var payload = opts.payload || {};
+        var background = opts.background || false;
+        var suppressBackgroundNotification = opts.suppressBackgroundNotification || false;
+        var pendingReload = opts.pendingReload || false;
+        var actionStateText = opts.actionStateText || composeActionStateText(actionName);
+        var onComplete = opts.onComplete;
 
-        $.post(compURL, {
-            action: 'composeUp',
-            path: path,
-            profile: profile,
-            background: background ? 1 : 0
-        }, function(data) {
+        if (pendingReload && stackName) {
+            if (pendingComposeReloadStacks.indexOf(stackName) === -1) {
+                pendingComposeReloadStacks.push(stackName);
+                schedulePendingComposeReloads();
+            }
+        }
+
+        if (stackName) {
+            setStackActionInProgress(stackName, true, actionStateText);
+        }
+
+        payload.background = background ? 1 : 0;
+
+        $.post(requestUrl, payload, function(data) {
             var parsed = tryParseJson(data);
             if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Up: ' + basename(path), !suppressBackgroundNotification);
-                pollBackgroundCompletion(stackNameForReload);
+                if (stackName && !pendingReload) {
+                    setStackActionInProgress(stackName, true, actionStateText);
+                }
+                if (!suppressBackgroundNotification) {
+                    notifyBackgroundStarted(title, true);
+                }
+                if (stackName) {
+                    pollBackgroundCompletion(stackName);
+                }
             } else if (data) {
-                openBox(data, "Compose Up: " + basename(path), height, width, true);
+                if (stackName) {
+                    setStackActionInProgress(stackName, false);
+                }
+                openBox(data, title, 800, 1200, true);
             }
-        })
+            if (typeof onComplete === 'function') {
+                onComplete(parsed, data);
+            }
+        }).fail(function() {
+            if (stackName) {
+                setStackActionInProgress(stackName, false);
+            }
+            if (typeof onComplete === 'function') {
+                onComplete(null, null);
+            }
+        });
+    }
+
+    // Confirmed action handlers (no dialog, just execute)
+    function ComposeUpConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
+        var stackName = basename(path);
+        performComposeAction({
+            stackName: stackName,
+            actionName: 'up',
+            title: 'Compose Up: ' + stackName,
+            requestUrl: compURL,
+            payload: {
+                action: 'composeUp',
+                path: path,
+                profile: profile
+            },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
+        });
     }
 
     // Recreate containers without pulling (for label changes)
@@ -2046,28 +2114,21 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     function ComposeDownConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
-        var height = 800;
-        var width = 1200;
-
-        // Mark stack for local reload and show per-row spinner
-        var stackNameForReloadDown = basename(path);
-        if (pendingComposeReloadStacks.indexOf(stackNameForReloadDown) === -1) pendingComposeReloadStacks.push(stackNameForReloadDown);
-        setStackActionInProgress(stackNameForReloadDown, true);
-
-        $.post(compURL, {
-            action: 'composeDown',
-            path: path,
-            profile: profile,
-            background: background ? 1 : 0
-        }, function(data) {
-            var parsed = tryParseJson(data);
-            if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Down: ' + basename(path), !suppressBackgroundNotification);
-                pollBackgroundCompletion(stackNameForReloadDown);
-            } else if (data) {
-                openBox(data, "Compose Down: " + basename(path), height, width, true);
-            }
-        })
+        var stackName = basename(path);
+        performComposeAction({
+            stackName: stackName,
+            actionName: 'down',
+            title: 'Compose Down: ' + stackName,
+            requestUrl: compURL,
+            payload: {
+                action: 'composeDown',
+                path: path,
+                profile: profile
+            },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
+        });
     }
 
     function ComposeDown(path, profile = "") {
@@ -2076,28 +2137,21 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Stop stack without removing containers
     function ComposeStopConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
-        var height = 800;
-        var width = 1200;
-
-        // Mark stack for local reload and show per-row spinner
-        var stackNameForStop = basename(path);
-        if (pendingComposeReloadStacks.indexOf(stackNameForStop) === -1) pendingComposeReloadStacks.push(stackNameForStop);
-        setStackActionInProgress(stackNameForStop, true);
-
-        $.post(compURL, {
-            action: 'composeStop',
-            path: path,
-            profile: profile,
-            background: background ? 1 : 0
-        }, function(data) {
-            var parsed = tryParseJson(data);
-            if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Stop: ' + basename(path), !suppressBackgroundNotification);
-                pollBackgroundCompletion(stackNameForStop);
-            } else if (data) {
-                openBox(data, "Compose Stop: " + basename(path), height, width, true);
-            }
-        })
+        var stackName = basename(path);
+        performComposeAction({
+            stackName: stackName,
+            actionName: 'stop',
+            title: 'Compose Stop: ' + stackName,
+            requestUrl: compURL,
+            payload: {
+                action: 'composeStop',
+                path: path,
+                profile: profile
+            },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
+        });
     }
 
     function ComposeStop(path, profile = "") {
@@ -2106,28 +2160,21 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Restart stack (recreate containers without pulling)
     function ComposeRestartConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
-        var height = 800;
-        var width = 1200;
-
-        // Mark stack for local reload and show per-row spinner
-        var stackNameForRestart = basename(path);
-        if (pendingComposeReloadStacks.indexOf(stackNameForRestart) === -1) pendingComposeReloadStacks.push(stackNameForRestart);
-        setStackActionInProgress(stackNameForRestart, true);
-
-        $.post(compURL, {
-            action: 'composeUpRecreate',
-            path: path,
-            profile: profile,
-            background: background ? 1 : 0
-        }, function(data) {
-            var parsed = tryParseJson(data);
-            if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Restart: ' + basename(path), !suppressBackgroundNotification);
-                pollBackgroundCompletion(stackNameForRestart);
-            } else if (data) {
-                openBox(data, "Compose Restart: " + basename(path), height, width, true);
-            }
-        })
+        var stackName = basename(path);
+        performComposeAction({
+            stackName: stackName,
+            actionName: 'restart',
+            title: 'Compose Restart: ' + stackName,
+            requestUrl: compURL,
+            payload: {
+                action: 'composeUpRecreate',
+                path: path,
+                profile: profile
+            },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
+        });
     }
 
     function ComposeRestart(path, profile = "") {
@@ -2136,9 +2183,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Force update stack (pull and rebuild even without detected updates)
     function ForceUpdateStackConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
-        var height = 800;
-        var width = 1200;
-
         var stackName = basename(path);
         if (pendingUpdateCheckStacks.indexOf(stackName) === -1) {
             pendingUpdateCheckStacks.push(stackName);
@@ -2148,19 +2192,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             action: 'markStackForRecheck',
             stacks: JSON.stringify([stackName])
         }, function() {
-            $.post(compURL, {
-                action: 'composeUpPullBuild',
-                path: path,
-                profile: profile,
-                background: background ? 1 : 0
-            }, function(data) {
-                var parsed = tryParseJson(data);
-                if (parsed && parsed.background) {
-                    notifyBackgroundStarted('Force Update: ' + basename(path), !suppressBackgroundNotification);
-                    pollBackgroundCompletion(stackName);
-                } else if (data) {
-                    openBox(data, "Force Update: " + basename(path), height, width, true);
-                }
+            performComposeAction({
+                stackName: stackName,
+                actionName: 'forceUpdate',
+                title: 'Force Update: ' + stackName,
+                requestUrl: compURL,
+                payload: {
+                    action: 'composeUpPullBuild',
+                    path: path,
+                    profile: profile
+                },
+                background: background,
+                suppressBackgroundNotification: suppressBackgroundNotification,
+                pendingReload: true
             });
         });
     }
@@ -2407,34 +2451,29 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
     }
 
-    function UpdateStackConfirmed(path, profile = "", background = false) {
-        var height = 800;
-        var width = 1200;
-
-        // Track this stack for update check when dialog closes
+    function UpdateStackConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
         var stackName = basename(path);
         if (pendingUpdateCheckStacks.indexOf(stackName) === -1) {
             pendingUpdateCheckStacks.push(stackName);
         }
 
-        // Mark stack for recheck server-side (persists across page reload)
         $.post(caURL, {
             action: 'markStackForRecheck',
             stacks: JSON.stringify([stackName])
         }, function() {
-            $.post(compURL, {
-                action: 'composeUpPullBuild',
-                path: path,
-                profile: profile,
-                background: background ? 1 : 0
-            }, function(data) {
-                var parsed = tryParseJson(data);
-                if (parsed && parsed.background) {
-                    notifyBackgroundStarted('Update: ' + basename(path));
-                    pollBackgroundCompletion(stackName);
-                } else if (data) {
-                    openBox(data, "Update: " + basename(path), height, width, true);
-                }
+            performComposeAction({
+                stackName: stackName,
+                actionName: 'update',
+                title: 'Update: ' + stackName,
+                requestUrl: compURL,
+                payload: {
+                    action: 'composeUpPullBuild',
+                    path: path,
+                    profile: profile
+                },
+                background: background,
+                suppressBackgroundNotification: suppressBackgroundNotification,
+                pendingReload: true
             });
         });
     }
@@ -2939,7 +2978,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (confirmed) {
                     // Capture checkbox state before swal destroys the DOM
                     var runInBackground = $('#swal-run-bg-checkbox').is(':checked');
-                    cfg.confirmedFn(path, profile, runInBackground);
+                    // when running in background, suppress the extra notifyBackgroundStarted popup
+                    cfg.confirmedFn(path, profile, runInBackground, runInBackground);
                 }
             });
 
@@ -2983,22 +3023,21 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     function ComposePullConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
-        var height = 800;
-        var width = 1200;
-        $.post(compURL, {
-            action: 'composePull',
-            path: path,
-            profile: profile,
-            background: background ? 1 : 0
-        }, function(data) {
-            var parsed = tryParseJson(data);
-            if (parsed && parsed.background) {
-                notifyBackgroundStarted('Compose Pull: ' + basename(path), !suppressBackgroundNotification);
-                pollBackgroundCompletion(basename(path));
-            } else if (data) {
-                openBox(data, "Compose Pull: " + basename(path), height, width, true);
-            }
-        })
+        var stackName = basename(path);
+        performComposeAction({
+            stackName: stackName,
+            actionName: 'pull',
+            title: 'Compose Pull: ' + stackName,
+            requestUrl: compURL,
+            payload: {
+                action: 'composePull',
+                path: path,
+                profile: profile
+            },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
+        });
     }
 
     function ComposePull(path, profile = "") {
