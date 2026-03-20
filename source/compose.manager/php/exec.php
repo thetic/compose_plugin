@@ -866,9 +866,10 @@ switch ($_POST['action']) {
 
                 // Second pass: check updates for running containers
                 foreach ($rows as $container) {
-                    $containerName = $container['Name'] ?? '';
-                    $image = $container['Image'] ?? '';
-                    $state = $container['State'] ?? '';
+                    $containerLower = array_change_key_case($container, CASE_LOWER);
+                    $containerName = trim($containerLower['name'] ?? $containerLower['names'] ?? '');
+                    $image = trim($containerLower['image'] ?? '');
+                    $state = strtolower(trim($containerLower['state'] ?? ''));
 
                     // Only check updates for running containers
                     if ($containerName && $image && $state === 'running') {
