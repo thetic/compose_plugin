@@ -2329,6 +2329,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Track stacks that need a full compose list reload after start/stop operations
     var pendingComposeReloadStacks = [];
+    // Track stacks currently in progress (e.g. background start/stop/update)
+    var composeStackActionInProgress = {};
     // Timer for batching compose reloads to avoid duplicate refreshes
     var pendingComposeReloadTimer = null;
 
@@ -2407,6 +2409,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(data) {
             if (data) {
                 try {
+                    composeClientDebug('[refreshStackRow] response', {
+                        project: project,
+                        data: data
+                    }, 'daemon', 'info');
                     var response = JSON.parse(data);
                     if (response.result === 'success') {
                         var containers = response.containers || [];
@@ -2454,8 +2460,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             inProgress: inProgress,
             text: text
         }, 'daemon', 'info');
+
+        if (inProgress) {
+            composeStackActionInProgress[stackName] = true;
+        } else {
+            delete composeStackActionInProgress[stackName];
+        }
+
         var $stackRow = $('#compose_stacks tr.compose-sortable[data-project="' + stackName + '"]');
         if ($stackRow.length === 0) return;
+        $stackRow.data('action-in-progress', inProgress ? true : null);
+        if (!inProgress) {
+            $stackRow.removeData('action-in-progress');
+        }
         var $icon = $stackRow.find('.compose-status-icon');
         var $state = $stackRow.find('.state');
         if (inProgress) {
@@ -4546,6 +4563,15 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // Skip updating the update column if a check is currently in progress
             if (!isChecking) {
                 updateStackUpdateUI(project, stackInfo);
+            }
+
+            // If the stack has an in-progress action, keep the temporary status icon/text until completion.
+            if (composeStackActionInProgress[project]) {
+                composeClientDebug('[updateParentStackFromContainers] skipping icon/state update while action in progress', {
+                    stackId: stackId,
+                    project: project
+                }, 'daemon', 'debug');
+                return;
             }
 
             // Update the stack row status icon and state text based on container states
