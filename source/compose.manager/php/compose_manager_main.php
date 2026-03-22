@@ -2054,9 +2054,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             setStackActionInProgress(stackName, true, actionStateText);
         }
 
-        // Show centered compose action spinner for user feedback
-        showComposeSpinner(actionStateText || 'Processing...');
-
         payload.background = background ? 1 : 0;
 
         $.post(requestUrl, payload, function(data) {
@@ -2080,7 +2077,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             if (typeof onComplete === 'function') {
                 onComplete(parsed, data);
             }
-            hideComposeSpinner();
         }).fail(function() {
             if (stackName && !pendingReload) {
                 setStackActionInProgress(stackName, false);
