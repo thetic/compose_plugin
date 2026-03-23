@@ -1,12 +1,13 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
 <!ENTITY name        "compose.manager">
+<!ENTITY displayName "Compose Manager Plus">
 <!ENTITY author      "mstrhakr">
 <!ENTITY version     "2026.03.20-dev.1804">
-<!ENTITY launch      "Settings/&name;">
+<!ENTITY launch      "Settings/&name;.settings">
 <!ENTITY packageVER  "&version;">
 <!ENTITY packageMD5  "e74affb29504ed472439fbce4f85e4b0">
-<!ENTITY packageName "&name;-package-&packageVER;">
+<!ENTITY packageName "compose.manager-package-&packageVER;">
 <!ENTITY packagefile "&packageName;.txz">
 <!ENTITY github      "mstrhakr/compose_plugin">
 <!ENTITY pluginURL   "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
@@ -15,7 +16,7 @@
 <!ENTITY emhttpLOC   "/usr/local/emhttp/plugins/&name;">
 ]>
 
-<PLUGIN  name="&name;"
+<PLUGIN  name="&displayName;"
          author="&author;"
          version="&version;"
          launch="&launch;"
@@ -66,7 +67,7 @@ fi
 </FILE> 
 
 <FILE Run="/bin/bash">
-<INLINE>
+<INLINE min="v6.9.0" max="v6.99.99">
 # Use the new patch utility during install to cleanup and optionally apply patches
 patch_script=/usr/local/emhttp/plugins/compose.manager/scripts/patch.sh
 config_file=/boot/config/plugins/compose.manager/compose.manager.cfg
@@ -113,7 +114,7 @@ fi
 <INLINE>
 echo ""
 echo "----------------------------------------------------"
-echo " &name; has been installed."
+echo " &displayName; has been installed."
 echo " Version: &version;"
 echo "----------------------------------------------------"
 echo ""
@@ -121,13 +122,14 @@ echo ""
 </FILE>
 
 <FILE Run="/bin/bash" Method="remove">
-<INLINE>
+<INLINE min="v6.9.0" max="v6.99.99">
 #Remove patchs if already applied
 patch_remove_script=/usr/local/emhttp/plugins/compose.manager/scripts/patch.sh
 if [ -f "$patch_remove_script" ]; then
     $patch_remove_script -r
 fi
-
+</INLINE>
+<INLINE>
 removepkg &packageName;
 
 # Remove plugin related files

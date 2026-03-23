@@ -138,30 +138,45 @@ if (-not $PackagePath) {
 
 $packageName = Split-Path -Leaf $PackagePath
 $remotePackage = "$RemoteDir/$packageName"
+$pluginPath = Join-Path $scriptDir "compose.manager.plg"
+if (-not (Test-Path -Path $pluginPath -PathType Leaf)) {
+	throw "Plugin file not found: $pluginPath"
+}
+$pluginName = Split-Path -Leaf $pluginPath
+$remotePlugin = "$RemoteDir/$pluginName"
+$installScriptLocal = Join-Path $scriptDir "install.sh"
+if (-not (Test-Path -Path $installScriptLocal -PathType Leaf)) {
+	throw "Install script not found: $installScriptLocal"
+}
+$remoteInstallScript = "$RemoteDir/install.sh"
 $remoteTarget = "$User@$RemoteHost"
 
-Write-Host "Deploying package:" -ForegroundColor Green
-Write-Host "  Local : $PackagePath" -ForegroundColor Gray
-Write-Host "  Remote: ${remoteTarget}:$remotePackage" -ForegroundColor Gray
+Write-Host "Deploying package, plugin manifest, and install.sh:" -ForegroundColor Green
+Write-Host "  Local package : $PackagePath" -ForegroundColor Gray
+Write-Host "  Local .plg    : $pluginPath" -ForegroundColor Gray
+Write-Host "  Local install : $installScriptLocal" -ForegroundColor Gray
+Write-Host "  Remote target : ${remoteTarget}:$RemoteDir" -ForegroundColor Gray
 
-$uploadAction = "Upload package via SCP"
+$uploadAction = "Upload package + .plg + install.sh via SCP"
 if ($PSCmdlet.ShouldProcess("${remoteTarget}:$RemoteDir/", $uploadAction)) {
-	Write-Host "Uploading package via SCP..." -ForegroundColor Yellow
+	Write-Host "Uploading package, .plg and install.sh via SCP..." -ForegroundColor Yellow
 	scp -- "$PackagePath" "$remoteTarget`:$RemoteDir/"
+	scp -- "$pluginPath" "$remoteTarget`:$RemoteDir/"
+	scp -- "$installScriptLocal" "$remoteTarget`:$remoteInstallScript"
 	if ($LASTEXITCODE -ne 0) {
 		throw "SCP upload failed with exit code $LASTEXITCODE"
 	}
 }
 
-$remoteCommand = "installpkg '$remotePackage' && rm -f '$remotePackage'"
-$installAction = "Install package and remove temporary file"
-if ($PSCmdlet.ShouldProcess($remoteTarget, "$installAction (command: $remoteCommand)")) {
-	Write-Host "Installing package on remote host..." -ForegroundColor Yellow
-	ssh -- "$remoteTarget" "$remoteCommand"
+$installAction = "Execute remote install script"
+if ($PSCmdlet.ShouldProcess($remoteTarget, $installAction)) {
+	Write-Host "Executing remote install script..." -ForegroundColor Yellow
+	ssh -- "$remoteTarget" "bash '$remoteInstallScript' '$remotePackage' '$remotePlugin' && rm -f '$remoteInstallScript'"
 	if ($LASTEXITCODE -ne 0) {
-		throw "Remote install failed with exit code $LASTEXITCODE"
+		throw "Remote install script failed with exit code $LASTEXITCODE"
 	}
 }
+
 
 if ($WhatIfPreference) {
 	Write-Host "WhatIf simulation complete." -ForegroundColor Green

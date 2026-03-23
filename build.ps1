@@ -101,16 +101,38 @@ Write-Host ""
 $ArchivePath = $OutputPath -replace '\\', '/' -replace '^([A-Za-z]):', '/$1'
 $SourcePath = "$ScriptDir/source" -replace '\\', '/' -replace '^([A-Za-z]):', '/$1'
 
+# CA bundle setup (host side) for Docker HTTPS validation
+$HostCACert = $env:CA_CERT_PATH
+if (-not $HostCACert) {
+    $HostCACert = Join-Path $env:TEMP 'cacert.pem'
+}
+
+if (-not (Test-Path $HostCACert)) {
+    Write-Host "CA bundle not found at $HostCACert. Downloading fresh bundle..." -ForegroundColor Yellow
+    try {
+        Invoke-WebRequest -Uri 'https://curl.se/ca/cacert.pem' -OutFile $HostCACert -UseBasicParsing -ErrorAction Stop
+    }
+    catch {
+        Write-Host "Failed to download CA bundle for Docker build: $_" -ForegroundColor Red
+        throw "CA bundle not available. Set CA_CERT_PATH to a valid file and rerun."
+    }
+}
+
+# In-container path for CA bundle
+$ContainerCACert = '/etc/ssl/certs/ca-certificates.crt'
+
 # Build in Docker
 $dockerArgs = @(
     "run", "--rm", "--tmpfs", "/tmp"
     "-v", "${ArchivePath}:/mnt/output:rw"
     "-v", "${SourcePath}:/mnt/source:ro"
+    "-v", "${HostCACert}:${ContainerCACert}:ro"
     "-e", "TZ=America/New_York"
     "-e", "COMPOSE_VERSION=$ComposeVersion"
     "-e", "ACE_VERSION=$AceVersion"
     "-e", "OUTPUT_FOLDER=/mnt/output"
     "-e", "PKG_VERSION=$Version"
+    "-e", "CA_CERT=${ContainerCACert}"
     "vbatts/slackware:latest"
     "/mnt/source/pkg_build.sh"
 )
