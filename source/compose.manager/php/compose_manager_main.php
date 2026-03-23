@@ -694,6 +694,13 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }
             }
         });
+
+        // Close modal when clicking on the overlay background (not the inner modal content)
+        $('#editor-modal-overlay').off('click.editorModal').on('click.editorModal', function(e) {
+            if (e.target === this) {
+                closeEditorModal();
+            }
+        });
     }
 
     // Switch between tabs (compose / env / labels / settings)
