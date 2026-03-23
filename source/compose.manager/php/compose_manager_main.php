@@ -1627,7 +1627,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     function addStack() {
         // Show custom modal for stack creation
         var modalHtml = `
-            <div id="compose-stack-modal-overlay" class="compose-modal-overlay" style="display:flex;">
+            <div id="compose-stack-modal-overlay" class="compose-modal-overlay" style="display:flex;" onclick="if (event.target === this) closeComposeStackModal();">
                 <div class="compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-stack-modal-title" aria-describedby="compose-stack-modal-desc" tabindex="-1">
                     <div class="compose-modal-header">
                         <span id="compose-stack-modal-title">Add New Compose Stack</span>
