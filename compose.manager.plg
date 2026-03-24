@@ -29,10 +29,20 @@
 >
 
 <CHANGES>
-###2026.03.20-dev.1804
-- Features (compose.manager): add tracking for ongoing stack actions and improve UI updates
+###2026.03.23-dev.2315
+- Bug Fixes (advancedView): add advanced class to container table columns
+- Bug Fixes (styles): stabilize header row height in compose stacks for better visibility, used docker mangers css for this
+- Bug Fixes (advancedView): avoid flicker by applying class/opacity in proper sequence
+- Bug Fixes (updates): prevent premature update checks on background updates
+- Bug Fixes: ttyd spawn was not awaiting socket creation, often would open new tab with 502 instead of logs
+- Bug Fixes (styles): unify modal overlay styles and adjust z-index for better stacking
+- Bug Fixes (compose.manager): close stack creation modal on overlay click
+- Bug Fixes (editorModal): close modal on overlay background click
+- Bug Fixes (editorModal): enhance overlay appearance with backdrop blur effect
+- Bug Fixes: enhance Docker build and deployment scripts with CA bundle handling and improved logging
+- Bug Fixes (compose.manager): remove unraid spinner blip during stack actions
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.20-dev.1804)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.23-dev.2315)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
