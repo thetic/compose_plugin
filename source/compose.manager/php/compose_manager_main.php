@@ -1458,74 +1458,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             applyListView(true);
         });
 
-        // Set up MutationObserver to detect when ebox (progress dialog) closes
-        // This is used to trigger update check after an update operation completes
-        var eboxObserver = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.removedNodes.length > 0) {
-                    mutation.removedNodes.forEach(function(node) {
-                        // Check if the removed node is the ebox or contains it
-                        if (node.id === 'ebox' || (node.querySelector && node.querySelector('#ebox'))) {
-                            // If there are stacks queued for update checks, process them
-                            if (pendingUpdateCheckStacks.length > 0) {
-                                // Copy and clear the list before processing
-                                var stacksToCheck = pendingUpdateCheckStacks.slice();
-                                pendingUpdateCheckStacks = [];
-
-                                // Delay slightly to let page state settle
-                                setTimeout(function() {
-                                    composeClientDebug('Update completed, running check for updates on stacks:', {
-                                        stacks: stacksToCheck
-                                    }, 'daemon', 'debug');
-                                    // Check each stack that was updated
-                                    stacksToCheck.forEach(function(stackName) {
-                                        checkStackUpdates(stackName);
-                                    });
-                                }, 1000);
-                            }
-
-                            // If there are stacks queued for compose list reload (start/stop), trigger a reload
-                            if (pendingComposeReloadStacks.length > 0) {
-                                // Immediately replace stale update-column text with a
-                                // loading spinner so the user never sees outdated "stopped"
-                                pendingComposeReloadStacks.forEach(function(project) {
-                                    var $row = $('#compose_stacks tr.compose-sortable[data-project="' + project + '"]');
-                                    if ($row.length) {
-                                        $row.find('.compose-updatecolumn').html(
-                                            '<span class="grey-text" style="white-space:nowrap;"><i class="fa fa-refresh fa-spin fa-fw"></i> loading…</span>'
-                                        );
-                                    }
-                                });
-                                // Tell the loadlist hook to skip composeLoadlist once
-                                skipNextComposeLoadlist = true;
-                                // Schedule a debounced processor to handle pending compose reloads
-                                composeClientDebug('[eboxObserver] pending-compose-reloads', {
-                                    pending: pendingComposeReloadStacks.slice()
-                                }, 'daemon', 'debug');
-                                schedulePendingComposeReloads(800);
-                            }
-
-                            // Sync Unraid's Docker containers widget after compose actions
-                            // (compose up/down/update changes containers that Docker's view needs to reflect)
-                            if (typeof window.loadlist === 'function') {
-                                setTimeout(function() {
-                                    composeClientDebug('[eboxObserver] calling-loadlist-for-docker-sync', {
-                                        pendingComposeReloadStacks: pendingComposeReloadStacks.slice()
-                                    }, 'daemon', 'debug');
-                                    window.loadlist();
-                                }, 1500);
-                            }
-                        }
-                    });
-                }
-            });
-        });
-
-        // Start observing the body for changes (ebox gets added/removed from body)
-        eboxObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+        // ebox observer removed; pending update checks are now processed from
+        // refreshStackRow and processPendingComposeReloads directly.
 
         // Load the stack list asynchronously (like Docker tab)
         // This defers the expensive docker commands to after the page renders
@@ -1999,6 +1933,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         setStackActionInProgress(stackName, false);
                         setTimeout(function() {
                             refreshStackByProject(stackName);
+                            processPendingUpdateChecks();
                         }, refreshDelayMs);
                         return; // stop scheduling
                     }
@@ -2321,6 +2256,41 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     // Using array to support Update All Stacks operation
     var pendingUpdateCheckStacks = [];
 
+    // Process the queued stacks from pending update checks.
+    // This is called from refreshStackRow and processPendingComposeReloads.
+    function processPendingUpdateChecks() {
+        if (!pendingUpdateCheckStacks || pendingUpdateCheckStacks.length === 0) {
+            return;
+        }
+
+        var stacksToCheck = pendingUpdateCheckStacks.slice();
+        pendingUpdateCheckStacks = [];
+        var deferredStacks = [];
+
+        // Delay slightly to let the UI settle after row refresh
+        setTimeout(function() {
+            composeClientDebug('Processing pending update checks', {
+                stacks: stacksToCheck
+            }, 'daemon', 'debug');
+
+            stacksToCheck.forEach(function(stackName) {
+                if (composeStackActionInProgress[stackName]) {
+                    // Update action still in progress; defer until completion.
+                    deferredStacks.push(stackName);
+                    composeClientDebug('Deferring pending update check while action is in progress', {
+                        stack: stackName
+                    }, 'daemon', 'info');
+                } else {
+                    checkStackUpdates(stackName);
+                }
+            });
+
+            if (deferredStacks.length > 0) {
+                pendingUpdateCheckStacks = pendingUpdateCheckStacks.concat(deferredStacks);
+            }
+        }, 1000);
+    }
+
     // >0 while refreshStackRow AJAX calls are in-flight; the loadlist
     // hook skips composeLoadlist until all pending refreshes complete.
     var pendingComposeRefreshCount = 0;
@@ -2390,6 +2360,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }, 'daemon', 'error');
             }
         });
+
+        // After reload sequence, process any pending update checks.
+        processPendingUpdateChecks();
     }
 
     // Helper to refresh a single stack by project name (wrapper for refreshStackRow)
@@ -2449,10 +2422,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }
             }
             pendingComposeRefreshCount = Math.max(0, pendingComposeRefreshCount - 1);
+            processPendingUpdateChecks();
         }).fail(function() {
             // On network failure, fall back to cache-based update
             updateParentStackFromContainers(stackId, project);
             pendingComposeRefreshCount = Math.max(0, pendingComposeRefreshCount - 1);
+            processPendingUpdateChecks();
         });
     }
 
