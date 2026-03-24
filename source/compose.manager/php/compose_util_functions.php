@@ -12,6 +12,30 @@ require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 
 /**
+ * Wait for ttyd UNIX socket to exist.
+ *
+ * @param string $socketName Base name of socket file (without path)
+ * @param int $timeoutMs How long to wait in milliseconds (default 2000)
+ * @param int $intervalMs Poll interval in milliseconds (default 100)
+ * @return bool True if socket existed within timeout, false otherwise
+ */
+function waitForTtydSocket($socketName, $timeoutMs = 2000, $intervalMs = 100, $tmpDir = '/var/tmp')
+{
+
+    $socketPath = rtrim($tmpDir, '/') . "/$socketName.sock";
+    $attempts = max(1, (int) ceil($timeoutMs / $intervalMs));
+    for ($i = 0; $i < $attempts; $i++) {
+        if (file_exists($socketPath)) {
+            clientDebug("ttyd socket ready: $socketPath", ['socket' => $socketPath, 'attempt' => $i], 'daemon', 'debug');
+            return true;
+        }
+        usleep($intervalMs * 1000);
+    }
+    clientDebug("ttyd socket timeout: $socketPath", ['socket' => $socketPath, 'timeoutMs' => $timeoutMs], 'daemon', 'warning');
+    return false;
+}
+
+/**
  * Execute a compose command in a ttyd terminal, optionally capturing output to a log file.
  *
  * @param string $cmd The command to execute
@@ -37,6 +61,9 @@ function execComposeCommandInTTY($cmd, $debug, $logFile = '')
     }
     exec($command);
     clientDebug("Executing command in ttyd: " . $cmd, ['command' => $cmd], 'daemon', 'debug');
+
+    // Wait for the socket to be created to avoid 502 on first open.
+    waitForTtydSocket($socket_name);
 }
 
 /**

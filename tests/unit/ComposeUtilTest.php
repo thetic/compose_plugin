@@ -343,6 +343,29 @@ class ComposeUtilTest extends TestCase
         unset($_POST['path'], $_POST['profile']);
     }
 
+    public function testWaitForTtydSocketTimeout(): void
+    {
+        $socketName = 'compose_test_wait_timeout_' . uniqid();
+        $tmpDir = sys_get_temp_dir();
+        $socketPath = "$tmpDir/$socketName.sock";
+        @unlink($socketPath);
+
+        $this->assertFalse(waitForTtydSocket($socketName, 500, 50, $tmpDir));
+    }
+
+    public function testWaitForTtydSocketSuccess(): void
+    {
+        $socketName = 'compose_test_wait_success_' . uniqid();
+        $tmpDir = sys_get_temp_dir();
+        $socketPath = "$tmpDir/$socketName.sock";
+        @unlink($socketPath);
+        touch($socketPath);
+
+        $this->assertTrue(waitForTtydSocket($socketName, 500, 50, $tmpDir));
+
+        @unlink($socketPath);
+    }
+
     /**
      * @dataProvider actionsProvider
      * Test various compose actions
