@@ -454,13 +454,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             lessLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"
         });
 
-        // Apply current view mode (advanced/basic) via CSS class on table
-        var advanced = $.cookie('compose_listview_mode') === 'advanced';
-        if (advanced) {
-            $('#compose_stacks').addClass('cm-advanced-view');
-        } else {
-            $('#compose_stacks').removeClass('cm-advanced-view');
-        }
+        // Apply current view mode (advanced/basic) with centralized logic
+        applyListView(false);
 
         // Seed expandedStacks from any rows rendered expanded server-side
         $('.stack-details-row:visible').each(function() {
@@ -1298,73 +1293,51 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         return url;
     }
 
+    function isComposeAdvancedMode() {
+        return $.cookie('compose_listview_mode') === 'advanced';
+    }
+
     // Apply advanced/basic view based on cookie (used after async load)
     // Scoped to compose_stacks to avoid affecting Docker tab when tabs are joined.
-    // When animate=true (user clicked toggle), run a phased transition.
+    // When animate=true (user clicked toggle), run a simple symmetric transition.
     // When false (page load), instant class toggle.
-    // Uses compose-specific 'cm-advanced' / 'cm-advanced-view' classes
-    // so Docker tab's own '.advanced' toggle cannot interfere.
     function applyListView(animate) {
-        var advanced = $.cookie('compose_listview_mode') === 'advanced';
+        var advanced = isComposeAdvancedMode();
         var $table = $('#compose_stacks');
+        var $advanced = $table.find('.cm-advanced');
 
-        if (animate) {
-            var $changing = $table.find('.cm-advanced');
-
-            if (advanced) {
-                // Showing advanced columns: make visible at opacity 0, then fade in
-                var startHeight = $table.outerHeight();
-                $changing.css('opacity', 0);
-                $table.addClass('cm-advanced-view');
-                var endHeight = $table.outerHeight();
-
-                $table.css({
-                        height: startHeight,
-                        overflow: 'hidden'
-                    })
-                    .animate({
-                        height: endHeight
-                    }, 400);
-                $changing.animate({
-                    opacity: 1
-                }, 400).promise().done(function() {
-                    $table.css({
-                        height: '',
-                        overflow: ''
-                    });
-                    $changing.css('opacity', '');
-                });
-            } else {
-                // Hiding advanced columns: fade out, then remove class
-                var startHeight = $table.outerHeight();
-                $changing.animate({
-                    opacity: 0
-                }, 300).promise().done(function() {
-                    $table.removeClass('cm-advanced-view');
-                    var endHeight = $table.outerHeight();
-
-                    $table.css({
-                            height: startHeight,
-                            overflow: 'hidden'
-                        })
-                        .animate({
-                            height: endHeight
-                        }, 400, function() {
-                            $table.css({
-                                height: '',
-                                overflow: ''
-                            });
-                            $changing.css('opacity', '');
-                        });
-                });
-            }
-        } else {
-            if (advanced) {
+        var setClass = function(enabled) {
+            if (enabled) {
                 $table.addClass('cm-advanced-view');
             } else {
                 $table.removeClass('cm-advanced-view');
             }
+        };
+
+        if (!animate) {
+            setClass(advanced);
+            $table.css({height: '', overflow: ''});
+            $advanced.css({opacity: '', display: ''});
+        } else {
+            if (advanced) {
+                // basic -> advanced: enable class first, then fade in advanced cells
+                setClass(true);
+                $table.css({height: $table.outerHeight(), overflow: 'hidden'});
+                $advanced.stop(true, true).css({opacity: 0}).animate({opacity: 1}, 300, function() {
+                    $table.css({height: '', overflow: ''});
+                    $advanced.css({opacity: '', display: ''});
+                });
+            } else {
+                // advanced -> basic: fade out then disable class to avoid flicker
+                $table.css({height: $table.outerHeight(), overflow: 'hidden'});
+                $advanced.stop(true, true).animate({opacity: 0}, 300, function() {
+                    setClass(false);
+                    $table.css({height: '', overflow: ''});
+                    $advanced.css({opacity: '', display: ''});
+                });
+            }
         }
+
         // Apply readmore to descriptions — exclude container detail rows to avoid double-application
         $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore').readmore({
             maxHeight: 32,
