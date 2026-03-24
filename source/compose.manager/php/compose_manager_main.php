@@ -4263,10 +4263,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         html += '<thead><tr>';
         html += '<th class="ct-col-name">Container</th>';
         html += '<th class="ct-col-update">Update</th>';
-        html += '<th class="ct-col-source">Source</th>';
-        html += '<th class="ct-col-tag">Tag</th>';
-        html += '<th class="ct-col-net">Network</th>';
-        html += '<th class="ct-col-ip">Container IP</th>';
+        html += '<th class="cm-advanced ct-col-source">Source</th>';
+        html += '<th class="cm-advanced ct-col-tag">Tag</th>';
+        html += '<th class="cm-advanced ct-col-net">Network</th>';
+        html += '<th class="cm-advanced ct-col-ip">Container IP</th>';
         html += '<th class="ct-col-cport">Container Port</th>';
         html += '<th class="ct-col-lport">LAN IP:Port</th>';
         html += '</tr></thead>';
@@ -4406,16 +4406,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             html += '</td>';
 
             // Source (image name without tag)
-            html += '<td><span class="docker_readmore" style="color:#606060;">' + escapeHtml(imageSource) + '</span></td>';
+            html += '<td class="cm-advanced"><span class="docker_readmore" style="color:#606060;">' + escapeHtml(imageSource) + '</span></td>';
 
             // Tag (image tag) — truncated with ellipsis via CSS if too long
-            html += '<td class="ct-col-tag-cell"><span class="ct-tag" title="' + escapeAttr(imageTag) + '">' + escapeHtml(imageTag) + '</span></td>';
+            html += '<td class="cm-advanced ct-col-tag-cell"><span class="ct-tag" title="' + escapeAttr(imageTag) + '">' + escapeHtml(imageTag) + '</span></td>';
 
             // Network
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + networkNames.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + networkNames.map(escapeHtml).join('<br>') + '</span></td>';
 
             // Container IP
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(escapeHtml).join('<br>') + '</span></td>';
 
             // Container Port
             html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.map(escapeHtml).join('<br>') + '</span></td>';
