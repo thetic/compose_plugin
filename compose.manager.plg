@@ -15,7 +15,7 @@
 <!ENTITY emhttpLOC   "/usr/local/emhttp/plugins/&name;">
 ]>
 
-<PLUGIN  name="&displayName;"
+<PLUGIN  name="&name;"
          author="&author;"
          version="&version;"
          launch="&launch;"
