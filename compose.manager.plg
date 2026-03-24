@@ -1,7 +1,6 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
 <!ENTITY name        "compose.manager">
-<!ENTITY displayName "Compose Manager Plus">
 <!ENTITY author      "mstrhakr">
 <!ENTITY version     "2026.03.23-dev.2333">
 <!ENTITY launch      "Settings/&name;.settings">
