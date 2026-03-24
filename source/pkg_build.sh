@@ -13,6 +13,31 @@ set +x
 LOG_FILE=/tmp/build.log
 : > "$LOG_FILE"
 
+# Discover and validate CA bundle for wget in container.
+# Prefer explicit CA_CERT, then common system locations.
+get_ca_cert_path() {
+  if [[ -n "${CA_CERT:-}" && -f "$CA_CERT" ]]; then
+    echo "$CA_CERT"
+    return 0
+  fi
+
+  for candidate in "/etc/ssl/certs/ca-certificates.crt" "/etc/pki/tls/certs/ca-bundle.crt" "/etc/ssl/cert.pem"; do
+    if [[ -f "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  echo ""  # no cert found
+  return 1
+}
+
+CA_CERT=$(get_ca_cert_path || true)
+if [[ -z "$CA_CERT" ]]; then
+  echo "WARNING: No CA_CERT available; wget will fall back to --no-check-certificate (insecure)." | tee -a "$LOG_FILE"
+  CA_CERT=""
+fi
+
 run_quiet() {
   # run the command, stream stdout/stderr to terminal and log file
   "$@" 2>&1 | tee -a "$LOG_FILE"
@@ -20,8 +45,18 @@ run_quiet() {
 
 # Note: run_quiet uses tee so log is live and stays in /tmp/build.log.
 
+wget_args() {
+  local args=("--https-only" "--secure-protocol=TLSv1_2")
+  if [[ -n "$CA_CERT" && -f "$CA_CERT" ]]; then
+    args+=("--ca-certificate=$CA_CERT")
+  else
+    args+=("--no-check-certificate")
+  fi
+  echo "${args[@]}"
+}
+
 echo "Installing unzip dependency..."
-run_quiet wget --ca-certificate="$CA_CERT" --https-only --secure-protocol=TLSv1_2 https://slackware.uk/slackware/slackware64-14.2/slackware64/a/infozip-6.0-x86_64-3.txz
+run_quiet wget $(wget_args) https://slackware.uk/slackware/slackware64-14.2/slackware64/a/infozip-6.0-x86_64-3.txz
 run_quiet upgradepkg --install-new infozip-6.0-x86_64-3.txz
 
 echo "Creating temporary package structure at $tmpdir..."
@@ -40,8 +75,8 @@ run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/scripts/
 run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/php/"
 
 echo "Downloading Docker Compose CLI plugin v${COMPOSE_VERSION}..."
-run_quiet wget --ca-certificate="$CA_CERT" --https-only --secure-protocol=TLSv1_2 "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64"
-run_quiet wget --ca-certificate="$CA_CERT" --https-only --secure-protocol=TLSv1_2 "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64.sha256"
+run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64"
+run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64.sha256"
 run_quiet sha256sum -c docker-compose-linux-x86_64.sha256 | grep -q OK || exit 4
 run_quiet rm docker-compose-linux-x86_64.sha256
 
@@ -53,7 +88,7 @@ run_quiet rm docker-compose-linux-x86_64
 
 echo "Installing Ace Editor v${ACE_VERSION}..."
 run_quiet mkdir -p "$tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/"
-run_quiet wget --ca-certificate="$CA_CERT" --https-only --secure-protocol=TLSv1_2 "https://github.com/ajaxorg/ace-builds/archive/refs/tags/v${ACE_VERSION}.zip"
+run_quiet wget $(wget_args) "https://github.com/ajaxorg/ace-builds/archive/refs/tags/v${ACE_VERSION}.zip"
 run_quiet mkdir -p /tmp/ace
 
 echo "Unpacking Ace Editor v${ACE_VERSION}..."

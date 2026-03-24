@@ -95,11 +95,13 @@ jobs:
           docker run --rm --tmpfs /tmp \
             -v $PWD/archive:/mnt/output:rw \
             -v $PWD/source:/mnt/source:ro \
+            -v /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro \
             -e TZ="America/New_York" \
             -e COMPOSE_VERSION="$COMPOSE_VERSION" \
             -e ACE_VERSION="$ACE_VERSION" \
             -e OUTPUT_FOLDER="/mnt/output" \
             -e PKG_VERSION="${VERSION}" \
+            -e CA_CERT="/etc/ssl/certs/ca-certificates.crt" \
             vbatts/slackware:latest /mnt/source/pkg_build.sh
 
           # Verify package was created
