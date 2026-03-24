@@ -28,10 +28,10 @@
 >
 
 <CHANGES>
-###2026.03.24-dev.1146
-- Bug Fixes: revert name to plugin name instead of display name
+###2026.03.24-dev.1150
+- Bug Fixes: update plugin name to use the correct entity reference
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.24-dev.1146)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.24-dev.1150)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
