@@ -1,18 +1,18 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
-    <!ENTITY name "compose.manager">
-    <!ENTITY author "mstrhakr">
-    <!ENTITY version     "2026.03.24-dev.1202">
-    <!ENTITY launch "Settings/&name;.settings">
-    <!ENTITY packageVER "&version;">
-    <!ENTITY packageMD5  "55a72200e667ae70fbfbb0152daabd3d">
-    <!ENTITY packageName "compose.manager-package-&packageVER;">
-    <!ENTITY packagefile "&packageName;.txz">
-    <!ENTITY github "mstrhakr/compose_plugin">
-    <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
-    <!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
-    <!ENTITY pluginLOC "/boot/config/plugins/&name;">
-    <!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
+<!ENTITY name "compose.manager">
+<!ENTITY author "mstrhakr">
+<!ENTITY version "2026.03.24-dev.1146">
+<!ENTITY launch "Settings/&name;.settings">
+<!ENTITY packageVER "&version;">
+<!ENTITY packageMD5 "bbca0263f709a95713d0eb722d4029ad">
+<!ENTITY packageName "compose.manager-package-&packageVER;">
+<!ENTITY packagefile "&packageName;.txz">
+<!ENTITY github "mstrhakr/compose_plugin">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
+<!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
+<!ENTITY pluginLOC "/boot/config/plugins/&name;">
+<!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
 ]>
 
 <PLUGIN name="&name;"
@@ -27,119 +27,101 @@
     readme="https://github.com/mstrhakr/compose_plugin#readme"
 >
 
-    <CHANGES>
-        ###2026.03.24-dev.1146
-        - Bug Fixes: revert name to plugin name instead of display name
-        - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-        - [beta release
-        diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.24-dev.1146)
-    </CHANGES>
+<CHANGES>
+###2026.03.24-dev.1146
+- Bug Fixes: revert name to plugin name instead of display name
+- [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.24-dev.1146)
+</CHANGES>
 
-    <!-- The 'pre-install' script. -->
-    <FILE Run="/bin/bash">
-        <INLINE>
-            # Remove old 'source' files
-            rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
+<!-- The 'pre-install' script. -->
+<FILE Run="/bin/bash">
+<INLINE>
+# Remove old 'source' files
+rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
 
-            #Create projects folder if it doesnt exist
-            mkdir -p &pluginLOC;/projects
+#Create projects folder if it doesnt exist
+mkdir -p &pluginLOC;/projects
 
-            if [[ ! -f "&pluginLOC;/projects/version" ]]; then
-            #Upgrade projects to latest format
-            for dir in &pluginLOC;/projects/*; do
-            if [[ -d $dir ]]; then
+if [[ ! -f "&pluginLOC;/projects/version" ]]; then
+    #Upgrade projects to latest format
+    for dir in &pluginLOC;/projects/*; do
+        if [[ -d $dir ]]; then
             if [[ -f $dir/docker-compose.yml &amp;&amp; ! -f $dir/compose.yaml ]]; then
-            mv $dir/docker-compose.yml $dir/compose.yaml
+                mv $dir/docker-compose.yml $dir/compose.yaml
             fi
-            fi
-            done
+        fi
+    done
 
-            echo "1" > &pluginLOC;/projects/version
-            fi
+    echo "1" > &pluginLOC;/projects/version
+fi
+</INLINE>
+</FILE>
 
+<FILE Name="&pluginLOC;/&packagefile;" Run="upgradepkg --install-new">
+<URL>&packageURL;</URL>
+<MD5>&packageMD5;</MD5>
+</FILE>
 
-        </INLINE>
-    </FILE>
+<FILE Run="/bin/bash" min="6.9.0" max="6.99.99">
+<INLINE>
+# Use the new patch utility during install to cleanup and optionally apply patches
+patch_script=/usr/local/emhttp/plugins/compose.manager/scripts/patch.sh
+if [ -f "$patch_script" ]; then
+    if [ $patch_ui == 'true' ]; then
+        echo ""
+        echo "----------------------------------------------------"
+        echo " Applying WebUI Patches because PATCH_UI=true"
+        echo "----------------------------------------------------"
+        echo ""
+        #Remove patchs if already applied
+        $patch_script -r
 
-    <FILE Name="&pluginLOC;/&packagefile;" Run="upgradepkg --install-new">
-        <URL>&packageURL;</URL>
-        <MD5>&packageMD5;</MD5>
-    </FILE>
+        #Apply Patches
+        $patch_script apply || true
+    fi
+    if [ $patch_ui != 'true' ]; then
+        echo ""
+        echo "----------------------------------------------------"
+        echo " Removing WebUI Patches because PATCH_UI=false"
+        echo " To enable the WebUI, set PATCH_UI=true in &name;.cfg"
+        echo " and apply patches from the plugin settings page."
+        echo "----------------------------------------------------"
+        echo ""
+        $patch_script -r
+    fi
+fi
+</INLINE>
+</FILE>
 
-    <FILE Run="/bin/bash">
-        <INLINE min="v6.9.0" max="v6.99.99">
-            # Use the new patch utility during install to cleanup and optionally apply patches
-            patch_script=/usr/local/emhttp/plugins/compose.manager/scripts/patch.sh
-            config_file=/boot/config/plugins/compose.manager/compose.manager.cfg
-            if [ -f "$patch_script" ]; then
-            if [ -f "$config_file" ]; then
-            #Grab the contents of our config file.
-            source &lt;(grep = $config_file)
-            patch_ui=${PATCH_UI:='false'}
-            # Parse /etc/unraid-version into numeric form: M*10000 + m*100 + p
-            # Handles formats like: 6.10.2 or "7.2.3" by extracting the first X.Y.Z
-            ver=$(grep -oE '[0-9]+(\.[0-9]+){0,2}' /etc/unraid-version | head -n1)
-            IFS=. read -r major minor patch &lt;&lt;&lt; "$ver"
-            major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
-            unraid_version=$((major*10000 + minor*100 + patch))
+<FILE Run="/bin/bash">
+<INLINE>
+echo ""
+echo "----------------------------------------------------"
+echo " Compose Manager Plus has been installed."
+echo " Version: &version;"
+echo "----------------------------------------------------"
+echo ""
+</INLINE>
+</FILE>
 
-            if [ $unraid_version -ge 61000 ] &amp;&amp; [ $unraid_version -le 69999 ] &amp;&amp; [
-            $patch_ui == 'true' ]; then
-            echo ""
-            echo "----------------------------------------------------"
-            echo " Applying WebUI Patches because PATCH_UI=true"
-            echo "----------------------------------------------------"
-            echo ""
-            #Remove patchs if already applied
-            $patch_script -r
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+#Remove patchs if already applied
+patch_remove_script=/usr/local/emhttp/plugins/compose.manager/scripts/patch.sh
+if [ -f "$patch_remove_script" ]; then
+    $patch_remove_script -r
+fi
 
-            #Apply Patches
-            $patch_script apply || true
-            fi
-            if [ $unraid_version -ge 61000 ] &amp;&amp; [ $unraid_version -le 69999 ] &amp;&amp; [
-            $patch_ui != 'true' ]; then
-            echo ""
-            echo "----------------------------------------------------"
-            echo " Removing WebUI Patches because PATCH_UI=false"
-            echo " To enable the WebUI, set PATCH_UI=true in &name;.cfg"
-            echo " and apply patches from the plugin settings page."
-            echo "----------------------------------------------------"
-            echo ""
-            $patch_script -r
-            fi
-            fi
-            fi
-        </INLINE>
-    </FILE>
+# Remove by plugin name (does latest version), fallback to explicit package name.
+removepkg &name; || removepkg &packageName; || false
 
-    <FILE Run="/bin/bash">
-        <INLINE>
-            echo ""
-            echo "----------------------------------------------------"
-            echo " Compose Manager Plus has been installed."
-            echo " Version: &version;"
-            echo "----------------------------------------------------"
-            echo ""
-        </INLINE>
-    </FILE>
-
-    <FILE Run="/bin/bash" Method="remove">
-        <INLINE min="v6.9.0" max="v6.99.99">
-            #Remove patchs if already applied
-            patch_remove_script=/usr/local/emhttp/plugins/compose.manager/scripts/patch.sh
-            if [ -f "$patch_remove_script" ]; then
-            $patch_remove_script -r
-            fi
-        </INLINE>
-    </FILE>
-
-    <FILE Run="/bin/bash" Method="remove">
-        <INLINE>
-            removepkg &packageName;
-
-            # Remove plugin related files
-            rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
-        </INLINE>
-    </FILE>
+# Remove plugin related files
+rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
+if [ -d "/usr/local/emhttp/plugins/&name;" ]; then
+    rm -rf /usr/local/emhttp/plugins/&name;
+fi
+</INLINE>
+</FILE>
 
 </PLUGIN>
