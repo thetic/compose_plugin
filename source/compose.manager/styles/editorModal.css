@@ -1,12 +1,6 @@
 /* Editor Modal - Uses unRAID CSS variables where possible */
 .editor-modal-overlay {
   display: none;
-  position: fixed;
-  inset: 0;
-  background-color: var(--modal-overlay-bg, rgba(0, 0, 0, 0.4));
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  z-index: 99999;
   overflow: auto;
   padding: 20px;
   box-sizing: border-box;

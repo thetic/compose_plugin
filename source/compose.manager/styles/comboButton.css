@@ -1,12 +1,27 @@
   /* Compose Manager Custom Modal */
-  .compose-modal-overlay {
+  .compose-modal-overlay,
+  .stack-actions-overlay,
+  .editor-modal-overlay {
+    --compose-modal-z-index: 10002;
+    --modal-backdrop-blur: 8px;
     position: fixed;
-    z-index: 9999;
     inset: 0;
-    background: var(--modal-overlay-bg, rgba(0, 0, 0, 0.6));
+    background: var(--modal-overlay-bg, rgba(0, 0, 0, 0.5));
+    backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+    -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+    transition: background-color 0.2s ease, backdrop-filter 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .compose-modal-overlay,
+  .editor-modal-overlay {
+    z-index: var(--compose-modal-z-index);
+  }
+
+  .stack-actions-overlay {
+    z-index: calc(var(--compose-modal-z-index) - 1);
   }
 
   .compose-modal {
