@@ -33,6 +33,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         table-layout: fixed
     }
 
+    /* Stabilize header row height across basic/advanced toggle transitions */
+    #compose_stacks thead tr th {
+	font-weight: normal;
+	font-size: 1.1rem;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	color: var(--dynamix-tablesorter-thead-th-text-color);
+	background-color: var(--dynamix-tablesorter-thead-th-bg-color);
+	padding: 8px 20px 8px 6px;
+	white-space: nowrap;
+	text-align: left;
+    }
+
     /* Clip overflowing content in fixed-layout cells */
     #compose_stacks th,
     #compose_stacks td {
