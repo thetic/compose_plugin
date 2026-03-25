@@ -1,6 +1,6 @@
 Icon="cubes"
-Author="dcflachs"
-Title="Compose"
+Author="mstrhakr"
+Title="Compose Manager Plus"
 Type="xmenu"
 Menu="Utilities"
 ---
@@ -1923,14 +1923,6 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 <blockquote class="inline_help">
                     <strong>(Unraid 6.11 and earlier only)</strong> Patch the Docker page to better display compose-managed containers.
                 </blockquote>
-            </dd>
-        </dl>
-        <?php endif; ?>
-
-        <?php if ($option_patch_ui): ?>
-        <dl>
-            <dd>
-                <span style="display:inline-block;margin-left:10px;color:#888;">Not needed on Unraid 6.12+ (compose integration is built-in)</span>
             </dd>
         </dl>
         <?php endif; ?>
