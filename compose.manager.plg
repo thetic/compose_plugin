@@ -15,16 +15,16 @@
 <!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
 ]>
 
-<PLUGIN name="&name;"
-    author="&author;"
-    version="&version;"
-    launch="&launch;"
-    pluginURL="&pluginURL;"
-    icon="cubes"
-    min="6.9.0"
-    support="https://forums.unraid.net/topic/197334-plugin-compose-manager-plus/"
-    project="https://github.com/mstrhakr/compose_plugin"
-    readme="https://github.com/mstrhakr/compose_plugin#readme"
+<PLUGIN  name="&name;"
+         author="&author;"
+         version="&version;"
+         launch="&launch;"
+         pluginURL="&pluginURL;"
+         icon="cubes"
+         min="6.9.0"
+         support="https://forums.unraid.net/topic/197334-plugin-compose-manager-plus/"
+         project="https://github.com/mstrhakr/compose_plugin"
+         readme="https://github.com/mstrhakr/compose_plugin#readme"
 >
 
 <CHANGES>
