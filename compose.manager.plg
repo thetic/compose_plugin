@@ -68,7 +68,7 @@ fi
 # Use the new patch utility during install to cleanup and optionally apply patches
 patch_script=/usr/local/emhttp/plugins/compose.manager/scripts/patch.sh
 if [ -f "$patch_script" ]; then
-    if [ $patch_ui == 'true' ]; then
+    if [ "${patch_ui}" = "true" ]; then
         echo ""
         echo "----------------------------------------------------"
         echo " Applying WebUI Patches because PATCH_UI=true"
@@ -80,7 +80,7 @@ if [ -f "$patch_script" ]; then
         #Apply Patches
         $patch_script apply || true
     fi
-    if [ $patch_ui != 'true' ]; then
+    if [ "${patch_ui}" != "true" ]; then
         echo ""
         echo "----------------------------------------------------"
         echo " Removing WebUI Patches because PATCH_UI=false"
@@ -119,6 +119,7 @@ removepkg &name; || removepkg &packageName; || false
 # Remove plugin related files
 rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
 if [ -d "/usr/local/emhttp/plugins/&name;" ]; then
+    echo "Removing plugin directory: /usr/local/emhttp/plugins/&name;"
     rm -rf /usr/local/emhttp/plugins/&name;
 fi
 </INLINE>

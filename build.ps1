@@ -12,7 +12,7 @@
     The version string for the package (e.g., "0.1.0"). Defaults to version in .plg file.
 
 .PARAMETER Dev
-    Generate a development build with timestamp: YYYY.MM.DD-dev-HHMMSS
+    Generate a development build with timestamp: YYYY.MM.DD-dev-HHMM
 
 .PARAMETER SkipTests
     Skip running tests before building. Not recommended.
@@ -92,6 +92,31 @@ if (-not (Test-Path $OutputPath)) {
     New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
 }
 
+# Generate a temporary plugin manifest for this specific build so install on remote will use local package path
+$plgSourcePath = Join-Path $ScriptDir "compose.manager.plg"
+if (-not (Test-Path $plgSourcePath -PathType Leaf)) {
+    throw "Plugin manifest not found: $plgSourcePath"
+}
+
+$PackageBaseName = "compose.manager-package-$Version"
+$PackageFileName = "$PackageBaseName.txz"
+$PackageURL = 'file:///tmp/' + $PackageFileName
+$TempPluginPath = Join-Path $OutputPath "compose.manager.plg"
+
+$plgLines = Get-Content $plgSourcePath
+$plgLines = $plgLines | ForEach-Object {
+    if ($_ -match '^\s*<!ENTITY version "') { "<!ENTITY version `"$Version`">" }
+    elseif ($_ -match '^\s*<!ENTITY packageVER "') { "<!ENTITY packageVER `"$Version`">" }
+    elseif ($_ -match '^\s*<!ENTITY packageName "') { "<!ENTITY packageName `"$PackageBaseName`">" }
+    elseif ($_ -match '^\s*<!ENTITY packagefile "') { "<!ENTITY packagefile `"$PackageFileName`">" }
+    elseif ($_ -match '^\s*<!ENTITY packageURL "') { "<!ENTITY packageURL `"$PackageURL`">" }
+    elseif ($_ -match '^\s*<FILE Name="&pluginLOC;/&packagefile;"') { "<FILE Name='/tmp/$PackageFileName' Run='upgradepkg --install-new'>" }
+    elseif ($_ -match '^\s*<URL>') { "<URL>$PackageURL</URL>" }
+    else { $_ }
+}
+Set-Content -Path $TempPluginPath -Value $plgLines -Encoding UTF8
+Write-Host "Generated temporary plugin manifest for build: $TempPluginPath" -ForegroundColor Cyan
+
 Write-Host "Building compose.manager package v$Version" -ForegroundColor Green
 Write-Host "  Docker Compose: v$ComposeVersion" -ForegroundColor Gray
 Write-Host "  Ace Editor: v$AceVersion" -ForegroundColor Gray
@@ -154,6 +179,15 @@ if (Test-Path $PackagePath) {
     Write-Host "  Package: $PackagePath" -ForegroundColor Cyan
     Write-Host "  MD5: $md5" -ForegroundColor Cyan
 
+    # Update packageMD5 in the temporary plugin manifest so plugin installer can validate local package
+    $tempPlgLines = Get-Content $TempPluginPath
+    $tempPlgLines = $tempPlgLines | ForEach-Object {
+        if ($_ -match '^\s*<!ENTITY packageMD5 "') { "<!ENTITY packageMD5 `"$md5`">" } 
+        elseif ($_ -match '^\s*<MD5>') { "<MD5>$md5</MD5>" }
+        else { $_ }
+    }
+    Set-Content -Path $TempPluginPath -Value $tempPlgLines -Encoding UTF8
+
     # Return build info for use by release script
     return @{
         Version = $Version
@@ -162,6 +196,7 @@ if (Test-Path $PackagePath) {
         MD5 = $md5
         ComposeVersion = $ComposeVersion
         AceVersion = $AceVersion
+        PluginPath = $TempPluginPath
     }
 } else {
     throw "Package was not created: $PackagePath"
