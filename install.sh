@@ -12,7 +12,7 @@ fi
 # This script is expected to run on the remote unRAID host.
 mkdir -p /boot/config/plugins
 echo "uninstall plugin if it exists"
-if plugin remove compose.manager; then
+if plugin remove compose.manager.plg; then
   echo "plugin remove succeeded"
 else
   echo "plugin remove failed, plugin may not have been installed"
