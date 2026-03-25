@@ -28,10 +28,10 @@
 >
 
 <CHANGES>
-###2026.03.25-dev.1609
-- Minor updates and improvements
+###2026.03.25-dev.1735
+- Features: add initial README for Compose Manager Plus plugin so in plugins tab, display is correct
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.25-dev.1609)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.25-dev.1735)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
