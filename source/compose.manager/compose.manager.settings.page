@@ -1971,6 +1971,74 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     </form>
 </div>
 
+<script>
+(function(){
+    var cookieName = 'compose_manager_settings_return';
+    function getSafeReturnPath() {
+        if (!document.referrer) return null;
+        try {
+            var ref = new URL(document.referrer, window.location.origin);
+            if (ref.origin !== window.location.origin) return null;
+            var p = ref.pathname.replace(/\/+$/, '');
+            if (p === '' || p === '/') return '/Settings';
+
+            var allowed = [
+                '/Settings',
+                '/Plugins',
+                '/Docker',
+                '/Compose',
+            ];
+
+            for (var i = 0; i < allowed.length; i++) {
+                if (p.toLowerCase() === allowed[i].toLowerCase()) {
+                    return ref.pathname + (ref.search || '');
+                }
+                if (allowed[i].toLowerCase().endsWith('/') && p.toLowerCase().startsWith(allowed[i].toLowerCase())) {
+                    return ref.pathname + (ref.search || '');
+                }
+            }
+
+            if (p.toLowerCase().startsWith('/plugins')) {
+                return ref.pathname + (ref.search || '');
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    var returnPath = getSafeReturnPath() || '/Settings';
+    $.cookie(cookieName, returnPath, { path: '/' });
+
+    var originalDone = window.done;
+    window.done = function(k) {
+        var saved = $.cookie(cookieName);
+        if (saved) {
+            $.removeCookie(cookieName, { path: '/' });
+            if (saved !== '' && saved !== window.location.pathname) {
+                location.replace(saved);
+                return;
+            }
+        }
+        if (typeof originalDone === 'function') {
+            originalDone(k);
+        } else if (k) {
+            var url = location.pathname.split('/');
+            var path = '/' + url[1];
+            for (var i = 2; i < url.length; i++) {
+                if (url[i] == k) break;
+                path += '/' + url[i];
+            }
+            $.removeCookie('one');
+            location.replace(path);
+        } else {
+            $.removeCookie('one');
+            location.replace('/Settings');
+        }
+    };
+})();
+</script>
+
 <!-- Updates Tab -->
 <div id="compose-tab-updates" class="compose-tab-content">
 
