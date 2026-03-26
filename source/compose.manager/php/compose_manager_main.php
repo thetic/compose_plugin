@@ -723,21 +723,42 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $('.editor-tab').removeClass('active').attr('aria-selected', 'false');
         $('#editor-tab-' + tabName).addClass('active').attr('aria-selected', 'true');
 
-        // Update panels
-        $('.editor-panel').removeClass('active');
-        $('#editor-panel-' + tabName).addClass('active');
+        // Update panels and ensure inline display is correct (inline style may be persisted from tab host)
+        $('.editor-panel').each(function() {
+            var $panel = $(this);
+            if ($panel.attr('id') === 'editor-panel-' + tabName) {
+                $panel.addClass('active').css('display', 'flex');
+            } else {
+                $panel.removeClass('active').css('display', 'none');
+            }
+        });
 
         editorModal.currentTab = tabName;
 
         // Resize and focus editor if switching to compose or env tab
         if ((tabName === 'compose' || tabName === 'env') && editorModal.editors[tabName]) {
-            editorModal.editors[tabName].resize();
-            editorModal.editors[tabName].focus();
+            try {
+                editorModal.editors[tabName].resize();
+                editorModal.editors[tabName].renderer.updateFull();
+                editorModal.editors[tabName].focus();
+            } catch (e) {
+                console.warn('Compose Manager: editor resize failed', e);
+            }
         }
 
         // Load labels data if switching to labels tab for the first time
         if (tabName === 'labels' && !editorModal.labelsData) {
             loadLabelsData();
+        }
+    }
+
+    function refreshEditorContents(type) {
+        if (!editorModal.editors[type]) return;
+        try {
+            editorModal.editors[type].resize();
+            editorModal.editors[type].renderer.updateFull();
+        } catch (e) {
+            console.warn('Compose Manager: refreshEditorContents failed for ' + type, e);
         }
     }
 
@@ -3276,8 +3297,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $('#editor-modal-title').text('Editing: ' + projectName);
         $('#editor-file-info').text(compose_root + '/' + project);
 
-        // Show loading state
-        $('#editor-modal-overlay').addClass('active');
+        // Ensure overlay is in top-level document layer for tabbed mode
+        // Appending to body makes the modal full-screen and avoids nested overflow limitations.
+        $('#editor-modal-overlay').appendTo('body').addClass('active');
         $('#editor-validation-compose').html('<i class="fa fa-spinner fa-spin editor-validation-icon"></i> Loading files...').removeClass('valid error warning');
 
         // Load all files and settings
@@ -3287,6 +3309,11 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         // Switch to appropriate initial tab (default to 'compose')
         var targetTab = initialTab || 'compose';
         switchTab(targetTab);
+        setTimeout(function() {
+            refreshEditorContents(targetTab);
+            refreshEditorContents('compose');
+            refreshEditorContents('env');
+        }, 100);
     }
 
     function loadEditorFiles(project) {
@@ -4043,7 +4070,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     function doCloseEditorModal() {
-        $('#editor-modal-overlay').removeClass('active');
+        $('#editor-modal-overlay').removeClass('active').appendTo('body');
         editorModal.currentProject = null;
         editorModal.currentTab = 'compose';
         editorModal.modifiedTabs = new Set();
@@ -5603,9 +5630,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $(function() {
             (function hideComposeContainersFromDocker() {
                 if (!hideComposeFromDocker) return;
-                // In tabbed mode this doesn't make sense
-                if ($('.tabs').length) return;
-
                 function getComposeContainerNames() {
                     var names = {};
                     // Primary source: data-containers attribute on stack rows
