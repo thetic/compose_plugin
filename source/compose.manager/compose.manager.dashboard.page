@@ -28,15 +28,20 @@ $isResponsive = version_compare($unraidVersion, '7.2.0-beta', '>=');
 $tileTitle = _('Compose Stacks');
 $tileTitleAttr = _('Go to Compose Manager');
 $loadingText = _('Loading...');
+$composePage = $cfg['SHOW_COMPOSE_IN_HEADER_MENU'] === 'true' ? '/Compose' : '/Docker';
 
 // Build tile header
 if ($isResponsive) {
     $headerHtml = <<<EOT
 <span class='tile-header'>
     <span class='tile-header-left'>
-        <i class='fa fa-cubes f32'></i>
+        <a href='$composePage' title="$tileTitleAttr" style="color:inherit;text-decoration:none;">
+            <i class='fa fa-cubes f32'></i>
+        </a>
         <div class='section'>
-            <h3 class='tile-header-main'>$tileTitle</h3>
+            <a href='$composePage' title="$tileTitleAttr" style="color:inherit;text-decoration:none;">
+                <h3 class='tile-header-main'>$tileTitle</h3>
+            </a>
             <span class='compose-stacks button'>
                 <input type='checkbox' id='compose_stacks_toggle'>
             </span>
@@ -45,7 +50,7 @@ if ($isResponsive) {
     </span>
     <span class='tile-header-right'>
         <span class='tile-header-right-controls'>
-            <a href='/Docker/Compose' title="$tileTitleAttr">
+            <a href='/Settings/compose.manager.settings' title="Go to Settings">
                 <i class='fa fa-fw fa-cog control'></i>
             </a>
         </span>
@@ -54,14 +59,19 @@ if ($isResponsive) {
 EOT;
 } else {
     $headerHtml = <<<EOT
-<i class='fa fa-cubes f32'></i>
-<div class='section'>$tileTitle<br>
+<a href='$composePage' title="$tileTitleAttr" style="color:inherit;text-decoration:none;">
+    <i class='fa fa-cubes f32'></i>
+</a>
+<div class='section'>
+    <a href='$composePage' title="$tileTitleAttr" style="color:inherit;text-decoration:none;">
+        $tileTitle<br>
+    </a>
     <span class='compose-stacks button'>
         <input type='checkbox' id='compose_stacks_toggle'>
     </span>
     <span id='compose_stacks_status' class='compose-stacks switch'></span><br>
 </div>
-<a href='/Docker/Compose' title="$tileTitleAttr">
+<a href='/Settings/compose.manager.settings' title="Go to Settings">
     <i class='fa fa-cog control'></i>
 </a>
 EOT;
