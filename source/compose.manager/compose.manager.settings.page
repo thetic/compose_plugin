@@ -191,7 +191,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     /* Log viewer styles */
     #compose-log-container {
-        font-family: monospace;
+        font-family: var(--font-bitstream);
         font-size: 12px;
         background: var(--background-color, var(--dynamix-sb-body-bg-color));
         color: var(--text-color, var(--dynamix-sb-body-text-color, var(--black)));

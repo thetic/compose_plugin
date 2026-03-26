@@ -1188,7 +1188,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (updatesWithSha.length === 1) {
                     // Single update - show the SHA diff inline
                     var ct = updatesWithSha[0];
-                    updateHtml += '<div style="font-family:monospace;font-size:0.8em;margin-top:2px;">';
+                    updateHtml += '<div style="font-family:var(--font-bitstream);font-size:0.8em;margin-top:2px;">';
                     updateHtml += '<span class="compose-status-warning" title="' + escapeAttr(ct.localSha) + '">' + escapeHtml(ct.localSha.substring(0, 8)) + '</span>';
                     updateHtml += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 2px;font-size:0.9em;"></i> ';
                     updateHtml += '<span class="compose-status-success" title="' + escapeAttr(ct.remoteSha) + '">' + escapeHtml(ct.remoteSha.substring(0, 8)) + '</span>';
@@ -2961,14 +2961,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (cfg.showVersionArrow) {
                     if (hasUpdate && localSha && remoteSha) {
                         // Has update - show current SHA → new SHA
-                        html += '<div style="font-family:monospace;font-size:0.9em;margin-top:2px;">';
+                        html += '<div style="font-family:var(--font-bitstream);font-size:0.9em;margin-top:2px;">';
                         html += '<span class="compose-status-warning" title="' + escapeAttr(localSha) + '">' + escapeHtml(localSha.substring(0, 8)) + '</span>';
                         html += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 4px;"></i> ';
                         html += '<span class="compose-status-success" title="' + escapeAttr(remoteSha) + '">' + escapeHtml(remoteSha.substring(0, 8)) + '</span>';
                         html += '</div>';
                     } else if (localSha) {
                         // No update - just show current SHA (greyed)
-                        html += '<div style="font-family:monospace;font-size:0.9em;margin-top:2px;" title="' + escapeAttr(localSha) + '"><span class="compose-text-muted">' + escapeHtml(localSha.substring(0, 8)) + '</span></div>';
+                        html += '<div style="font-family:var(--font-bitstream);font-size:0.9em;margin-top:2px;" title="' + escapeAttr(localSha) + '"><span class="compose-text-muted">' + escapeHtml(localSha.substring(0, 8)) + '</span></div>';
                     }
                 }
                 html += '</div></div></div>';
@@ -4406,7 +4406,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 // Image is pinned with SHA256 digest - show pinned status
                 html += '<span class="cyan-text" style="white-space:nowrap;"><i class="fa fa-thumb-tack fa-fw"></i> pinned</span>';
                 if (ctPinnedDigest) {
-                    html += '<div style="font-family:monospace;font-size:0.85em;margin-top:2px;"><span class="compose-status-info">' + escapeHtml(ctPinnedDigest.substring(0, 12)) + '</span></div>';
+                    html += '<div style="font-family:var(--font-bitstream);font-size:0.85em;margin-top:2px;"><span class="compose-status-info">' + escapeHtml(ctPinnedDigest.substring(0, 12)) + '</span></div>';
                 }
             } else if (ctHasUpdate) {
                 // Update available - orange "update ready" style with SHA diff
@@ -4415,7 +4415,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 html += '</a>';
                 if (ctLocalSha && ctRemoteSha) {
                     // Always show SHA diff (not just in advanced view)
-                    html += '<div style="font-family:monospace;font-size:0.85em;margin-top:2px;">';
+                    html += '<div style="font-family:var(--font-bitstream);font-size:0.85em;margin-top:2px;">';
                     html += '<span class="compose-status-warning" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 8)) + '</span>';
                     html += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 4px;"></i> ';
                     html += '<span class="compose-status-success" title="' + escapeAttr(ctRemoteSha) + '">' + escapeHtml(ctRemoteSha.substring(0, 8)) + '</span>';
@@ -4426,7 +4426,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 html += '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
                 if (ctLocalSha) {
                     // Show SHA in advanced view only for up-to-date containers (15 chars)
-                    html += '<div class="cm-advanced" style="font-family:monospace;font-size:0.85em;" title="' + escapeAttr(ctLocalSha) + '"><span class="compose-text-muted">' + escapeHtml(ctLocalSha.substring(0, 15)) + '</span></div>';
+                    html += '<div class="cm-advanced" style="font-family:var(--font-bitstream);font-size:0.85em;" title="' + escapeAttr(ctLocalSha) + '"><span class="compose-text-muted">' + escapeHtml(ctLocalSha.substring(0, 15)) + '</span></div>';
                 }
             } else {
                 // Unknown/not checked
@@ -5541,7 +5541,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                             </div>
                             <div id="settings-available-profiles" style="margin-top:8px;display:none;">
                                 <span class="compose-text-muted" style="font-size:0.9em;">Available profiles: </span>
-                                <span id="settings-profiles-list" style="font-family:monospace;"></span>
+                                <span id="settings-profiles-list" style="font-family:var(--font-bitstream);"></span>
                             </div>
                         </div>
                     </div>
