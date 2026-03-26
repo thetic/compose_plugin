@@ -193,27 +193,27 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     #compose-log-container {
         font-family: monospace;
         font-size: 12px;
-        background: var(--dynamix-sb-body-bg-color);
-        color: var(--text-color);
+        background: var(--background-color, var(--dynamix-sb-body-bg-color));
+        color: var(--text-color, var(--dynamix-sb-body-text-color, var(--black)));
         padding: 10px;
         border-radius: 4px;
         height: 500px;
         overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
-        border: 1px solid var(--border-color);
+        border: 1px solid var(--border-color, var(--dynamix-box-inner-div-border-color));
     }
 
     #compose-log-container .log-timestamp {
-        color: var(--dynamix-sb-message-link-color);
+        color: var(--link-text-color, var(--dynamix-sb-message-link-color));
     }
 
     #compose-log-container .log-source {
-        color: var(--dynamix-ui-dropdownchecklist-color);
+        color: var(--alt-text-color, var(--dynamix-ui-dropdownchecklist-color));
     }
 
     #compose-log-container .log-message {
-        color: var(--text-color);
+        color: inherit;
     }
 
     .log-controls {

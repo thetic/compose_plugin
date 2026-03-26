@@ -17,7 +17,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
 }
 ?>
 <!DOCTYPE html>
-<html style="height:100%;margin:0;padding:0;background:var(--dynamix-sb-body-bg-color)">
+<html style="height:100%;margin:0;padding:0;background:var(--background-color, var(--dynamix-sb-body-bg-color))">
 
 <head>
     <style>
@@ -27,7 +27,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             padding: 0;
             height: 100%;
             overflow: hidden;
-            background: var(--dynamix-sb-body-bg-color);
+            background: var(--background-color, var(--dynamix-sb-body-bg-color));
             box-sizing: border-box
         }
 
@@ -47,7 +47,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             text-align: center;
             padding: 10px 0;
             margin: 0;
-            background: var(--dynamix-sb-body-bg-color);
+            background: var(--background-color, var(--dynamix-sb-body-bg-color));
             flex-shrink: 0
         }
 

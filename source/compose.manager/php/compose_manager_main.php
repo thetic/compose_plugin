@@ -3020,7 +3020,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
             // Show log in a swal with a scrollable pre block
             var logHtml = '<div style="text-align:left;">' +
-                '<pre style="background:var(--dynamix-tablesorter-tbody-row-bg-color);border-radius:4px;padding:12px;max-height:400px;overflow-y:auto;' +
+                '<pre style="background:var(--background-color, var(--dynamix-sb-body-bg-color)); color:var(--text-color, var(--dynamix-sb-body-text-color, var(--black))); border:1px solid var(--table-border-color, var(--dynamix-box-inner-div-border-color)); border-radius:4px;padding:12px;max-height:400px;overflow-y:auto;' +
                 'font-size:0.82em;line-height:1.4;white-space:pre-wrap;word-break:break-all;">' +
                 escapeHtml(parsed.log) + '</pre></div>';
             swal({
