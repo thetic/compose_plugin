@@ -28,19 +28,10 @@
 >
 
 <CHANGES>
-###2026.03.26-dev.1133
-- Bug Fixes (settings): enhance return path logic for Docker and Compose navigation when adding or removing the compose tab via settings.
-- Bug Fixes (editor): improve panel display logic when in tabbed mode
-- Bug Fixes (settings): add 'Favorites' to allowed done button return options in settings
-- Bug Fixes (lastCmd): fix last command log to skip stack log actions
-- Bug Fixes (style): update background and text colors to use dynamic theme variables
-- Bug Fixes (settings): move Menu to first line to support favorites.
-- Bug Fixes (style): replaced all hard coded colors with dynamix theme vars and custom classes
-- Bug Fixes (stack-info): streamline debug logging and remove redundant messages
-- Bug Fixes (sync-plugin-url): update pluginURL and README badge handling for branch sync
-- Bug Fixes (readme): update title to include (Beta) for clarity
+###2026.03.26-dev.1148
+- Bug Fixes (compose): improve toggle placement for advanced view in tabbed and standalone modes
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.26-dev.1133)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.26-dev.1148)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
