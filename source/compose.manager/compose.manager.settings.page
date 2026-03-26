@@ -1,8 +1,8 @@
+Menu="Utilities"
 Icon="cubes"
 Author="mstrhakr"
 Title="Compose Manager Plus"
 Type="xmenu"
-Menu="Utilities"
 ---
 <?php
 include "/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php";
