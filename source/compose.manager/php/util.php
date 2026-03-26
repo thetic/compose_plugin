@@ -1183,8 +1183,6 @@ class StackInfo
             return 'compose';
         }
 
-        // Log the sanitization result for debugging purposes.
-        clientDebug("Sanitized project string: '$rawProjectString' -> '$sanitizedProjectString'", ['input' => $rawProjectString, 'output' => $sanitizedProjectString], 'daemon', 'debug');
         return $sanitizedProjectString;
     }
 
@@ -1597,20 +1595,13 @@ class StackInfo
             throw new \Exception($logmsg);
         }
         if (self::hasRunningContainers($this->projectFolder)) {
-            $logmsg = "Cannot rename project folder from '$this->projectFolder' to '$newProject' because containers are currently running under the old project name.";
-            clientDebug(
-                $logmsg,
-                ['old' => $this->projectFolder, 'new' => $newProject],
-                'daemon',
-                'warning'
-            );
-            throw new \Exception($logmsg);
+            clientDebug("Cannot rename project folder from '$this->projectFolder' to '$newProject' because containers are currently running under the old project name.", ['old' => $this->projectFolder, 'new' => $newProject], 'daemon', 'warning');
+            return;
         }
         $oldPath = $this->path;
         $this->projectFolder = $newProject;
         $this->setPath();
         if (strtolower($oldPath) === strtolower($this->path)) {
-            clientDebug("New project name '$newProject' is the same as the current project name '$this->projectFolder' (case-insensitive); skipping rename.", ['current' => $this->projectFolder, 'new' => $newProject], 'daemon', 'debug');
             return;
         }
         // Attempt to rename the directory to match the new project name
