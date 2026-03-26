@@ -282,7 +282,9 @@ $script = <<<'EOT'
         opts.push({divider:true});
         opts.push({text:'Open Compose', icon:'fa-cubes', action:function(e){
             e.preventDefault();
-            location.href = '/Docker/Compose';
+EOT;
+$script .= "            location.href = '$composePage';";
+$script .= <<<'EOT'
         }});
 
         // Destroy and re-attach like Docker pattern
