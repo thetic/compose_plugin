@@ -153,7 +153,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     #compose-tab-settings form {
-        padding-bottom: 65px; /* keep content from hiding under fixed action bar */
+        padding-bottom: 85px; /* keep content from hiding under fixed action bar */
     }
 
     /* Disabled input styling */
