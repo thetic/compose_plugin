@@ -29,7 +29,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 20px;
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   border-bottom: 1px solid var(--border-color);
   border-radius: 8px 8px 0 0;
 }
@@ -62,7 +62,7 @@
 /* Unified Tab Bar */
 .editor-tabs {
   display: flex;
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   border-bottom: 1px solid var(--border-color);
   padding: 0 10px;
 }
@@ -178,7 +178,7 @@
 
 .settings-section {
   margin-bottom: 35px;
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 24px 28px;
@@ -283,7 +283,7 @@
   width: 48px;
   height: 48px;
   border-radius: 6px;
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   object-fit: contain;
 }
 
@@ -298,7 +298,7 @@
 .labels-panel-header {
   margin-bottom: 24px;
   padding: 16px 20px;
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   border-left: 4px solid var(--brand-orange);
@@ -312,7 +312,7 @@
 }
 
 .labels-service {
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 24px;
@@ -386,7 +386,7 @@
 .labels-field input:focus {
   outline: none;
   border-color: var(--brand-orange);
-  box-shadow: 0 0 0 3px rgba(255, 140, 47, 0.15);
+  box-shadow: 0 0 0 3px var(--brand-orange);
 }
 
 .labels-field input::placeholder {
@@ -408,13 +408,13 @@
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background-color: rgba(0, 0, 0, 0.15);
+  background-color: var(--dynamix-box-inner-div-border-color);
   border-radius: 6px;
   transition: background-color 0.2s ease;
 }
 
 .labels-deleted-title:hover {
-  background-color: rgba(0, 0, 0, 0.25);
+  background-color: var(--dynamix-box-inner-div-border-color);
 }
 
 .labels-deleted-title i {
@@ -435,7 +435,7 @@
 
 .labels-service.deleted {
   opacity: 0.6;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: var(--dynamix-box-inner-div-border-color);
 }
 
 .labels-service.deleted input {
@@ -448,7 +448,7 @@
   padding: 60px 20px;
   color: var(--alt-text-color);
   font-size: 1.1rem;
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
 }
@@ -466,7 +466,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   border-top: 1px solid var(--border-color);
   border-radius: 0 0 8px 8px;
 }
@@ -496,7 +496,7 @@
 }
 
 .editor-btn-cancel {
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   color: var(--text-color);
 }
 
@@ -529,7 +529,7 @@
 }
 
 .editor-shortcuts kbd {
-  background-color: var(--alt-background-color);
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: monospace;

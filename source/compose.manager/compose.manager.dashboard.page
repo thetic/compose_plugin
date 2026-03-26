@@ -105,11 +105,11 @@ $styles = <<<EOT
     cursor: pointer;
     border-radius: 4px;
 }
-.compose-dash-stack:hover { background: rgba(255,255,255,0.05); }
+.compose-dash-stack:hover { background: var(--dynamix-tablesorter-tbody-row-alt-bg-color); }
 .compose-dash-expand {
     width: var(--compose-expand-width);
     flex-shrink: 0;
-    color: #666;
+    color: var(--alt-text-color);
 }
 .compose-dash-expand::before {
     display: inline-block;
@@ -131,7 +131,7 @@ $styles = <<<EOT
 .compose-dash-col { white-space: nowrap; flex-shrink: 0; }
 .compose-dash-col.update { width: var(--compose-update-width); }
 .compose-dash-col.containers { flex: 1; text-align: center; min-width: 0; }
-.compose-dash-col.runtime { width: var(--compose-runtime-width); color: #888; text-align: right; flex-shrink: 0; padding-right: 12px; }
+.compose-dash-col.runtime { width: var(--compose-runtime-width); color: var(--alt-text-color); text-align: right; flex-shrink: 0; padding-right: 12px; }
 .compose-dash-containers {
     display: none;
     padding: 4px 0 8px 0;
@@ -145,7 +145,7 @@ $styles = <<<EOT
     padding-left: calc(var(--compose-expand-width) + 8px);
     overflow: hidden;
 }
-.compose-dash-container:hover { background: rgba(255,255,255,0.03); }
+.compose-dash-container:hover { background: var(--dynamix-tablesorter-tbody-row-bg-color); }
 /* Container icon: 24px + 24px margins = 48px total to match stack icon area */
 .compose-dash-ct-icon { width: 24px; height: 24px; margin: 0 12px; cursor: pointer; flex-shrink: 0; }
 .compose-dash-ct-icon img { width: 24px; height: 24px; border-radius: 3px; }
@@ -155,9 +155,9 @@ $styles = <<<EOT
 .compose-dash-ct-cols { display: flex; align-items: center; gap: 8px; font-size: 0.85em; flex: 2; min-width: 0; overflow: hidden; }
 .compose-dash-ct-update { width: var(--compose-update-width); white-space: nowrap; flex-shrink: 0; }
 .compose-dash-ct-update .sha { font-family: monospace; font-size: 0.9em; }
-.compose-dash-ct-image { width: 0; flex-grow: 1; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.compose-dash-ct-runtime { width: var(--compose-runtime-width); color: #888; text-align: right; white-space: nowrap; flex-shrink: 0; padding-right: 12px; }
-.compose-dash-loading { color: #888; font-style: italic; padding: 8px; }
+.compose-dash-ct-image { width: 0; flex-grow: 1; color: var(--alt-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compose-dash-ct-runtime { width: var(--compose-runtime-width); color: var(--alt-text-color); text-align: right; white-space: nowrap; flex-shrink: 0; padding-right: 12px; }
+.compose-dash-loading { color: var(--alt-text-color); font-style: italic; padding: 8px; }
 </style>
 EOT;
 

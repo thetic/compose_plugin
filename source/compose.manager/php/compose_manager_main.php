@@ -136,7 +136,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     #compose_stacks tbody tr.stack-details-row {
-        background-color: rgba(0, 0, 0, 0.08) !important
+        background-color: var(--dynamix-sb-body-bg-color) !important
     }
 
     /* Autostart cell */
@@ -421,7 +421,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }, 'daemon', 'error');
                 clearTimeout(composeTimers.load);
                 hideComposeSpinner();
-                $('#compose_list').html('<tr><td colspan="7" style="text-align:center;padding:20px;color:#c00;">Failed to load stack list. Please refresh the page.</td></tr>');
+                $('#compose_list').html('<tr><td colspan="7" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
 
                 // Reject the promise so callers can handle the error
                 try { reject({xhr: xhr, status: status, error: error}); } catch (e) { reject(error); }
@@ -928,7 +928,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 $row.find('.state').text().indexOf('partial') !== -1;
             if (isRunning) {
                 var $updateCell = $row.find('.compose-updatecolumn');
-                $updateCell.html('<span style="color:#267CA8"><i class="fa fa-refresh fa-spin"></i> checking...</span>');
+                $updateCell.html('<span class="compose-status-info"><i class="fa fa-refresh fa-spin"></i> checking...</span>');
             }
         });
 
@@ -1024,7 +1024,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var title = autostartOnly ? 'Update Autostart Stacks?' : 'Update All Stacks?';
         var confirmText = 'Yes, update ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
 
-        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:8px;">' +
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--dynamix-box-inner-div-border-color);display:flex;align-items:center;gap:8px;">' +
             '<input type="checkbox" id="swal-run-bg-updateall" style="width:16px;height:16px;cursor:pointer;">' +
             '<label for="swal-run-bg-updateall" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
             '</div>';
@@ -1041,7 +1041,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             swal({
                 title: title,
                 html: true,
-                text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be updated:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p style="color:#f80;"><i class="fa fa-warning"></i> This will pull new images and recreate containers.</p></div>' + bgCheckboxHtml,
+                text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be updated:</p><div style="background:var(--dynamix-sb-body-bg-color);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p class="compose-status-warning"><i class="fa fa-warning"></i> This will pull new images and recreate containers.</p></div>' + bgCheckboxHtml,
                 type: 'warning',
                 showCancelButton: true,
                 confirmButtonText: confirmText,
@@ -1168,19 +1168,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     // Single update - show the SHA diff inline
                     var ct = updatesWithSha[0];
                     updateHtml += '<div style="font-family:monospace;font-size:0.8em;margin-top:2px;">';
-                    updateHtml += '<span style="color:#f80;" title="' + escapeAttr(ct.localSha) + '">' + escapeHtml(ct.localSha.substring(0, 8)) + '</span>';
-                    updateHtml += ' <i class="fa fa-arrow-right" style="margin:0 2px;color:#3c3;font-size:0.9em;"></i> ';
-                    updateHtml += '<span style="color:#3c3;" title="' + escapeAttr(ct.remoteSha) + '">' + escapeHtml(ct.remoteSha.substring(0, 8)) + '</span>';
+                    updateHtml += '<span class="compose-status-warning" title="' + escapeAttr(ct.localSha) + '">' + escapeHtml(ct.localSha.substring(0, 8)) + '</span>';
+                    updateHtml += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 2px;font-size:0.9em;"></i> ';
+                    updateHtml += '<span class="compose-status-success" title="' + escapeAttr(ct.remoteSha) + '">' + escapeHtml(ct.remoteSha.substring(0, 8)) + '</span>';
                     updateHtml += '</div>';
                 } else if (updatesWithSha.length > 1) {
                     // Multiple updates - show expand hint
-                    updateHtml += '<div class="cm-advanced" style="font-size:0.8em;color:#999;margin-top:2px;">Expand for details</div>';
+                    updateHtml += '<div class="cm-advanced compose-text-muted" style="font-size:0.8em;margin-top:2px;">Expand for details</div>';
                 }
             }
 
             // Also show pinned count if any containers are pinned
             if (pinnedCount > 0) {
-                updateHtml += '<div style="font-size:0.8em;color:#17a2b8;margin-top:2px;"><i class="fa fa-thumb-tack fa-fw"></i> ' + pinnedCount + ' pinned</div>';
+                updateHtml += '<div class="compose-status-info" style="font-size:0.8em;margin-top:2px;"><i class="fa fa-thumb-tack fa-fw"></i> ' + pinnedCount + ' pinned</div>';
             }
             $updateCell.html(updateHtml);
         } else if (totalContainers > 0) {
@@ -1192,7 +1192,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             } else if (pinnedCount > 0) {
                 // Some containers pinned, rest up-to-date
                 var html = '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
-                html += '<div style="font-size:0.8em;color:#17a2b8;margin-top:2px;"><i class="fa fa-thumb-tack fa-fw"></i> ' + pinnedCount + ' pinned</div>';
+                html += '<div class="cm-advanced compose-status-info" style="font-size:0.8em;margin-top:2px;"><i class="fa fa-thumb-tack fa-fw"></i> ' + pinnedCount + ' pinned</div>';
                 html += '<div class="cm-advanced"><a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><span style="white-space:nowrap;"><i class="fa fa-cloud-download fa-fw"></i> force update</span></a></div>';
                 $updateCell.html(html);
             } else {
@@ -1256,7 +1256,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         if ($stackRow.length === 0) return;
 
         var $updateCell = $stackRow.find('.compose-updatecolumn');
-        $updateCell.html('<span style="color:#267CA8"><i class="fa fa-refresh fa-spin"></i> checking...</span>');
+        $updateCell.html('<span class="compose-status-info"><i class="fa fa-refresh fa-spin"></i> checking...</span>');
 
         $.post(caURL, {
             action: 'checkStackUpdates',
@@ -1418,7 +1418,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             $('div.content').children('div.title').each(function() {
                 var txt = $(this).text().trim();
                 if (/Compose/i.test(txt) && !/Docker\s*Containers/i.test(txt)) {
-                    $(this).append(' <span style="font-size:0.75em;color:#606060;font-weight:normal;vertical-align:middle;">v' + escapeHtml(composeCliVersion) + '</span>');
+                    $(this).append(' <span class="compose-text-muted" style="font-size:0.75em;font-weight:normal;vertical-align:middle;">v' + escapeHtml(composeCliVersion) + '</span>');
                 }
             });
         }
@@ -1558,7 +1558,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         <input type="text" id="compose-stack-name" placeholder="Stack Name" autofocus>
                         <div id="compose-stack-modal-desc" style="font-weight:bold;margin-bottom:8px;">Description (optional)</div>
                         <input type="text" id="compose-stack-desc" placeholder="Description">
-                        <div id="compose-stack-modal-error" style="color:#f44336;margin-bottom:8px;display:none;"></div>
+                        <div id="compose-stack-modal-error" class="compose-status-danger" style="margin-bottom:8px;display:none;"></div>
                     
                         <details>
                             <summary>Advanced Options</summary></br>
@@ -2208,8 +2208,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             title: "Recreate Containers?",
             text: '<div style="text-align:left;max-width:400px;margin:0 auto;">' +
                 '<p>Container labels (icon, WebUI) have been saved.</p>' +
-                '<p style="color:#f80;"><i class="fa fa-exclamation-triangle"></i> <strong>Containers must be recreated</strong> for these changes to take effect.</p>' +
-                '<p style="font-size:0.9em;color:#999;">This will briefly restart the affected containers. Your data will be preserved.</p>' +
+                '<p class="compose-status-warning"><i class="fa fa-exclamation-triangle"></i> <strong>Containers must be recreated</strong> for these changes to take effect.</p>' +
+                '<p class="compose-text-muted" style="font-size:0.9em;">This will briefly restart the affected containers. Your data will be preserved.</p>' +
                 '</div>',
             html: true,
             type: "warning",
@@ -2537,7 +2537,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var title = autostartOnly ? 'Start Autostart Stacks?' : 'Start All Stacks?';
         var confirmText = autostartOnly ? 'Yes, start ' + stacks.length + ' autostart stack' + (stacks.length > 1 ? 's' : '') : 'Yes, start ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
 
-        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:8px;">' +
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--dynamix-box-inner-div-border-color);display:flex;align-items:center;gap:8px;">' +
             '<input type="checkbox" id="swal-run-bg-startall" style="width:16px;height:16px;cursor:pointer;">' +
             '<label for="swal-run-bg-startall" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
             '</div>';
@@ -2554,7 +2554,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             swal({
                 title: title,
                 html: true,
-                text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be started:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div>' + bgCheckboxHtml + '</div>',
+                text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be started:</p><div style="background:var(--dynamix-sb-body-bg-color);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div>' + bgCheckboxHtml + '</div>',
                 type: 'warning',
                 showCancelButton: true,
                 confirmButtonText: confirmText,
@@ -2654,7 +2654,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var title = autostartOnly ? 'Stop Autostart Stacks?' : 'Stop All Stacks?';
         var confirmText = autostartOnly ? 'Yes, stop ' + stacks.length + ' autostart stack' + (stacks.length > 1 ? 's' : '') : 'Yes, stop ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
 
-        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:8px;">' +
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--dynamix-box-inner-div-border-color);display:flex;align-items:center;gap:8px;">' +
             '<input type="checkbox" id="swal-run-bg-stopall" style="width:16px;height:16px;cursor:pointer;">' +
             '<label for="swal-run-bg-stopall" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
             '</div>';
@@ -2671,7 +2671,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             swal({
                 title: title,
                 html: true,
-                text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be stopped:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p style="color:#f80;margin-top:10px;"><i class="fa fa-exclamation-triangle"></i> Containers will be stopped and removed. Data in volumes will be preserved.</p>' + bgCheckboxHtml + '</div>',
+                text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be stopped:</p><div style="background:var(--dynamix-sb-body-bg-color);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p class="compose-status-warning" style="margin-top:10px;"><i class="fa fa-exclamation-triangle"></i> Containers will be stopped and removed. Data in volumes will be preserved.</p>' + bgCheckboxHtml + '</div>',
                 type: 'warning',
                 showCancelButton: true,
                 confirmButtonText: confirmText,
@@ -2808,7 +2808,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 listTitle: 'CONTAINERS',
                 warning: 'Images will be pulled if not present locally.',
                 warningIcon: 'info-circle',
-                warningColor: '#08f',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-ui-dropdownchecklist-color'),
                 confirmText: 'Compose Up',
                 showVersionArrow: false,
                 confirmedFn: ComposeUpConfirmed
@@ -2819,7 +2819,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 listTitle: 'CONTAINERS',
                 warning: 'Containers will be removed but data in volumes is preserved.',
                 warningIcon: 'exclamation-triangle',
-                warningColor: '#f80',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-sb-message-link-color'),
                 confirmText: 'Compose Down',
                 showVersionArrow: false,
                 confirmedFn: ComposeDownConfirmed
@@ -2830,7 +2830,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 listTitle: 'CONTAINERS',
                 warning: 'Containers will be stopped but not removed. Use Compose Up to start them again.',
                 warningIcon: 'info-circle',
-                warningColor: '#08f',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-ui-dropdownchecklist-color'),
                 confirmText: 'Compose Stop',
                 showVersionArrow: false,
                 confirmedFn: ComposeStopConfirmed
@@ -2841,7 +2841,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 listTitle: 'CONTAINERS',
                 warning: 'Containers will be recreated. Data in volumes is preserved.',
                 warningIcon: 'info-circle',
-                warningColor: '#08f',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-ui-dropdownchecklist-color'),
                 confirmText: 'Compose Restart',
                 showVersionArrow: false,
                 confirmedFn: ComposeRestartConfirmed
@@ -2852,7 +2852,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 listTitle: 'CONTAINERS',
                 warning: hasBuild ? 'Images will be built from Dockerfile.' : 'Images will be pulled from the registry.',
                 warningIcon: 'info-circle',
-                warningColor: '#08f',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-ui-dropdownchecklist-color'),
                 confirmText: pullLabel,
                 showVersionArrow: false,
                 confirmedFn: ComposePullConfirmed
@@ -2863,7 +2863,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 listTitle: 'CONTAINERS',
                 warning: 'Running containers will be recreated with the latest images.',
                 warningIcon: 'exclamation-triangle',
-                warningColor: '#f80',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-sb-message-link-color'),
                 confirmText: 'Update',
                 showVersionArrow: true,
                 confirmedFn: UpdateStackConfirmed
@@ -2874,7 +2874,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 listTitle: 'CONTAINERS',
                 warning: 'All containers will be recreated with freshly pulled images.',
                 warningIcon: 'exclamation-triangle',
-                warningColor: '#f80',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-sb-message-link-color'),
                 confirmText: 'Force Update',
                 showVersionArrow: false,
                 confirmedFn: ForceUpdateStackConfirmed
@@ -2890,8 +2890,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         // Container list with icons
         if (containers && containers.length > 0) {
-            html += '<div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:12px 14px;margin:12px 0;">';
-            html += '<div style="font-weight:bold;margin-bottom:10px;font-size:0.9em;color:#999;"><i class="fa fa-cubes"></i> ' + cfg.listTitle + '</div>';
+            html += '<div style="background:var(--dynamix-sb-body-bg-color);border-radius:6px;padding:12px 14px;margin:12px 0;">';
+            html += '<div class="compose-text-muted" style="font-weight:bold;margin-bottom:10px;font-size:0.9em;"><i class="fa fa-cubes"></i> ' + cfg.listTitle + '</div>';
 
             containers.forEach(function(container, index) {
                 var containerName = container.name || container.service || 'Unknown';
@@ -2901,7 +2901,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var imageName = imageParts[0].split('/').pop();
                 var imageTag = imageParts[1] || 'latest';
                 var state = container.state || 'unknown';
-                var stateColor = state === 'running' ? '#3c3' : (state === 'paused' ? '#f80' : '#888');
+                var stateClass = state === 'running' ? 'compose-status-success' : (state === 'paused' ? 'compose-status-warning' : 'compose-text-muted');
                 var stateIcon = state === 'running' ? 'play' : (state === 'paused' ? 'pause' : 'square');
 
                 // Check if this container has an update available
@@ -2917,7 +2917,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 // Grey out containers without updates when showing update dialog
                 var rowOpacity = (cfg.showVersionArrow && !hasUpdate && updateStatus === 'up-to-date') ? '0.5' : '1';
                 var isLast = (index === containers.length - 1);
-                var borderStyle = isLast ? '' : 'border-bottom:1px solid rgba(255,255,255,0.1);';
+                var borderStyle = isLast ? '' : 'border-bottom:1px solid var(--dynamix-box-inner-div-border-color);';
 
                 html += '<div style="display:flex;align-items:center;padding:8px 4px;' + borderStyle + 'opacity:' + rowOpacity + ';">';
                 html += '<img src="' + iconSrc + '" style="width:28px;height:28px;margin-right:10px;border-radius:4px;" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
@@ -2925,27 +2925,27 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 html += '<div style="font-weight:bold;">' + escapeHtml(shortName);
                 // Show update badge if update is available (for update action)
                 if (cfg.showVersionArrow && hasUpdate) {
-                    html += ' <span style="background:#f80;color:#fff;font-size:0.7em;padding:2px 6px;border-radius:3px;margin-left:6px;">UPDATE</span>';
+                    html += ' <span class="compose-status-warning" style="font-size:0.7em;padding:2px 6px;border-radius:3px;margin-left:6px;">UPDATE</span>';
                 } else if (cfg.showVersionArrow && updateStatus === 'up-to-date') {
-                    html += ' <span style="color:#3c3;font-size:0.8em;margin-left:6px;"><i class="fa fa-check"></i></span>';
+                    html += ' <span class="compose-status-success" style="font-size:0.8em;margin-left:6px;"><i class="fa fa-check"></i></span>';
                 }
                 html += '</div>';
-                html += '<div style="font-size:0.85em;color:#999;margin-top:2px;">';
-                html += '<i class="fa fa-' + stateIcon + '" style="color:' + stateColor + ';margin-right:4px;"></i>';
-                html += escapeHtml(imageName) + ' : <span style="color:#f0a000;">' + escapeHtml(imageTag) + '</span>';
+                html += '<div class="compose-text-muted" style="font-size:0.85em;margin-top:2px;">';
+                html += '<i class="fa fa-' + stateIcon + ' ' + stateClass + '" style="margin-right:4px;"></i>';
+                html += escapeHtml(imageName) + ' : <span class="compose-status-info">' + escapeHtml(imageTag) + '</span>';
 
                 // Show SHA info for update action
                 if (cfg.showVersionArrow) {
                     if (hasUpdate && localSha && remoteSha) {
                         // Has update - show current SHA → new SHA
                         html += '<div style="font-family:monospace;font-size:0.9em;margin-top:2px;">';
-                        html += '<span style="color:#f80;" title="' + escapeAttr(localSha) + '">' + escapeHtml(localSha.substring(0, 8)) + '</span>';
-                        html += ' <i class="fa fa-arrow-right" style="margin:0 4px;color:#3c3;"></i> ';
-                        html += '<span style="color:#3c3;" title="' + escapeAttr(remoteSha) + '">' + escapeHtml(remoteSha.substring(0, 8)) + '</span>';
+                        html += '<span class="compose-status-warning" title="' + escapeAttr(localSha) + '">' + escapeHtml(localSha.substring(0, 8)) + '</span>';
+                        html += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 4px;"></i> ';
+                        html += '<span class="compose-status-success" title="' + escapeAttr(remoteSha) + '">' + escapeHtml(remoteSha.substring(0, 8)) + '</span>';
                         html += '</div>';
                     } else if (localSha) {
                         // No update - just show current SHA (greyed)
-                        html += '<div style="font-family:monospace;font-size:0.9em;color:#666;margin-top:2px;" title="' + escapeAttr(localSha) + '">' + escapeHtml(localSha.substring(0, 8)) + '</div>';
+                        html += '<div style="font-family:monospace;font-size:0.9em;margin-top:2px;" title="' + escapeAttr(localSha) + '"><span class="compose-text-muted">' + escapeHtml(localSha.substring(0, 8)) + '</span></div>';
                     }
                 }
                 html += '</div></div></div>';
@@ -2958,7 +2958,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         html += '<div style="color:' + cfg.warningColor + ';margin-top:14px;font-size:0.9em;"><i class="fa fa-' + cfg.warningIcon + '"></i> ' + cfg.warning + '</div>';
 
         // Run-in-background checkbox (appended after config is fetched below)
-        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:8px;">' +
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--dynamix-box-inner-div-border-color);display:flex;align-items:center;gap:8px;">' +
             '<input type="checkbox" id="swal-run-bg-checkbox" style="width:16px;height:16px;cursor:pointer;">' +
             '<label for="swal-run-bg-checkbox" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
             '</div>';
@@ -3020,7 +3020,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
             // Show log in a swal with a scrollable pre block
             var logHtml = '<div style="text-align:left;">' +
-                '<pre style="background:rgba(0,0,0,0.3);border-radius:4px;padding:12px;max-height:400px;overflow-y:auto;' +
+                '<pre style="background:var(--dynamix-tablesorter-tbody-row-bg-color);border-radius:4px;padding:12px;max-height:400px;overflow-y:auto;' +
                 'font-size:0.82em;line-height:1.4;white-space:pre-wrap;word-break:break-all;">' +
                 escapeHtml(parsed.log) + '</pre></div>';
             swal({
@@ -3192,7 +3192,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         // Build profile selection HTML with checkboxes for multi-select
         var profileHtml = '<div style="text-align: left;">';
-        profileHtml += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(128,128,128,0.3);">';
+        profileHtml += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--dynamix-box-inner-div-border-color);">';
         profileHtml += '<label style="font-weight:bold;"><input type="checkbox" id="profile_all" checked onchange="toggleAllProfiles(this)"> All Services (no profile filter)</label>';
         profileHtml += '</div>';
         profileHtml += '<div id="profile_list">';
@@ -3200,7 +3200,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             profileHtml += '<label style="display:block;margin:5px 0;"><input type="checkbox" class="profile_checkbox" value="' + escapeHtml(profile) + '" disabled> ' + escapeHtml(profile) + '</label>';
         });
         profileHtml += '</div>';
-        profileHtml += '<div style="margin-top:10px;font-size:0.9em;color:#888;"><i class="fa fa-info-circle"></i> Select multiple profiles to include services from each.</div>';
+        profileHtml += '<div class="compose-text-muted" style="margin-top:10px;font-size:0.9em;"><i class="fa fa-info-circle"></i> Select multiple profiles to include services from each.</div>';
         profileHtml += '</div>';
 
         swal({
@@ -3566,7 +3566,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 deletedHtml += '<div class="labels-service deleted" data-service="' + escapeAttr(serviceKey) + '" data-deleted="true">';
                 deletedHtml += '<div class="labels-service-header">';
                 deletedHtml += '<img class="labels-service-icon" src="' + escapeAttr(deletedIconSrc) + '" alt="" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
-                deletedHtml += '<span class="labels-service-name">' + escapeHtml(containerName) + ' <span style="color:#f44336;font-size:0.8em;">(will be removed on save)</span></span>';
+                deletedHtml += '<span class="labels-service-name">' + escapeHtml(containerName) + ' <span class="compose-status-danger" style="font-size:0.8em;">(will be removed on save)</span></span>';
                 deletedHtml += '</div>';
                 deletedHtml += '<div class="labels-service-fields">';
                 deletedHtml += '<div class="labels-field"><label><i class="fa fa-picture-o"></i> Icon</label><input type="text" id="orphan-' + escapeAttr(serviceKey) + '-icon" value="' + escapeAttr(iconValue) + '" readonly></div>';
@@ -4377,7 +4377,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 // Image is pinned with SHA256 digest - show pinned status
                 html += '<span class="cyan-text" style="white-space:nowrap;"><i class="fa fa-thumb-tack fa-fw"></i> pinned</span>';
                 if (ctPinnedDigest) {
-                    html += '<div style="font-family:monospace;font-size:0.85em;color:#17a2b8;margin-top:2px;">' + escapeHtml(ctPinnedDigest.substring(0, 12)) + '</div>';
+                    html += '<div style="font-family:monospace;font-size:0.85em;margin-top:2px;"><span class="compose-status-info">' + escapeHtml(ctPinnedDigest.substring(0, 12)) + '</span></div>';
                 }
             } else if (ctHasUpdate) {
                 // Update available - orange "update ready" style with SHA diff
@@ -4387,9 +4387,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (ctLocalSha && ctRemoteSha) {
                     // Always show SHA diff (not just in advanced view)
                     html += '<div style="font-family:monospace;font-size:0.85em;margin-top:2px;">';
-                    html += '<span style="color:#f80;" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 8)) + '</span>';
-                    html += ' <i class="fa fa-arrow-right" style="margin:0 4px;color:#3c3;"></i> ';
-                    html += '<span style="color:#3c3;" title="' + escapeAttr(ctRemoteSha) + '">' + escapeHtml(ctRemoteSha.substring(0, 8)) + '</span>';
+                    html += '<span class="compose-status-warning" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 8)) + '</span>';
+                    html += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 4px;"></i> ';
+                    html += '<span class="compose-status-success" title="' + escapeAttr(ctRemoteSha) + '">' + escapeHtml(ctRemoteSha.substring(0, 8)) + '</span>';
                     html += '</div>';
                 }
             } else if (ctUpdateStatus === 'up-to-date') {
@@ -4397,16 +4397,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 html += '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
                 if (ctLocalSha) {
                     // Show SHA in advanced view only for up-to-date containers (15 chars)
-                    html += '<div class="cm-advanced" style="font-family:monospace;font-size:0.85em;color:#666;" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 15)) + '</div>';
+                    html += '<div class="cm-advanced" style="font-family:monospace;font-size:0.85em;" title="' + escapeAttr(ctLocalSha) + '"><span class="compose-text-muted">' + escapeHtml(ctLocalSha.substring(0, 15)) + '</span></div>';
                 }
             } else {
                 // Unknown/not checked
-                html += '<span style="white-space:nowrap;color:#888;"><i class="fa fa-question-circle fa-fw"></i> not checked</span>';
+                html += '<span class="compose-text-muted" style="white-space:nowrap;"><i class="fa fa-question-circle fa-fw"></i> not checked</span>';
             }
             html += '</td>';
 
             // Source (image name without tag)
-            html += '<td class="cm-advanced"><span class="docker_readmore" style="color:#606060;">' + escapeHtml(imageSource) + '</span></td>';
+            html += '<td class="cm-advanced"><span class="docker_readmore compose-text-muted">' + escapeHtml(imageSource) + '</span></td>';
 
             // Tag (image tag) — truncated with ellipsis via CSS if too long
             html += '<td class="cm-advanced ct-col-tag-cell"><span class="ct-tag" title="' + escapeAttr(imageTag) + '">' + escapeHtml(imageTag) + '</span></td>';
@@ -5489,11 +5489,11 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                             <label for="settings-external-compose-path">External Compose Path</label>
                             <input type="text" id="settings-external-compose-path" placeholder="Default (uses compose file in project folder)" data-pickroot="/" data-picktop="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
                             <div class="settings-field-help">Path to an external folder containing your compose file(s) (e.g., /mnt/user/appdata/myapp/). The folder must contain a file matching *compose*.yml. Leave empty to use the compose file stored in the project folder.</div>
-                            <div id="settings-invalid-indirect-warning" style="margin-top:8px;display:none;padding:8px 12px;background:#4a1c1c;border:1px solid #f44336;border-radius:4px;">
-                                <span style="color:#f44336;font-size:0.9em;"><i class="fa fa-exclamation-triangle"></i> <strong>Invalid external path.</strong> The path shown above is broken or the directory was not found. Correct the path and save to restore the stack, or clear it to use a local compose file instead.</span>
+                            <div id="settings-invalid-indirect-warning" class="compose-status-danger" style="margin-top:8px;display:none;padding:8px 12px;border-radius:4px;">
+                                <span class="compose-status-danger" style="font-size:0.9em;"><i class="fa fa-exclamation-triangle"></i> <strong>Invalid external path.</strong> The path shown above is broken or the directory was not found. Correct the path and save to restore the stack, or clear it to use a local compose file instead.</span>
                             </div>
                             <div id="settings-external-compose-info" style="margin-top:8px;display:none;">
-                                <span style="color:#c80;font-size:0.9em;"><i class="fa fa-info-circle"></i> This stack uses an external compose file. The Compose editor tab will load the file from the external path.</span>
+                                <span class="compose-status-warning" style="font-size:0.9em;"><i class="fa fa-info-circle"></i> This stack uses an external compose file. The Compose editor tab will load the file from the external path.</span>
                             </div>
                         </div>
 
@@ -5511,7 +5511,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                                 <br>Leave empty to start all services. Available profiles are auto-detected from your compose file.
                             </div>
                             <div id="settings-available-profiles" style="margin-top:8px;display:none;">
-                                <span style="color:#888;font-size:0.9em;">Available profiles: </span>
+                                <span class="compose-text-muted" style="font-size:0.9em;">Available profiles: </span>
                                 <span id="settings-profiles-list" style="font-family:monospace;"></span>
                             </div>
                         </div>

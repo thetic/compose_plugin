@@ -38,7 +38,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     /* Tab styles */
     .compose-tabs {
         display: flex;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
         margin-bottom: 20px;
     }
 
@@ -55,12 +55,12 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     .compose-tab:hover {
-        background: rgba(128, 128, 128, 0.1);
+        background: var(--dynamix-box-inner-div-border-color);
         opacity: 1;
     }
 
     .compose-tab.active {
-        border: 1px solid rgba(128, 128, 128, 0.3);
+        border: 1px solid var(--dynamix-box-inner-div-border-color);
         border-bottom: 1px solid transparent;
         background: inherit;
         font-weight: bold;
@@ -75,7 +75,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         left: 0;
         right: 0;
         height: 2px;
-        background: var(--header-background, #ff8c2f);
+        background: var(--header-background);
     }
 
     .compose-tab-content {
@@ -90,7 +90,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     #compose-tab-settings h2 {
         margin: 25px 0 15px 0;
         padding-bottom: 8px;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
         font-size: 1.2em;
         font-weight: 600;
         color: inherit;
@@ -103,14 +103,17 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     /* Button styling */
     #compose-tab-settings .orange-button,
     #compose-tab-backup .orange-button {
-        background: linear-gradient(to bottom, #f97316 0%, #ea580c 100%);
-        border: 1px solid #c2410c;
-        color: #fff;
+        background: linear-gradient(to bottom, var(--dynamix-jquery-ui-button-background-start), var(--dynamix-jquery-ui-button-background-end));
+        border: 1px solid var(--dynamix-jquery-ui-border-color);
+        color: var(--action-primary-color);
+        font-weight: 600;
+        text-shadow: 0 0 2px rgba(0,0,0,0.45);
     }
 
     #compose-tab-settings .orange-button:hover,
     #compose-tab-backup .orange-button:hover {
-        background: linear-gradient(to bottom, #fb923c 0%, #f97316 100%);
+        background: linear-gradient(to bottom, var(--hover-button-background), var(--hover-button-background));
+        color: var(--action-primary-color);
     }
 
     #compose-tab-settings .slim-button {
@@ -128,7 +131,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         min-width: 280px;
         background: var(--dynamix-jquery-ui-header-background);
         border: 2px solid var(--dynamix-tooltipster-sidetip-box-border-color);
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 2px 10px var(--dynamix-box-inner-div-border-color);
         padding: 15px;
         z-index: 9999;
         border-radius: 6px;
@@ -168,9 +171,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     #compose-tab-backup blockquote {
         margin: 5px 0 15px 0;
         padding: 8px 12px;
-        border-left: 3px solid rgba(128, 128, 128, 0.3);
+        border-left: 3px solid var(--dynamix-box-inner-div-border-color);
         font-size: 0.9em;
-        color: #888;
+        color: var(--dynamix-sb-title-text-color);
     }
 
     #compose-tab-settings blockquote p,
@@ -180,7 +183,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     #compose-tab-settings blockquote code,
     #compose-tab-backup blockquote code {
-        background: rgba(128, 128, 128, 0.15);
+        background: var(--dynamix-sb-body-bg-color);
         padding: 1px 5px;
         border-radius: 3px;
         font-size: 0.95em;
@@ -190,26 +193,27 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     #compose-log-container {
         font-family: monospace;
         font-size: 12px;
-        background: #1e1e1e;
-        color: #d4d4d4;
+        background: var(--dynamix-sb-body-bg-color);
+        color: var(--text-color);
         padding: 10px;
         border-radius: 4px;
         height: 500px;
         overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
+        border: 1px solid var(--border-color);
     }
 
     #compose-log-container .log-timestamp {
-        color: #6a9955;
+        color: var(--dynamix-sb-message-link-color);
     }
 
     #compose-log-container .log-source {
-        color: #569cd6;
+        color: var(--dynamix-ui-dropdownchecklist-color);
     }
 
     #compose-log-container .log-message {
-        color: #d4d4d4;
+        color: var(--text-color);
     }
 
     .log-controls {
@@ -231,7 +235,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     #log-line-count {
         margin-left: auto;
-        color: #888;
+        color: var(--dynamix-sb-title-text-color);
     }
 
     /* Auto-Updates styles - reuse backup-section layout */
@@ -263,7 +267,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         text-align: left;
         padding: 6px 8px;
         font-weight: 600;
-        border-bottom: 2px solid rgba(128, 128, 128, 0.3);
+        border-bottom: 2px solid var(--dynamix-box-inner-div-border-color);
         font-size: 0.9em;
     }
 
@@ -293,7 +297,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         cursor: pointer;
         font-size: 1.2em;
         vertical-align: middle;
-        color: var(--header-background, #ff8c2f);
+        color: var(--header-background);
     }
 
     #compose_updates th .toggle-all-btn:hover {
@@ -307,7 +311,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     #compose_updates td {
         padding: 4px 8px;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
         vertical-align: middle;
         font-size: 0.9em;
     }
@@ -318,7 +322,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     #compose_updates .au-placeholder {
         display: inline-block;
-        color: var(--dynamix-tablesorter-text-color, #ccc);
+        color: var(--dynamix-tablesorter-text-color);
         font-style: italic;
         min-width: 30px;
         width: 100%;
@@ -346,12 +350,12 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     #compose_updates tbody tr:hover {
-        background: rgba(128, 128, 128, 0.08);
+        background: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
     }
 
     /* Alternating row colors for updates table */
     #compose_updates tbody tr:nth-child(odd) {
-        background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color, rgba(0, 0, 0, 0.05));
+        background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
     }
 
     #compose_updates tbody tr:nth-child(even) {
@@ -372,7 +376,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     .backup-dest-input::placeholder {
-        color: #888;
+        color: var(--dynamix-sb-title-text-color);
         opacity: 1;
     }
 
@@ -381,7 +385,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         width: 700px;
         max-width: 100%;
         overflow-y: auto;
-        border: 1px solid rgba(128, 128, 128, 0.3);
+        border: 1px solid var(--dynamix-box-inner-div-border-color);
         border-radius: 4px;
         margin: 4px 0;
         box-sizing: border-box;
@@ -396,27 +400,27 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     .backup-archive-list th {
         position: sticky;
         top: 0;
-        background: var(--body-background, #1c1b1b);
+        background: var(--body-background);
         padding: 4px 8px;
         text-align: left;
         font-size: 0.85em;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
         white-space: nowrap;
     }
 
     .backup-archive-list td {
         padding: 3px 8px;
         font-size: 0.85em;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
         white-space: nowrap;
     }
 
     .backup-archive-list tr.selected {
-        background: rgba(255, 140, 47, 0.15);
+        background: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
     }
 
     .backup-archive-list tr:hover {
-        background: rgba(128, 128, 128, 0.1);
+        background: var(--dynamix-box-inner-div-border-color);
         cursor: pointer;
     }
 
@@ -425,7 +429,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         width: 700px;
         max-width: 100%;
         overflow-y: auto;
-        border: 1px solid rgba(128, 128, 128, 0.3);
+        border: 1px solid var(--dynamix-box-inner-div-border-color);
         border-radius: 4px;
         padding: 4px 8px;
         margin: 4px 0;
@@ -440,7 +444,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     .backup-stack-checklist label:hover {
-        background: rgba(128, 128, 128, 0.1);
+        background: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
     }
 
     .backup-stack-checklist input[type="checkbox"] {
@@ -460,23 +464,56 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     .backup-status.success {
         display: block;
-        background: rgba(76, 175, 80, 0.15);
-        border: 1px solid rgba(76, 175, 80, 0.4);
-        color: #4caf50;
+        background: var(--dynamix-sb-message-bg-color);
+        border: 1px solid var(--dynamix-sweet-alert-icon-bg-color);
+        color: var(--dynamix-sb-message-text-color);
     }
 
     .backup-status.error {
         display: block;
-        background: rgba(244, 67, 54, 0.15);
-        border: 1px solid rgba(244, 67, 54, 0.4);
-        color: #f44336;
+        background: var(--dynamix-sb-message-bg-color);
+        border: 1px solid var(--dynamix-sweet-alert-icon-bg-color);
+        color: var(--dynamix-sweet-alert-text-color);
     }
 
     .backup-status.info {
         display: block;
-        background: rgba(33, 150, 243, 0.15);
-        border: 1px solid rgba(33, 150, 243, 0.4);
-        color: #2196f3;
+        background: var(--dynamix-sb-message-bg-color);
+        border: 1px solid var(--dynamix-sb-title-bg-color);
+        color: var(--dynamix-sb-title-text-color);
+    }
+
+    .compose-text-muted {
+        color: var(--dynamix-sb-title-text-color);
+    }
+
+    .compose-status-warning {
+        color: var(--dynamix-ui-dropdownchecklist-color);
+    }
+
+    .compose-status-danger {
+        color: var(--dynamix-sweet-alert-text-color);
+    }
+
+    .compose-status-success {
+        color: var(--dynamix-sb-message-text-color);
+    }
+
+    .compose-status-info {
+        color: var(--dynamix-sb-title-text-color);
+    }
+
+    #aggressive-mode-warning {
+        text-align: center;
+        font-weight: bold;
+        line-height: 1.4;
+        display: none;
+        margin-top: 4px;
+        padding: 8px 10px;
+        background: var(--dynamix-sb-message-bg-color);
+        color: var(--dynamix-sweet-alert-text-color);
+        border-radius: 8px;
+        border: 1px solid var(--dynamix-tablesorter-thead-row-border-color);
     }
 
     .backup-actions {
@@ -487,7 +524,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     .backup-actions .spinner {
         display: none;
-        color: #ff8c2f;
+        color: var(--dynamix-sb-message-link-color);
     }
 
     .backup-actions .spinner.visible {
@@ -640,8 +677,8 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             var $wrapper = $('#aggressive-mode-wrapper');
             if (isAggressive) {
                 $wrapper.css({
-                    'border': '2px solid #f58220',
-                    'background-color': '#3e1400'
+                    'border': '2px solid var(--dynamix-sb-title-bg-color)',
+                    'background-color': 'var(--dynamix-sb-body-bg-color)'
                 });
                 $('#aggressive-mode-warning').show();
             } else {
@@ -943,17 +980,17 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                         container.scrollTop = container.scrollHeight;
                     }
                 } else {
-                    $('#compose-log-container').html('<span style="color: #f44;">Error loading logs: ' + (result.message || 'Unknown error') + '</span>');
+                    $('#compose-log-container').html('<span class="compose-status-danger">Error loading logs: ' + (result.message || 'Unknown error') + '</span>');
                 }
             } catch (e) {
-                $('#compose-log-container').html('<span style="color: #f44;">Error parsing response</span>');
+                $('#compose-log-container').html('<span class="compose-status-danger">Error parsing response</span>');
             }
         });
     }
 
     function formatLogEntries(logs) {
         if (!logs || logs.length === 0) {
-            return '<span style="color: #888;">No log entries found. Enable Debug Logging in Settings to capture compose commands.</span>';
+            return '<span class="compose-text-muted">No log entries found. Enable Debug Logging in Settings to capture compose commands.</span>';
         }
 
         var html = '';
@@ -1106,7 +1143,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     function loadBackupArchives() {
         var dir = $('#BACKUP_DESTINATION').val() || '';
         var $list = $('#backup-archive-list');
-        $list.html('<tr><td colspan="4" style="text-align:center;padding:15px;color:#888;font-style:italic;">Loading...</td></tr>');
+        $list.html('<tr><td colspan="4" class="compose-text-muted" style="text-align:center;padding:15px;font-style:italic;">Loading...</td></tr>');
 
         $.post(caURL, {
             action: 'listBackups',
@@ -1117,10 +1154,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 if (result.result === 'success') {
                     renderArchiveList(result.archives);
                 } else {
-                    $list.html('<tr><td colspan="4" style="text-align:center;color:#f44;">Error loading archives</td></tr>');
+                    $list.html('<tr><td colspan="4" class="compose-status-danger" style="text-align:center;">Error loading archives</td></tr>');
                 }
             } catch (e) {
-                $list.html('<tr><td colspan="4" style="text-align:center;color:#f44;">Error parsing response</td></tr>');
+                $list.html('<tr><td colspan="4" class="compose-status-danger" style="text-align:center;">Error parsing response</td></tr>');
             }
         });
     }
@@ -1129,7 +1166,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var $list = $('#backup-archive-list');
 
         if (!archives || archives.length === 0) {
-            $list.html('<tr><td colspan="4" style="text-align:center;padding:15px;color:#888;">No backups found. Create one using the button above.</td></tr>');
+            $list.html('<tr><td colspan="4" class="compose-text-muted" style="text-align:center;padding:15px;">No backups found. Create one using the button above.</td></tr>');
             return;
         }
 
@@ -1159,7 +1196,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         selectedManifest = null;
 
         // Load stack list from archive
-        $('#restore-stack-checklist').html('<span style="color:#888;font-style:italic;">Reading archive contents...</span>');
+        $('#restore-stack-checklist').html('<span class="compose-text-muted" style="font-style:italic;">Reading archive contents...</span>');
         $('#btn-restore-stacks').prop('disabled', true);
         hideBackupStatus('#restore-status');
 
@@ -1175,13 +1212,13 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     selectedManifest = result;
                     renderStackChecklist(result.stacks);
                 } else {
-                    $('#restore-stack-checklist').html('<span style="color:#f44;">' + escapeHtml(result.message || 'Failed to read archive.') + '</span>');
+                    $('#restore-stack-checklist').html('<span class="compose-status-danger">' + escapeHtml(result.message || 'Failed to read archive.') + '</span>');
                 }
             } catch (e) {
-                $('#restore-stack-checklist').html('<span style="color:#f44;">Error parsing response.</span>');
+                $('#restore-stack-checklist').html('<span class="compose-status-danger">Error parsing response.</span>');
             }
         }).fail(function() {
-            $('#restore-stack-checklist').html('<span style="color:#f44;">Request failed. Check server logs.</span>');
+            $('#restore-stack-checklist').html('<span class="compose-status-danger">Request failed. Check server logs.</span>');
         });
     }
 
@@ -1189,11 +1226,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var $checklist = $('#restore-stack-checklist');
 
         if (!stacks || stacks.length === 0) {
-            $checklist.html('<span style="color:#888;">No stacks found in this archive.</span>');
+            $checklist.html('<span class="compose-text-muted">No stacks found in this archive.</span>');
             return;
         }
 
-        var html = '<label style="font-weight:bold;border-bottom:1px solid rgba(128,128,128,0.2);padding-bottom:6px;margin-bottom:4px;">' +
+        var html = '<label style="font-weight:bold;border-bottom:1px solid var(--dynamix-box-inner-div-border-color);padding-bottom:6px;margin-bottom:4px;">' +
             '<input type="checkbox" id="restore-select-all" onchange="toggleRestoreSelectAll(this)"> Select All (' + stacks.length + ' stacks)</label>';
 
         stacks.forEach(function(stack) {
@@ -1243,7 +1280,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             showCancelButton: true,
             confirmButtonText: 'Restore',
             cancelButtonText: 'Cancel',
-            confirmButtonColor: '#f97316'
+            confirmButtonColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-jquery-ui-button-background-end')
         }, function() {
             doRestore(stacks);
         });
@@ -1286,7 +1323,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             type: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Delete',
-            confirmButtonColor: '#d33'
+            confirmButtonColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-jquery-ui-button-background-start')
         }, function() {
             $.post(caURL, {
                 action: 'deleteBackup',
@@ -1297,7 +1334,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     if (result.result === 'success') {
                         selectedArchive = null;
                         selectedManifest = null;
-                        $('#restore-stack-checklist').html('<span style="text-align:center;display:block;padding:15px;color:#888;font-size:0.85em;">Select a backup archive above to see its contents.</span>');
+                        $('#restore-stack-checklist').html('<span class="compose-text-muted" style="text-align:center;display:block;padding:15px;font-size:0.85em;">Select a backup archive above to see its contents.</span>');
                         $('#btn-restore-stacks').prop('disabled', true);
                         loadBackupArchives();
                     } else {
@@ -1443,7 +1480,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     function loadUpdatesUI() {
-        $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td></tr>');
+        $('#updates-tbody').html('<tr><td colspan="5" class="compose-text-muted" style="text-align:center;padding:12px;">_(Loading stacks...)_</td></tr>');
         $.post('/plugins/compose.manager/php/exec.php', {
             action: 'listProjects'
         }, function(projects) {
@@ -1499,10 +1536,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 // Sync toggle-all state
                 updateToggleAllState();
             }, 'json').fail(function() {
-                $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#b33;padding:12px;">_(Failed to load auto-update settings.)_</td></tr>');
+                $('#updates-tbody').html('<tr><td colspan="5" class="compose-status-danger" style="text-align:center;padding:12px;">_(Failed to load auto-update settings.)_</td></tr>');
             });
         }, 'json').fail(function() {
-            $('#updates-tbody').html('<tr><td colspan="5" style="text-align:center;color:#b33;padding:12px;">_(Failed to load stacks.)_</td></tr>');
+            $('#updates-tbody').html('<tr><td colspan="5" class="compose-status-danger" style="text-align:center;padding:12px;">_(Failed to load stacks.)_</td></tr>');
         });
     }
 
@@ -1777,7 +1814,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 </dd>
             </dl>
 
-            <div id="aggressive-mode-warning" class="alert alert-warning" style="text-align:center;font-weight:bold;line-height:1.4;display:none;margin-top:4px;padding:8px 10px;background: #f58220;color:#fff;border-radius:8px;border:1px solid #ffa33f;">
+            <div id="aggressive-mode-warning" class="alert alert-warning">
                 <span style="font-size:0.95em;">⚠️ <strong>Warning:</strong> action confirmations are disabled and commands default to background mode. Operations execute immediately in background.</span>
             </div>
 
@@ -2126,7 +2163,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     </thead>
                     <tbody id="updates-tbody">
                         <tr>
-                            <td colspan="5" style="text-align:center;color:#888;padding:12px;">_(Loading stacks...)_</td>
+                            <td colspan="5" class="compose-text-muted" style="text-align:center;padding:12px;">_(Loading stacks...)_</td>
                         </tr>
                     </tbody>
                 </table>
@@ -2238,7 +2275,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                         </thead>
                         <tbody id="backup-archive-list">
                             <tr>
-                                <td colspan="4" style="text-align:center;padding:15px;color:#888;">_(Switch to this tab to load backup list.)_</td>
+                                <td colspan="4" class="compose-text-muted" style="text-align:center;padding:15px;">_(Switch to this tab to load backup list.)_</td>
                             </tr>
                         </tbody>
                     </table>
@@ -2256,7 +2293,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             <dt>_(Stacks in Archive)_:</dt>
             <dd>
                 <div class="backup-stack-checklist" id="restore-stack-checklist">
-                    <span style="text-align:center;display:block;padding:15px;color:#888;font-size:0.85em;">_(Select a backup archive above to see its contents.)_</span>
+                    <span class="compose-text-muted" style="text-align:center;display:block;padding:15px;font-size:0.85em;">_(Select a backup archive above to see its contents.)_</span>
                 </div>
             </dd>
         </dl>
@@ -2267,7 +2304,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 <div class="backup-actions">
                     <input type="button" id="btn-restore-stacks" value="_(Restore Selected)_" onclick="restoreSelectedStacks()" class="orange-button" disabled>
                     <i class="fa fa-spinner fa-spin spinner"></i>
-                    <span id="restore-selected-count" style="color:#888;"></span>
+                    <span id="restore-selected-count" class="compose-text-muted"></span>
                 </div>
                 <div id="restore-status" class="backup-status"></div>
             </dd>
@@ -2308,7 +2345,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         <span id="log-line-count"></span>
     </div>
     <div id="compose-log-container">
-        <span style="color: #888;">_(Loading logs...)_</span>
+        <span class="compose-text-muted">_(Loading logs...)_</span>
     </div>
     <blockquote class="inline_help">
         <p>This log shows compose-related entries from the system log.</p>
@@ -2390,11 +2427,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                         var avatar = (u.avatar_url || '').replace(/&s=\d+/, '') + '&s=96';
                         var contributions = u.contributions || 0;
 
-                        html += '<li style="width:220px;border:1px solid rgba(0,0,0,0.06);padding:8px;border-radius:6px;display:flex;gap:8px;align-items:center;">' +
+                        html += '<li style="width:220px;border:1px solid var(--dynamix-box-inner-div-border-color);padding:8px;border-radius:6px;display:flex;gap:8px;align-items:center;">' +
                             '<a href="' + url + '" target="_blank" rel="noopener noreferrer"><img src="' + avatar + '" alt="' + login + '" style="width:48px;height:48px;border-radius:4px;"></a>' +
                             '<div style="flex:1;min-width:0;overflow:hidden;">' +
                             '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + login + '</a>' +
-                            '<span style="color:#666;font-size:0.9em;">' + contributions + ' contributions</span>' +
+                            '<span style="color: var(--dynamix-sb-title-text-color);font-size:0.9em;">' + contributions + ' contributions</span>' +
                             '</div>' +
                             '</li>';
                     });

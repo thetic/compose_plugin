@@ -202,7 +202,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     // Add data-status attribute to the icon to aid debugging of initial render state
     $o .= "<i class='fa fa-$shape $status $color compose-status-icon' data-status='$status'></i><span class='state'>$statusLabel</span>";
     // Advanced: show project folder
-    $o .= "<div class='cm-advanced' style='margin-top:4px;font-size:0.85em;color:#888;'>";
+    $o .= "<div class='cm-advanced compose-text-muted' style='margin-top:4px;font-size:0.85em;'>";
     $o .= "Project: $projectHtml";
     $o .= "</div>";
     $o .= "</span></span>";
@@ -231,7 +231,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $o .= "<td class='cm-advanced' style='overflow-wrap:break-word;word-wrap:break-word;'><span class='docker_readmore'>$descriptionHtml</span></td>";
 
     // Path column (advanced only)
-    $o .= "<td class='cm-advanced' style='color:#606060;font-size:12px;'>$pathHtml</td>";
+    $o .= "<td class='cm-advanced compose-text-muted' style='font-size:12px;'>$pathHtml</td>";
 
     // Auto Start toggle
     $o .= "<td class='nine'>";
@@ -242,7 +242,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 
     // Expandable details row
     $o .= "<tr class='stack-details-row' id='details-row-$id' style='display:none;'>";
-    $o .= "<td colspan='9' class='stack-details-cell' style='padding:0 0 0 60px;background:rgba(0,0,0,0.05);'>";
+    $o .= "<td colspan='9' class='stack-details-cell' style='padding:0 0 0 60px;background:var(--dynamix-tablesorter-tbody-row-bg-color);'>";
     $o .= "<div class='stack-details-container' id='details-container-$id' style='padding:8px 16px;'>";
     $o .= "<i class='fa fa-spinner fa-spin compose-spinner'></i> Loading containers...";
     $o .= "</div>";
@@ -252,7 +252,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 
 // If no stacks found, show a message
 if ($stackCount === 0) {
-    $o = "<tr><td colspan='7' style='text-align:center;padding:20px;color:#888;'>No Docker Compose stacks found. Click 'Add New Stack' to create one.</td></tr>";
+    $o = "<tr><td colspan='7' style='text-align:center;padding:20px;color:var(--alt-text-color);'>No Docker Compose stacks found. Click 'Add New Stack' to create one.</td></tr>";
 }
 
 // Output the HTML

@@ -6,7 +6,7 @@
     --modal-backdrop-blur: 8px;
     position: fixed;
     inset: 0;
-    background: var(--modal-overlay-bg, rgba(0, 0, 0, 0.5));
+    background: var(--modal-overlay-bg);
     backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
     -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
     transition: background-color 0.2s ease, backdrop-filter 0.2s ease;
@@ -243,11 +243,11 @@
   }
 
   .stack-action-item.stack-action-danger {
-    color: #f44336;
+    color: var(--status-error);
   }
 
   .stack-action-item.stack-action-danger i {
-    color: #f44336;
+    color: var(--status-error);
   }
 
   .stack-action-item.disabled {
@@ -450,5 +450,5 @@
 
   /* Source data cells only — muted color (header inherits theme default) */
   .compose-ct-table td:nth-child(3) {
-    color: #606060;
+    color: var(--alt-text-color);
   }

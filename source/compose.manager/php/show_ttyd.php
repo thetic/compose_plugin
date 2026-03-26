@@ -17,7 +17,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
 }
 ?>
 <!DOCTYPE html>
-<html style="height:100%;margin:0;padding:0;background:#2b2b2b">
+<html style="height:100%;margin:0;padding:0;background:var(--dynamix-sb-body-bg-color)">
 
 <head>
     <style>
@@ -27,7 +27,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             padding: 0;
             height: 100%;
             overflow: hidden;
-            background: #2b2b2b;
+            background: var(--dynamix-sb-body-bg-color);
             box-sizing: border-box
         }
 
@@ -47,7 +47,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             text-align: center;
             padding: 10px 0;
             margin: 0;
-            background: #2b2b2b;
+            background: var(--dynamix-sb-body-bg-color);
             flex-shrink: 0
         }
 
@@ -73,9 +73,8 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             outline: none;
             border-radius: 4px;
             border: 0;
-            color: #ff8c2f;
-            background: -webkit-gradient(linear, left top, right top, from(#e22828), to(#ff8c2f)) 0 0 no-repeat, -webkit-gradient(linear, left top, right top, from(#e22828), to(#ff8c2f)) 0 100% no-repeat, -webkit-gradient(linear, left bottom, left top, from(#e22828), to(#e22828)) 0 100% no-repeat, -webkit-gradient(linear, left bottom, left top, from(#ff8c2f), to(#ff8c2f)) 100% 100% no-repeat;
-            background: linear-gradient(90deg, #e22828 0, #ff8c2f) 0 0 no-repeat, linear-gradient(90deg, #e22828 0, #ff8c2f) 0 100% no-repeat, linear-gradient(0deg, #e22828 0, #e22828) 0 100% no-repeat, linear-gradient(0deg, #ff8c2f 0, #ff8c2f) 100% 100% no-repeat;
+            color: var(--dynamix-jquery-ui-button-text-color);
+            background: linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end));
             background-size: 100% 2px, 100% 2px, 2px 100%, 2px 100%
         }
 
@@ -85,14 +84,13 @@ if (version_compare($version['version'], "6.10.0", "<")) {
         button:hover,
         button:hover[type=button],
         a.button:hover {
-            color: #f2f2f2;
-            background: -webkit-gradient(linear, left top, right top, from(#e22828), to(#ff8c2f));
-            background: linear-gradient(90deg, #e22828 0, #ff8c2f)
+            color: var(--dynamix-sb-message-text-color);
+            background: linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end));
         }
     </style>
 </head>
 
-<body style="background:#2b2b2b">
+<body style="background:var(--dynamix-sb-body-bg-color)">
     <iframe id="ttyd-frame" src="<?= $url ?>"></iframe>
     <?php if ($showDone): ?>
         <p class="centered"><button class="logLine" type="button" id="done-btn">Done</button></p>
@@ -143,7 +141,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             if (!doc.getElementById('compose-sb-dark')) {
                 var s = doc.createElement('style');
                 s.id = 'compose-sb-dark';
-                s.textContent = '#sb-body,#sb-body-inner,#sb-player,#sb-info,#sb-info-inner,#sb-loading,#sb-wrapper-inner{background:#2b2b2b !important;border-color:#2b2b2b !important}';
+                s.textContent = '#sb-body,#sb-body-inner,#sb-player,#sb-info,#sb-info-inner,#sb-loading,#sb-wrapper-inner{background:var(--dynamix-sb-body-bg-color) !important;border-color:var(--dynamix-box-inner-div-border-color) !important}';
                 doc.head.appendChild(s);
             }
         } catch (e) {}
@@ -156,7 +154,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
                 // Inject scrollbar styling
                 var fdoc = frame.contentDocument || frame.contentWindow.document;
                 var s = fdoc.createElement('style');
-                s.textContent = '::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:rgba(255,255,255,0.05);border-radius:4px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35)}';
+                s.textContent = '::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:var(--dynamix-box-inner-div-border-color);border-radius:4px}::-webkit-scrollbar-thumb{background:var(--dynamix-box-text-color);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:var(--dynamix-sb-title-text-color)}';
                 fdoc.head.appendChild(s);
                 // Force ttyd to recalculate terminal dimensions (fixes initial right margin)
                 setTimeout(function() {
