@@ -28,10 +28,16 @@
 >
 
 <CHANGES>
-###2026.03.25-dev.1735
-- Features: add initial README for Compose Manager Plus plugin so in plugins tab, display is correct
+###2026.03.25-dev.2342
+- Features (settings): add '/Dashboard' to allowed navigation paths for done button
+- Bug Fixes (dashboard): update navigation to redirect to the correct compose page
+- Bug Fixes (settings): improve referrer handling for return path in settings after applying changes
+- Bug Fixes (dashboard): make tile header links navigable to Compose Manager and Settings
+- Bug Fixes (settings): increase padding to prevent content from hiding under fixed action bar
+- Bug Fixes (settings): done button correctly returns you to the previous page (/Settings, /Plugins, /Docker, or /Compose)
+- Bug Fixes (settings): fixed action bar to be static
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.25-dev.1735)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.25-dev.2342)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
