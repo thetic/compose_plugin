@@ -67,6 +67,21 @@ function execComposeCommandInTTY($cmd, $debug, $logFile = '')
 }
 
 /**
+ * Get the last command log file path for a given compose action.
+ *
+ * @param string $action Compose action (up, down, update, pull, stop, logs)
+ * @param string $path Stack path
+ * @return string Log file path or empty string when logs should not be saved.
+ */
+function getLastCmdLogFileForComposeAction($action, $path)
+{
+    if ($action === 'logs') {
+        return '';
+    }
+    return rtrim($path, '/') . '/last_cmd.log';
+}
+
+/**
  * Build and echo a compose command for a single stack.
  *
  * @param string $action The compose action (up, down, update, pull, stop, logs)
@@ -157,7 +172,7 @@ function echoComposeCommand($action, $recreate = false, $background = false)
             // Signal to JS that this ran in background (no terminal window to open)
             echo json_encode(['background' => true]);
         } elseif ($cfg['OUTPUTSTYLE'] == "ttyd") {
-            $logFile = $path . '/last_cmd.log';
+            $logFile = getLastCmdLogFileForComposeAction($action, $path);
             $composeCommandEscaped = array_map(function ($item) {
                 return escapeshellarg($item);
             }, $composeCommand);

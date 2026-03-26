@@ -366,6 +366,14 @@ class ComposeUtilTest extends TestCase
         @unlink($socketPath);
     }
 
+    public function testGetLastCmdLogFileForComposeAction(): void
+    {
+        $path = '/test-stack';
+        $this->assertSame('/test-stack/last_cmd.log', getLastCmdLogFileForComposeAction('up', $path));
+        $this->assertSame('', getLastCmdLogFileForComposeAction('logs', $path));
+        $this->assertSame('/test-stack/last_cmd.log', getLastCmdLogFileForComposeAction('down', $path));
+    }
+
     /**
      * @dataProvider actionsProvider
      * Test various compose actions
