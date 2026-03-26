@@ -1419,20 +1419,22 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         // Add Advanced View toggle (like Docker tab)
         // Use compose-specific class to avoid conflict with Docker tab's advancedview when tabs are joined
-        // Check if .tabs exists (joined under Docker tab) or create standalone toggle (own tab under Tasks)
         var toggleHtml = '<span class="status compose-view-toggle"><span><input type="checkbox" class="compose-advancedview"></span></span>';
-        if ($(".tabs").length) {
-            $(".tabs").append(toggleHtml);
+
+        // In tabbed mode we must keep the toggle inside the compose content pane
+        // so it does not leak into the global tab bar, and in standalone mode it
+        // also appears above the compose stacks table.
+        var $toggleContainer = $('<div class="ToggleViewMode"></div>').html(toggleHtml);
+        var $tableWrapper = $('#compose_stacks').closest('.TableContainer');
+        if ($tableWrapper.length) {
+            $tableWrapper.before($toggleContainer);
+        } else if ($('#compose_stacks').length) {
+            $('#compose_stacks').before($toggleContainer);
+        } else if ($('.tabs').length) {
+            // Fallback for unusual layout: inject into tabs as a last resort
+            $('.tabs').append($toggleContainer);
         } else {
-            // Standalone page (xmenu under Tasks) - add toggle before the container area
-            // Style it to float right above the table for consistent positioning
-            var standaloneToggle = $('<div class="ToggleViewMode"></div>').html(toggleHtml);
-            var $tableWrapper = $('#compose_stacks').closest('.TableContainer');
-            if ($tableWrapper.length) {
-                $tableWrapper.before(standaloneToggle);
-            } else {
-                $('#compose_stacks').before(standaloneToggle);
-            }
+            $('body').prepend($toggleContainer);
         }
         // Inject Compose CLI version next to the page title
         if (composeCliVersion) {
