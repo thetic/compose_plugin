@@ -1987,6 +1987,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 '/Plugins',
                 '/Docker',
                 '/Compose',
+                '/Dashboard',
             ];
 
             for (var i = 0; i < allowed.length; i++) {
