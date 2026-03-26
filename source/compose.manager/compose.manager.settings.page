@@ -560,6 +560,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         gap: 8px;
     }
 </style>
+<script src="<? autov('/plugins/compose.manager/javascript/common.js') ?>"></script>
 <script>
     var caURL = "/plugins/compose.manager/php/exec.php";
     var skipPatchUI = <?php echo json_encode($option_patch_ui); ?>; // true when Unraid >= 6.12
@@ -996,23 +997,14 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var html = '';
         logs.forEach(function(entry) {
             html += '<div class="log-entry">';
-            html += '<span class="log-timestamp">' + escapeHtml(entry.timestamp) + '</span> ';
-            html += '<span class="log-source">' + escapeHtml(entry.source) + '</span>: ';
-            html += '<span class="log-message">' + escapeHtml(entry.message) + '</span>';
+            html += '<span class="log-timestamp">' + composeEscapeHtml(entry.timestamp) + '</span> ';
+            html += '<span class="log-source">' + composeEscapeHtml(entry.source) + '</span>: ';
+            html += '<span class="log-message">' + composeEscapeHtml(entry.message) + '</span>';
             html += '</div>';
         });
         return html;
     }
 
-    function escapeHtml(text) {
-        var div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function escapeAttr(text) {
-        return String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
 
     function startLogRefresh() {
         stopLogRefresh();
@@ -1173,11 +1165,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var html = '';
         archives.forEach(function(a) {
             var date = a.modified ? new Date(a.modified).toLocaleString() : a.filename;
-            html += '<tr data-archive="' + escapeAttr(a.filename) + '" onclick="selectArchive(this)">';
+            html += '<tr data-archive="' + composeEscapeAttr(a.filename) + '" onclick="selectArchive(this)">';
             html += '<td><input type="radio" name="backup_archive_select" style="pointer-events:none;"></td>';
-            html += '<td>' + escapeHtml(a.filename) + '</td>';
-            html += '<td>' + escapeHtml(a.size) + '</td>';
-            html += '<td>' + escapeHtml(date) + '</td>';
+            html += '<td>' + composeEscapeHtml(a.filename) + '</td>';
+            html += '<td>' + composeEscapeHtml(a.size) + '</td>';
+            html += '<td>' + composeEscapeHtml(date) + '</td>';
             html += '</tr>';
         });
 
@@ -1212,7 +1204,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     selectedManifest = result;
                     renderStackChecklist(result.stacks);
                 } else {
-                    $('#restore-stack-checklist').html('<span class="compose-status-danger">' + escapeHtml(result.message || 'Failed to read archive.') + '</span>');
+                    $('#restore-stack-checklist').html('<span class="compose-status-danger">' + composeEscapeHtml(result.message || 'Failed to read archive.') + '</span>');
                 }
             } catch (e) {
                 $('#restore-stack-checklist').html('<span class="compose-status-danger">Error parsing response.</span>');
@@ -1234,7 +1226,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             '<input type="checkbox" id="restore-select-all" onchange="toggleRestoreSelectAll(this)"> Select All (' + stacks.length + ' stacks)</label>';
 
         stacks.forEach(function(stack) {
-            html += '<label><input type="checkbox" class="restore-stack-cb" value="' + escapeAttr(stack) + '" onchange="updateRestoreButton()"> ' + escapeHtml(stack) + '</label>';
+            html += '<label><input type="checkbox" class="restore-stack-cb" value="' + composeEscapeAttr(stack) + '" onchange="updateRestoreButton()"> ' + composeEscapeHtml(stack) + '</label>';
         });
 
         $checklist.html(html);
@@ -1499,11 +1491,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     var time = entry.time || '02:00';
                     var weekday = (entry.weekday !== undefined) ? entry.weekday : 0;
                     var monthday = (entry.monthday !== undefined) ? entry.monthday : 1;
-                    var row = '<tr class="sortable" data-path="' + escapeAttr(key) + '">';
-                    row += '<td>' + escapeHtml(p.name) + '</td>';
+                    var row = '<tr class="sortable" data-path="' + composeEscapeAttr(key) + '">';
+                    row += '<td>' + composeEscapeHtml(p.name) + '</td>';
                     row += '<td><input type="checkbox" class="au-enabled compose-toggle" ' + enabled + '></td>';
                     row += '<td><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
-                    row += '<td><input type="time" class="au-time" value="' + escapeAttr(time) + '"></td>';
+                    row += '<td><input type="time" class="au-time" value="' + composeEscapeAttr(time) + '"></td>';
                     row += '<td>';
                     row += '<span class="au-placeholder">---</span>';
                     row += '<select class="au-weekday">';
@@ -1515,7 +1507,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     row += '<option value="5">_(Friday)_</option>';
                     row += '<option value="6">_(Saturday)_</option>';
                     row += '</select>';
-                    row += '<input type="number" class="au-monthday" min="1" max="31" step="1" value="' + escapeAttr(String(monthday)) + '">';
+                    row += '<input type="number" class="au-monthday" min="1" max="31" step="1" value="' + composeEscapeAttr(String(monthday)) + '">';
                     row += '</td>';
                     row += '</tr>';
                     $('#updates-tbody').append(row);

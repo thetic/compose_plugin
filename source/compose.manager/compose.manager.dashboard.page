@@ -176,7 +176,7 @@ $script = <<<'EOT'
     }
 
     // HTML escape function to prevent XSS
-    function escapeHtml(text) {
+    function composeEscapeHtml(text) {
         if (text === null || text === undefined) return '';
         var div = document.createElement('div');
         div.textContent = String(text);
@@ -184,7 +184,7 @@ $script = <<<'EOT'
     }
 
     // Escape for HTML attributes (more strict)
-    function escapeAttr(text) {
+    function composeEscapeAttr(text) {
         if (text === null || text === undefined) return '';
         return String(text)
             .replace(/&/g, '&amp;')
@@ -514,11 +514,11 @@ $script .= <<<'EOT'
                         var ctUptime = formatUptime(ctStartedAt, isRunning);
 
                         html += '<div class="compose-dash-container">';
-                        html += '<span class="compose-dash-ct-icon" id="' + ctElId + '" data-ct-name="' + escapeAttr(ctName) + '" data-ct-id="' + escapeAttr(shortId) + '" data-ct-running="' + (isRunning ? '1' : '0') + '" data-ct-webui="' + escapeAttr(webui) + '" data-ct-shell="' + escapeAttr(shell) + '">';
-                        html += '<img src="' + escapeAttr(imgSrc) + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';">';
+                        html += '<span class="compose-dash-ct-icon" id="' + ctElId + '" data-ct-name="' + composeEscapeAttr(ctName) + '" data-ct-id="' + composeEscapeAttr(shortId) + '" data-ct-running="' + (isRunning ? '1' : '0') + '" data-ct-webui="' + composeEscapeAttr(webui) + '" data-ct-shell="' + composeEscapeAttr(shell) + '">';
+                        html += '<img src="' + composeEscapeAttr(imgSrc) + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';">';
                         html += '</span>';
                         html += '<span class="compose-dash-ct-info">';
-                        html += '<div class="compose-dash-ct-name">' + escapeHtml(ctName) + '</div>';
+                        html += '<div class="compose-dash-ct-name">' + composeEscapeHtml(ctName) + '</div>';
                         html += '<div class="compose-dash-ct-state ' + stateColor + '"><i class="fa ' + stateIcon + '"></i> ' + stateText + '</div>';
                         html += '</span>';
                         html += '<span class="compose-dash-ct-cols">';
@@ -589,7 +589,7 @@ $script .= <<<'EOT'
                     var stateClass = state === 'stopped' ? 'stopped' : 'started';
                     html += '<div class="compose-dash-stack outer stacks ' + stateClass + '" data-stackid="' + stackId + '" data-folder="' + stack.folder + '">';
                     html += '<i class="fa fa-chevron-right compose-dash-expand" id="compose-dash-exp-' + stackId + '"></i>';
-                    html += '<span class="compose-dash-icon" id="compose-dash-icon-' + stackId + '" data-stack-folder="' + stack.folder + '" data-stack-running="' + (isRunning ? '1' : '0') + '" data-stack-webui="' + escapeAttr(webui) + '"><img src="' + escapeAttr(imgSrc) + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';"></span>';
+                    html += '<span class="compose-dash-icon" id="compose-dash-icon-' + stackId + '" data-stack-folder="' + stack.folder + '" data-stack-running="' + (isRunning ? '1' : '0') + '" data-stack-webui="' + composeEscapeAttr(webui) + '"><img src="' + composeEscapeAttr(imgSrc) + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';"></span>';
                     html += '<span class="compose-dash-info">';
                     html += '<div class="compose-dash-name">' + $('<div>').text(stack.name).html() + '</div>';
                     html += '<div class="compose-dash-state ' + stateColor + '"><i class="fa ' + stateIcon + '"></i> ' + stateText + '</div>';

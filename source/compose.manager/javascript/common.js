@@ -4,6 +4,25 @@ var _configCache = null;
 var _configPromise = null;
 var caURL = "/plugins/compose.manager/php/exec.php";
 
+// Shared HTML/attribute escape helpers (namespaced to avoid global collisions with other plugins)
+function composeEscapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    var div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+function composeEscapeAttr(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+
 // Delay used when positioning the file tree picker. This gives the picker a moment
 // to be inserted/rendered by the underlying fileTreeAttach logic before we compute
 // and apply its size/position.
