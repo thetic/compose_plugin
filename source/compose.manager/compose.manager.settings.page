@@ -1975,7 +1975,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 (function(){
     var cookieName = 'compose_manager_settings_return';
     function getSafeReturnPath() {
-        if (!document.referrer) return null;
+        if (!document.referrer || document.referrer === window.location.href) {
+            return null;
+        }
         try {
             var ref = new URL(document.referrer, window.location.origin);
             if (ref.origin !== window.location.origin) return null;
@@ -2008,7 +2010,18 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         }
     }
 
-    var returnPath = getSafeReturnPath() || '/Settings';
+    var existingPath = $.cookie(cookieName);
+    var safePath = getSafeReturnPath();
+    var returnPath;
+
+    if (safePath) {
+        returnPath = safePath;
+    } else if (existingPath) {
+        returnPath = existingPath;
+    } else {
+        returnPath = '/Settings';
+    }
+
     $.cookie(cookieName, returnPath, { path: '/' });
 
     var originalDone = window.done;
