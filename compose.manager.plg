@@ -28,20 +28,14 @@
 >
 
 <CHANGES>
-###2026.03.27-dev.0048
-- Features (deploy): add quick flag to allow copying files directly to server without repackaging
-- Bug Fixes (style): aggresive mode warning was blank
-- Bug Fixes (tests): added missing tests for compose.sh project name sanitization function
-- Bug Fixes (compose): use sanitized stack project name for docker compose
-- Bug Fixes (stack): improve path traversal detection and enhance error handling in project updates
-- Bug Fixes (readme): clarify installation instructions for the plugin
-- Bug Fixes (stack): add clientDebug logging for stack creation errors
-- Bug Fixes (styles): remove unused dropdown and SweetAlert2 styles from comboButton and editorModal
-- Bug Fixes (escape): replace escapeHtml with composeEscapeHtml for network names, IPs, and ports
-- Bug Fixes (tag-release): refine PR check to require specific author and label for beta releases
-- fix(style):wait until stylesheets are loaded before forcing changes
+###2026.03.27-dev.1348
+- Bug Fixes (compose_manager): remove unnecessary debug logging
+- Bug Fixes (StackInfo): implement listProjectFolders to skip reserved entries and reduce code duplication
+- Bug Fixes (StackInfo): remove unused hasRunningContainers method
+- Bug Fixes (StackInfo): simplify project path validation and remove unused updatePath method
+- Bug Fixes (docs): update README with new images and add migration and rollback information
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.27-dev.0048)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.27-dev.1348)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
