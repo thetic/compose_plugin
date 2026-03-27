@@ -376,6 +376,26 @@ class BackupFunctionsTest extends TestCase
         $compose_root = $this->testComposeRoot;
     }
 
+    /**
+     * @requires OS Linux
+     */
+    public function testCreateBackupSkipsVersionFileAtRoot(): void
+    {
+        $this->createTestStack('mystack');
+        // Place the plugin-managed version file at the compose root (as compose.manager.plg does)
+        file_put_contents($this->testComposeRoot . '/version', "1\n");
+
+        FunctionMocks::setPluginConfig('compose.manager', [
+            'BACKUP_DESTINATION' => $this->testBackupDir,
+            'BACKUP_RETENTION' => '10',
+        ]);
+
+        $result = createBackup();
+        $this->assertEquals('success', $result['result']);
+        // Only the real stack should be counted; 'version' must not appear as a stack
+        $this->assertEquals(1, $result['stacks']);
+    }
+
     // ===========================================
     // applyRetentionPolicy() Tests
     // ===========================================

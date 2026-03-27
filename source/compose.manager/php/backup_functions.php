@@ -8,6 +8,7 @@
  */
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
 
 /**
  * Get the backup destination path from config, falling back to default.
@@ -51,20 +52,11 @@ function createBackup()
         }
     }
 
-    // Collect stack directories
-    $stacks = [];
-    $entries = @scandir($source);
-    if ($entries === false) {
+    // Collect stack directories, skipping reserved root-level files (e.g. 'version')
+    if (@scandir($source) === false) {
         return ['result' => 'error', 'message' => 'Cannot read projects folder: ' . $source];
     }
-
-    foreach ($entries as $entry) {
-        if ($entry === '.' || $entry === '..') continue;
-        $fullPath = $source . '/' . $entry;
-        if (is_dir($fullPath)) {
-            $stacks[] = $entry;
-        }
-    }
+    $stacks = StackInfo::listProjectFolders($source);
 
     if (empty($stacks)) {
         return ['result' => 'error', 'message' => 'No stacks found to back up.'];

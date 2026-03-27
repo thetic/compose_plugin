@@ -208,10 +208,63 @@ class StackInfoTest extends TestCase
         $invalidDir = $this->tempRoot . '/not-a-stack';
         mkdir($invalidDir);
 
+        // Place the plugin-managed version file at the root (as compose.manager.plg does)
+        file_put_contents($this->tempRoot . '/version', "1\n");
+
         $stacks = \StackInfo::allFromRoot($this->tempRoot);
 
         $this->assertCount(1, $stacks);
         $this->assertSame('valid-stack', $stacks[0]->projectFolder);
+    }
+
+    // ===========================================
+    // listProjectFolders() Tests
+    // ===========================================
+
+    public function testListProjectFoldersReturnsOnlyDirectories(): void
+    {
+        mkdir($this->tempRoot . '/stack-a');
+        mkdir($this->tempRoot . '/stack-b');
+        file_put_contents($this->tempRoot . '/some-file.txt', 'data');
+
+        $folders = \StackInfo::listProjectFolders($this->tempRoot);
+
+        $this->assertContains('stack-a', $folders);
+        $this->assertContains('stack-b', $folders);
+        $this->assertNotContains('some-file.txt', $folders);
+    }
+
+    public function testListProjectFoldersSkipsVersionFile(): void
+    {
+        mkdir($this->tempRoot . '/my-stack');
+        file_put_contents($this->tempRoot . '/version', "1\n");
+
+        $folders = \StackInfo::listProjectFolders($this->tempRoot);
+
+        $this->assertContains('my-stack', $folders);
+        $this->assertNotContains('version', $folders);
+    }
+
+    public function testListProjectFoldersExcludesDotEntries(): void
+    {
+        mkdir($this->tempRoot . '/stack-c');
+
+        $folders = \StackInfo::listProjectFolders($this->tempRoot);
+
+        $this->assertNotContains('.', $folders);
+        $this->assertNotContains('..', $folders);
+    }
+
+    public function testListProjectFoldersEmptyRootReturnsEmptyArray(): void
+    {
+        $folders = \StackInfo::listProjectFolders($this->tempRoot);
+        $this->assertSame([], $folders);
+    }
+
+    public function testListProjectFoldersNonexistentRootReturnsEmptyArray(): void
+    {
+        $folders = \StackInfo::listProjectFolders('/nonexistent/path/that/does/not/exist');
+        $this->assertSame([], $folders);
     }
 
     // =========================================== 

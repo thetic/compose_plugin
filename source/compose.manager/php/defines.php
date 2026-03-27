@@ -22,6 +22,12 @@ define('UNRAID_UPDATE_STATUS_FILE', '/var/lib/docker/unraid-update-status.json')
 define('PENDING_RECHECK_FILE', '/boot/config/plugins/compose.manager/pending-recheck.json');
 
 /**
+ * Reserved filename at the compose root level used by the plugin installer
+ * to track migration state. Must be skipped when enumerating project folders.
+ */
+define('COMPOSE_ROOT_VERSION_FILE', 'version');
+
+/**
  * Compose file names in priority order per the Docker Compose spec.
  * @see https://docs.docker.com/compose/intro/compose-application-model/#the-compose-file
  */

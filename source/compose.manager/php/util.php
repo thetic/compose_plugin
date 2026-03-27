@@ -1712,10 +1712,38 @@ class StackInfo
     }
 
     /**
+     * List project folder basenames under a compose root, skipping reserved entries.
+     *
+     * Excludes the standard '.'/'..', plus the plugin-managed {@see COMPOSE_ROOT_VERSION_FILE}
+     * that lives at the compose root level (written by compose.manager.plg on install/upgrade).
+     * Only directory entries are returned, so plain files are always ignored.
+     *
+     * Use this everywhere project folders need to be enumerated to guarantee consistent
+     * behaviour across allFromRoot(), backup, and any future callers.
+     *
+     * @param string $composeRoot Compose projects root directory
+     * @return string[] Directory basenames (unsorted, filesystem order)
+     */
+    public static function listProjectFolders(string $composeRoot): array
+    {
+        $root = rtrim($composeRoot, '/');
+        $result = [];
+        foreach (@scandir($root) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..' || $entry === COMPOSE_ROOT_VERSION_FILE) {
+                continue;
+            }
+            if (is_dir("$root/$entry")) {
+                $result[] = $entry;
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Return all valid StackInfo instances under a compose root.
      *
      * Scans the root directory and returns one StackInfo per valid stack,
-     * silently skipping non-directory entries and folders with no compose file.
+     * silently skipping folders with no compose file or invalid structure.
      *
      * @param string $composeRoot Compose projects root directory
      * @return self[]
@@ -1723,8 +1751,7 @@ class StackInfo
     public static function allFromRoot(string $composeRoot): array
     {
         $stacks = [];
-        $projects = @array_diff(@scandir($composeRoot), ['.', '..']) ?: [];
-        foreach ($projects as $project) {
+        foreach (self::listProjectFolders($composeRoot) as $project) {
             try {
                 $stacks[] = self::fromProject($composeRoot, $project);
             } catch (\Throwable $e) {
