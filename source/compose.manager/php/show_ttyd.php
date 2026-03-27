@@ -81,14 +81,8 @@ $themeSheetJson = json_encode("themes/{$themeFile}.css");
         </p>
     <?php endif; ?>
     <script>
-        <?php if ($showDone): ?>
-            document.getElementById('done-btn').addEventListener('click', function() {
-                try { top.Shadowbox.close(); } catch (e) {}
-                try { window.close(); } catch (e) {}
-            });
-        <?php endif; ?>
-
         // Suppress "Leave Site?" prompt from ttyd's beforeunload handler.
+        // Must run immediately (before ttyd registers its handler), no layout impact.
         function suppressBeforeUnload(win) {
             try {
                 Object.defineProperty(win, 'onbeforeunload', {
@@ -106,15 +100,7 @@ $themeSheetJson = json_encode("themes/{$themeFile}.css");
 
         suppressBeforeUnload(window);
 
-        // Hide Shadowbox info bar in parent — prevents it from pushing content
-        // past the wrapper's border-radius and showing a mismatched strip.
-        try {
-            var sbInfo = top.document.getElementById('sb-info');
-            if (sbInfo) sbInfo.style.display = 'none';
-        } catch (e) {}
-
-        var frame = document.getElementById('ttyd-frame');
-        frame.addEventListener('load', function() {
+        function setupFrame(frame) {
             try {
                 suppressBeforeUnload(frame.contentWindow);
                 var fdoc = frame.contentDocument || frame.contentWindow.document;
@@ -141,6 +127,32 @@ $themeSheetJson = json_encode("themes/{$themeFile}.css");
                     frame.contentWindow.dispatchEvent(new Event('resize'));
                 }, 200);
             } catch (e) {}
+        }
+
+        // Defer all DOM/layout work until stylesheets have loaded to avoid
+        // "Layout forced before page fully loaded" / flash of unstyled content.
+        window.addEventListener('load', function() {
+            <?php if ($showDone): ?>
+                document.getElementById('done-btn').addEventListener('click', function() {
+                    try { top.Shadowbox.close(); } catch (e) {}
+                    try { window.close(); } catch (e) {}
+                });
+            <?php endif; ?>
+
+            // Hide Shadowbox info bar in parent — prevents it from pushing content
+            // past the wrapper's border-radius and showing a mismatched strip.
+            try {
+                var sbInfo = top.document.getElementById('sb-info');
+                if (sbInfo) sbInfo.style.display = 'none';
+            } catch (e) {}
+
+            // window.load waits for iframes, so the frame is already loaded —
+            // apply theme directly.
+            var frame = document.getElementById('ttyd-frame');
+            setupFrame(frame);
+
+            // Re-attach for any subsequent navigations within the iframe.
+            frame.addEventListener('load', function() { setupFrame(frame); });
         });
     </script>
 </body>
