@@ -1651,6 +1651,7 @@ class StackInfo
 
         // Validate stack name is not empty
         if (trim($stackName) === '') {
+            clientDebug("Attempted to create a new stack with an empty name, which is not allowed.", null, 'daemon', 'error');
             throw new \RuntimeException("Stack name cannot be empty");
         }
         $projectName = $stackName;
@@ -1658,6 +1659,7 @@ class StackInfo
         // Set the project name to the folder-and-project sanitized version of the display name.
         $project = self::sanitizeProjectString($stackName);
         if ($project === '') {
+            clientDebug("Sanitized stack name is empty, cannot create stack directory.", ['stackName' => $stackName], 'daemon', 'error');
             throw new \RuntimeException("Stack name produced an empty folder name after sanitization.");
         }
 
@@ -1667,12 +1669,14 @@ class StackInfo
         // Verify the resolved path stays within composeRoot (defense-in-depth)
         $realComposeRoot = realpath($composeRoot);
         if ($realComposeRoot === false) {
+            clientDebug("Failed to resolve real path for compose root.", ['composeRoot' => $composeRoot], 'daemon', 'error');
             throw new \RuntimeException("Invalid compose root directory.");
         }
 
         // For new folders, check that the parent resolves correctly
         $resolvedParent = realpath(dirname($path));
         if ($resolvedParent === false || strpos($resolvedParent, $realComposeRoot) !== 0) {
+            clientDebug("Invalid stack name: path would escape compose root.", ['stackName' => $stackName, 'resolvedParent' => $resolvedParent, 'realComposeRoot' => $realComposeRoot], 'daemon', 'error');
             throw new \RuntimeException("Invalid stack name: path would escape compose root.");
         }
 
@@ -1680,11 +1684,13 @@ class StackInfo
             // Ensure the project folder is available, handling collisions by appending suffixes if needed (e.g. "my-stack-001", "my-stack-002", etc.)
             $path = self::getAvailablePath($composeRoot, $project);
         } catch (\RuntimeException $e) {
+            clientDebug("Failed to get available path for stack.", ['stackName' => $stackName, 'error' => $e->getMessage()], 'daemon', 'error');
             throw new \RuntimeException("Failed to create stack: " . $e->getMessage());
         }
 
         // Create the directory
         if (!mkdir($path, 0755, true) && !is_dir($path)) {
+            clientDebug("Failed to create stack directory.", ['path' => $path], 'daemon', 'error');
             throw new \RuntimeException("Failed to create stack directory: $path");
         }
 
