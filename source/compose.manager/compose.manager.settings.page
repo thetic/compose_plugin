@@ -100,6 +100,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         margin-top: 10px;
     }
 
+    #compose-tab-settings {
+        --compose-settings-anchor: 35%;
+    }
+
     /* Button styling */
     #compose-tab-settings .orange-button,
     #compose-tab-backup .orange-button {
@@ -125,7 +129,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     #compose-tab-settings dl.settings-actions {
         position: fixed;
         bottom: 45px;
-        left: 45%;
+        left: var(--compose-settings-anchor);
         transform: translateX(-50%);
         width: max-content;
         min-width: 280px;
@@ -504,17 +508,63 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         color: var(--dynamix-sb-title-text-color);
     }
 
+    #aggressive-mode-wrapper {
+        --aggressive-mode-offset: calc(var(--compose-settings-anchor) - 50%);
+        padding: 12px;
+        margin-bottom: 12px;
+        position: relative;
+        isolation: isolate;
+    }
+
+    #aggressive-mode-wrapper::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        max-width: 980px;
+        margin: 0 auto;
+        border: 2px solid transparent;
+        border-radius: 10px;
+        background-color: var(--background-color);
+        transform: translateX(var(--aggressive-mode-offset));
+        transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s, transform 0.2s;
+        z-index: -1;
+        pointer-events: none;
+    }
+
+    #aggressive-mode-wrapper.aggressive-mode-active::before {
+        border: 2px solid var(--brand-orange);
+        background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color, var(--dynamix-tablesorter-tbody-row-bg-color));
+        box-shadow: 0 0 0 2px var(--brand-focus-ring, rgba(255, 136, 0, 0.22));
+    }
+
     #aggressive-mode-warning {
         text-align: center;
         font-weight: bold;
         line-height: 1.4;
         display: none;
-        margin-top: 4px;
-        padding: 8px 10px;
-        background: var(--dynamix-sb-message-bg-color);
-        color: var(--dynamix-sweet-alert-text-color);
+        position: relative;
+        left: 0;
+        width: min(900px, 100%);
+        max-width: 900px;
+        margin: 6px auto 0;
+        padding: 10px 12px;
+        box-sizing: border-box;
+        background: var(--dynamix-tablesorter-tbody-row-bg-color, var(--background-color));
+        color: var(--text-color, var(--dynamix-tablesorter-text-color));
         border-radius: 8px;
-        border: 1px solid var(--dynamix-tablesorter-thead-row-border-color);
+        border: 1px solid var(--brand-orange);
+        transform: translateX(var(--aggressive-mode-offset));
+    }
+
+    @media (max-width: 1200px) {
+        #compose-tab-settings dl.settings-actions {
+            left: 50%;
+        }
+
+        #aggressive-mode-wrapper::before,
+        #aggressive-mode-warning {
+            transform: translateX(0);
+        }
     }
 
     .backup-actions {
@@ -678,16 +728,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             var isAggressive = $('#DISABLE_ACTION_WARNINGS').is(':checked') && $('#RUN_IN_BACKGROUND_DEFAULT').is(':checked');
             var $wrapper = $('#aggressive-mode-wrapper');
             if (isAggressive) {
-                $wrapper.css({
-                    'border': '2px solid var(--dynamix-sb-title-bg-color)',
-                    'background-color': 'var(--dynamix-sb-body-bg-color)'
-                });
+                $wrapper.addClass('aggressive-mode-active');
                 $('#aggressive-mode-warning').show();
             } else {
-                $wrapper.css({
-                    'border': '2px solid transparent',
-                    'background-color': 'transparent'
-                });
+                $wrapper.removeClass('aggressive-mode-active');
                 $('#aggressive-mode-warning').hide();
             }
         }
@@ -1783,7 +1827,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             </dd>
         </dl>
 
-        <div id="aggressive-mode-wrapper" style="border:2px solid transparent;border-radius:10px;padding:12px;margin-bottom:12px;transition:border-color 0.2s, background-color 0.2s;">
+        <div id="aggressive-mode-wrapper">
 
             <dl>
                 <dt style="cursor: help;" onclick="toggleHelp(this)">_(Disable action warnings/confirmations)_:</dt>
@@ -1807,7 +1851,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 </dd>
             </dl>
 
-            <div id="aggressive-mode-warning" class="alert alert-warning">
+            <div id="aggressive-mode-warning">
                 <span style="font-size:0.95em;">⚠️ <strong>Warning:</strong> action confirmations are disabled and commands default to background mode. Operations execute immediately in background.</span>
             </div>
 
