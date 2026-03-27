@@ -17,6 +17,10 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   sync-url:
     permissions:
@@ -85,4 +89,5 @@ jobs:
 
           git add compose.manager.plg source/compose.manager/README.md
           git commit -m "chore: sync pluginURL+README for ${GITHUB_REF_NAME} branch [skip ci]"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push
