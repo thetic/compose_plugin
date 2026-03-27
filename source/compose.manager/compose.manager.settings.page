@@ -674,9 +674,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     function checkProjectFolder() {
         var projects_folder_not_empty = <?php echo json_encode($projects_exist); ?>;
-        var original_folder = "<?php echo $cfg['PROJECTS_FOLDER'] ?>";
+        var original_folder = <?php echo json_encode($cfg['PROJECTS_FOLDER']); ?>;
 
-        if (projects_folder_not_empty & ($(this).val() != original_folder)) {
+        if (projects_folder_not_empty && ($(this).val() != original_folder)) {
             $("#PROJECTS_FOLDER_WARNING").show();
         } else {
             $("#PROJECTS_FOLDER_WARNING").hide();
