@@ -52,7 +52,8 @@ jobs:
 
           if [[ "$CURRENT_URL_BRANCH" != "$BRANCH" ]]; then
             echo "Branch mismatch - fixing pluginURL..."
-            sed -i "s|/&github;/[^/]*/|/\&github;/${BRANCH}/|" "$PLG_FILE"
+            # Scope to pluginURL line only — avoids corrupting packageURL
+            sed -i "/pluginURL/s|/&github;/[^/]*/|/\&github;/${BRANCH}/|" "$PLG_FILE"
             NEEDS_COMMIT=true
           else
             echo "pluginURL already correct"

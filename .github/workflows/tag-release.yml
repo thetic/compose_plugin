@@ -257,10 +257,11 @@ jobs:
           README_FILE="source/compose.manager/README.md"
 
           # Ensure pluginURL entity references the current branch
+          # Scope sed to the pluginURL line only — avoids corrupting packageURL
           CURRENT_URL_BRANCH=$(grep -oP '<!ENTITY pluginURL.*github;/\K[^/]+' "$PLG_FILE" || echo "unknown")
           if [[ "$CURRENT_URL_BRANCH" != "$BRANCH" ]]; then
             echo "Fixing pluginURL branch: $CURRENT_URL_BRANCH → $BRANCH"
-            sed -i "s|/&github;/[^/]*/|/\&github;/${BRANCH}/|" "$PLG_FILE"
+            sed -i "/pluginURL/s|/&github;/[^/]*/|/\&github;/${BRANCH}/|" "$PLG_FILE"
           fi
 
           # Ensure README title matches branch disposition
