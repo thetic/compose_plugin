@@ -119,7 +119,7 @@ function echoComposeCommand($action, $recreate = false, $background = false)
         $stackInfo = StackInfo::fromProject($compose_root, basename($path));
 
         $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . $stackInfo->projectFolder;
+        $composeCommand[] = "-p" . $stackInfo->projectName;
 
         $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
         $composeCommand[] = "-f$composeFile";
@@ -234,7 +234,7 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         $stackNames[] = $stackInfo->getName();
 
         $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . $stackInfo->projectFolder;
+        $composeCommand[] = "-p" . $stackInfo->projectName;
 
         $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
         $composeCommand[] = "-f$composeFile";

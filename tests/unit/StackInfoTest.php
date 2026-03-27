@@ -41,6 +41,7 @@ class StackInfoTest extends TestCase
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertSame('my-stack', $info->projectFolder);
+        $this->assertSame('my-stack', $info->projectName);
         $this->assertSame('My Stack', $info->displayName);
         $this->assertSame($this->tempRoot . '/my-stack', $info->path);
         $this->assertFalse($info->isIndirect);
@@ -55,6 +56,28 @@ class StackInfoTest extends TestCase
 
         // Canonical project identity: lowercased, special chars replaced, underscores collapsed.
         $this->assertSame('my_stack_v2', $info->projectFolder);
+        $this->assertSame('my_stack_v2', $info->projectName);
+    }
+
+    public function testProjectNameAlwaysLowercaseEvenWhenFolderUnrenamed(): void
+    {
+        // Simulate a folder with uppercase that already has the lowercase version existing
+        // (so rename can't happen). projectName should still be lowercase.
+        $stack = 'Audible_Plex_Downloader';
+        $lowered = 'audible_plex_downloader';
+
+        // Create both directories so rename is blocked
+        mkdir($this->tempRoot . '/' . $stack);
+        mkdir($this->tempRoot . '/' . $lowered);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
+        file_put_contents($this->tempRoot . '/' . $lowered . '/compose.yaml', "services:\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        // Folder stays uppercase since rename was blocked
+        $this->assertSame($stack, $info->projectFolder);
+        // But projectName must always be the sanitized lowercase version
+        $this->assertSame($lowered, $info->projectName);
     }
 
     public function testIndirectStackResolution(): void

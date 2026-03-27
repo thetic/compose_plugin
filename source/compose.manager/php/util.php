@@ -952,8 +952,10 @@ class ContainerInfo
  */
 class StackInfo
 {
-    /** @var string Compose project folder basename (also project string) */
+    /** @var string Compose project folder basename (actual directory name on disk) */
     public string $projectFolder;
+    /** @var string Sanitized Docker Compose project name (always lowercase, valid for -p flag) */
+    public string $projectName;
     /** @var string Display name (from ./name) */
     public string $displayName;
     /** @var string Full path to the stack directory ($composeRoot/$project) */
@@ -1011,9 +1013,12 @@ class StackInfo
         // Only rename if the folder itself needs sanitization (e.g. contains uppercase, spaces, etc).
         $sanitizedFolder = self::sanitizeProjectString($this->projectFolder);
         if ($sanitizedFolder !== $this->projectFolder) {
-
             $this->updatePath($sanitizedFolder);
         }
+
+        // Always store the sanitized project name for Docker Compose -p flag,
+        // even if the folder rename didn't happen (running containers, permissions, etc).
+        $this->projectName = self::sanitizeProjectString($this->projectFolder);
 
         // Resolve display name from metadata (or default to folder name).
         $this->displayName = $this->getDisplayName();
@@ -1453,7 +1458,7 @@ class StackInfo
         }
 
         return [
-            'projectName' => $this->projectFolder,
+            'projectName' => $this->projectName,
             'files' => $files,
             'envFile' => $envFile,
         ];
@@ -1593,8 +1598,8 @@ class StackInfo
             clientDebug("Attempted to update project name to '$newProject' which is not a valid sanitized project string.", ['attemptedName' => $newProject], 'daemon', 'error');
             return;
         }
-        if (self::hasRunningContainers($this->projectFolder)) {
-            clientDebug("Cannot rename project folder from '$this->projectFolder' to '$newProject' because containers are currently running under the old project name.", ['old' => $this->projectFolder, 'new' => $newProject], 'daemon', 'warning');
+        if (self::hasRunningContainers($this->projectFolder) || self::hasRunningContainers($newProject)) {
+            clientDebug("Cannot rename project folder from '$this->projectFolder' to '$newProject' because containers are currently running.", ['old' => $this->projectFolder, 'new' => $newProject], 'daemon', 'warning');
             return;
         }
         $oldProject = $this->projectFolder;
@@ -1814,7 +1819,7 @@ class StackInfo
             }
         }
         foreach ($stacks as $stack) {
-            $key = $stack->projectFolder;
+            $key = $stack->projectName;
             $stack->setContainerList($containersByProject[$key] ?? []);
         }
 

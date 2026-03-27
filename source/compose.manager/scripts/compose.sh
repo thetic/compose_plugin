@@ -157,6 +157,9 @@ done
 # Build the compose base command as an array (no eval needed)
 compose_base=(docker compose "${env_args[@]}" "${file_args[@]}" "${profile_args[@]}")
 
+# Sanitize the project name for Docker Compose (must be lowercase alphanumeric, hyphens, underscores)
+name=$(echo "$name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/_/g; s/__*/_/g; s/^[_-]*//; s/[_-]*$//')
+
 # Acquire lock for operations that modify state (not for read-only commands)
 case $command in
   up|down|pull|update|stop)
