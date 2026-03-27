@@ -452,7 +452,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
 
         // Apply readmore to descriptions - scope to compose_stacks, exclude container detail rows
-        $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore').readmore({
+        var $readmoreEls = $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore');
+        $readmoreEls.readmore('destroy');
+        $readmoreEls.readmore({
             maxHeight: 32,
             moreLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",
             lessLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"
@@ -1346,8 +1348,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
         }
 
-        // Apply readmore to descriptions — exclude container detail rows to avoid double-application
-        $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore').readmore({
+        // Apply readmore to descriptions — exclude container detail rows; destroy first to avoid nested wrappers
+        var $readmoreEls = $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore');
+        $readmoreEls.readmore('destroy');
+        $readmoreEls.readmore({
             maxHeight: 32,
             moreLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",
             lessLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"
