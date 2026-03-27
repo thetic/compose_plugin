@@ -6,9 +6,11 @@ Compose Manager installs the Docker Compose CLI plugin on your unRAID server and
 
 ### Main Compose Manager Interface
 
+#### Compose Page
+
 ![Compose Manager UI](docs/images/compose.png)
 
-### Dashboard Integration
+#### Dashboard Integration
 
 ![Dashboard Stacks](docs/images/dashboard.png)
 
@@ -16,13 +18,43 @@ Compose Manager installs the Docker Compose CLI plugin on your unRAID server and
 
 The built-in editor provides multiple tabs for managing your compose stack:
 
-| Compose File | Settings |
-| ------------ | -------- |
-| ![Editor - Compose File](docs/images/editor-composeFile.png) | ![Editor - Settings](docs/images/editor-settings.png) |
+#### Compose Tab
 
-| Env | Web UI Labels |
-| --- | ------------- |
-| ![Editor - Env](docs/images/editor-env.png) | ![Editor - Web UI](docs/images/editor-webUI.png) |
+![Editor - Compose Tab](docs/images/editor-composeFile.png)
+
+#### Env Tab
+
+![Editor - Env Tab](docs/images/editor-env.png)
+
+#### WebUI Labels Tab
+
+![Editor - WebUI Labels Tab](docs/images/editor-webUI.png)
+
+#### Settings Tab
+
+![Editor - Settings Tab](docs/images/editor-settings.png)
+
+#### Theme Support
+
+![Editor - Compose Tab with the Azure theme applied](docs/images/theme-support.png)
+
+### Settings
+
+#### Settings - Main
+
+![Settings - Main Tab](docs/images/settings-main.png)
+
+#### Settings - Updates
+
+![Settings - Updates Tab](docs/images/settings-updates.png)
+
+#### Settings - Backups
+
+![Settings - Backups Tab](docs/images/settings-backups.png)
+
+#### Settings - Log Viewer
+
+![Settings - Logs Tab](docs/images/settings-logs.png)
 
 ## Features
 
@@ -52,40 +84,84 @@ The built-in editor provides multiple tabs for managing your compose stack:
 
 ## Installation
 
-Install via the **Community Applications** plugin in unRAID
+### Community Applications
 
--- or --
+Install via the **Community Applications** plugin in unRAID by going to the 'Apps' tab and searching for 'Compose Manager Plus'.
+
+![Screenshot of both Compose Manager Plus listings in the CA App Store](docs\images\ca-app-store.png)
+
+Once there you will see both the main release and the beta release available to be installed. See below if you have Compose Manager already.
+
+### Manual Install
 
 Install manually by navigating to:
 
 **Plugins → Install Plugin** and entering the plugin URL:
 
-```link
+Main Release:
+
+```url
 https://raw.githubusercontent.com/mstrhakr/compose_plugin/main/compose.manager.plg
 ```
+
+Beta Release:
+
+```url
+https://raw.githubusercontent.com/mstrhakr/compose_plugin/dev/compose.manager.plg
+```
+
+### Migration from dcflachs Compose Manager (Depreciated)
+
+When migrating from the original Compose Manager plugin, you can simply press reinstall on Compose Manager Plus to remove the old plugin and install the new one. The plugins both have the same name internally and cannot be installed at the same time. Compose Manager Plus also uses the exact same project folder structure so it will detect all your existing stacks automatically.
+
+Best safe method for migration:
+
+- Compose down for all stacks
+- Backup project directory
+- Uninstall old plugin
+- Install new plugin
+- Start up stacks
+
+> NOTE: I have tested upgrading in place by clicking "reinstall" in the CA app store without stopping the stacks and have has no issues personally. The only time this should be an issue is if your project is running with a project name that is different from the sanitized version of your folder name. Thats why it is safest to stop/down all stacks before migration.
+
+### Remove Compose Manager Plus and Re-Install dcflachs Compose Manager
+
+With dcflachs Compose Manager being depreciated, if you want to go back to it you will need to do the following:
+
+- Uninstall Compose Manager Plus
+- Get the plugin url from dcflachs GitHub
+
+```url
+https://raw.githubusercontent.com/dcflachs/compose_plugin/main/compose.manager.plg
+```
+
+- Paste this url into the box in 'Install Plugin's page
+- Press install.
 
 ## Requirements
 
 - unRAID 6.9.0 or later
+
+> NOTE: This is untested on anything older than 7.2.3 currently. I will remove this note if I get a report that this IS compatible that far back. I am working on getting a machine setup for testing on the older versions. Any advice would be welcome, eg how to VM unraid easily.
+
 - Docker service enabled
 
 ## Configuration
 
 Access **Settings → Compose** in the unRAID web UI. Key options:
 
-- **Output Style** — Terminal (ttyd) for live, colorized command output or Basic for simpler logs.
+- **Rich Terminal Output** — Toggle terminal-style live, colorized output (ttyd) versus simpler text output.
 - **Projects Folder** — Default: `/boot/config/plugins/compose.manager/projects`. Changing it does not move existing projects.
-- **Show in Header Menu** — Adds a "Docker Compose" entry to the unRAID header navigation bar.
+- **Show Compose in Header Menu** — Adds a Compose tab to the unRAID header navigation and removes it from the Docker tab.
 - **Show Dashboard Tile** — Show or hide the Compose stacks summary tile on the unRAID dashboard.
-- **Autostart** — Enable per-stack autostart; optional force recreate and wait-for-Docker behavior with configurable timeouts.
-- **Shutdown Timeout** — How long (seconds) to wait for stacks to stop gracefully during array shutdown.
-- **Auto-Check for Updates** — Automatically check all stacks for image updates on a configurable interval (days).
-- **Run in Background (Default)** — When enabled, action dialogs default the "Run in background" checkbox to checked.
-- **Stacks Default Expanded** — Expand all stack detail rows automatically when the page loads.
-- **Only Expand Running Stacks** — When "Default Expanded" is on, skip stopped stacks.
-- **Hide Compose Containers** — Toggle that removes Compose-managed containers from the Docker page and Dashboard tile to avoid duplicate entries.
-- **Backup** — Scheduled or manual backups with configurable retention and destination.
-- **Debug to Log** — Send debug output to syslog for troubleshooting.
+- **Recreate During Autostart / Wait for Docker Autostart** — Autostart behavior controls, plus **Docker Wait Timeout** and **Stack Startup Timeout**.
+- **Run in Background by Default** — Action dialogs pre-check "Run in background" and notify on completion.
+- **Expand Stacks by Default / Only Expand Running Stacks** — Control how stack rows expand on page load.
+- **Auto Check for Updates** — Automatically check image updates on page load with a configurable interval.
+- **Hide Compose Containers from Docker** — Hide Compose-managed containers from the Docker page (non-tabbed Docker mode).
+- **Hide Compose Containers from Docker Tile on Dashboard** — Hide Compose-managed containers from the Dashboard Docker tile.
+- **Backup Settings** — Backup destination, retention, and optional scheduled backups.
+- **Debug Logging** — Log detailed compose command output to syslog.
 
 ## Usage
 
