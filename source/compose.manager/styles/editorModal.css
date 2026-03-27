@@ -1,11 +1,3 @@
-:root {
-  --compose-font-sans: var(--font-sans);
-  --compose-font-mono: var(--font-bitstream);
-}
-
-.compose-font-sans { font-family: var(--font-sans); }
-.compose-font-mono { font-family: var(--font-bitstream); }
-
 /* Editor Modal - Uses unRAID CSS variables where possible */
 .editor-modal-overlay {
   display: none;

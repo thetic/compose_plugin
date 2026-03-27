@@ -145,11 +145,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         padding-right: 20px
     }
 
-    /* Container sub-table source column: left-align (override theme) */
-    .compose-ct-table th:nth-child(3),
-    .compose-ct-table td:nth-child(3) {
-        text-align: left !important
-    }
 </style>
 
 <script src="/plugins/compose.manager/javascript/ace/ace.js" type="text/javascript"></script>
@@ -5270,21 +5265,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 <HTML>
 
 <HEAD>
-    <style type="text/css">
-        .edit-stack-form .swal-footer {
-            display: table;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .edit-stack-form .swal-footer .swal-button-container {
-            display: table-row;
-        }
-
-        .edit-stack-form .swal-footer .swal-button-container .swal-button {
-            width: 150px;
-        }
-    </style>
 </HEAD>
 
 <BODY>

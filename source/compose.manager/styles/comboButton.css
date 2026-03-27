@@ -60,60 +60,6 @@
     border-top: 1px solid var(--border-color);
   }
 
-  /* The container <div> - needed to position the dropdown content */
-  .dropdown {
-    position: absolute;
-    display: inline-block;
-  }
-
-  /* Dropdown Content (Hidden by Default) */
-  .dropdown-content {
-    display: none;
-    position: relative;
-    background-color: var(--panel-bg);
-    min-width: 100px;
-    /* min-width: auto; */
-    z-index: 1;
-    right: 75px;
-  }
-
-  /* Links inside the dropdown */
-  .dropdown-content a {
-    color: var(--text-color);
-    padding: 12px 16px;
-    text-decoration: none;
-    display: block;
-  }
-
-  /* Change color of dropdown links on hover */
-  .dropdown-content a:hover {
-    background-color: var(--dropdown-hover-bg)
-  }
-
-  /* Show the dropdown menu on hover */
-  .dropdown:hover .dropdown-content {
-    display: block;
-  }
-
-  .combo-btn-group-left {
-    border-right-style: none !important;
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    margin-right: 0 !important;
-  }
-
-  .combo-btn-group-right {
-    border-left-style: none !important;
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    min-width: auto !important;
-    margin-right: 0 !important;
-  }
-
-  .combo-btn-subgroup {
-    display: inline;
-  }
-
   /* ============================================
    Minimal Custom Styles for Compose Manager
    Most styling uses Unraid's native CSS classes
@@ -129,18 +75,9 @@
   }
 
   /* Stack Actions Modal (context menu) */
-  .stack-actions-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 9998;
-  }
-
   .stack-actions-modal {
     position: fixed;
-    z-index: 9999;
+    z-index: var(--compose-modal-z-index);
     background-color: var(--background-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -242,37 +179,6 @@
     color: var(--status-error);
   }
 
-  /* SweetAlert2 button customizations */
-  .swal-stack-name {
-    color: var(--brand-orange);
-  }
-
-  .swal-btn-danger {
-    background-color: var(--status-error) !important;
-  }
-  .swal-btn-warning {
-    background-color: var(--brand-orange) !important;
-  }
-
-  /* Hover variants that follow the active Unraid theme */
-  .swal-btn-warning:hover {
-    background-color: var(--action-primary-bg-hover) !important;
-  }
-
-  .swal-btn-danger:hover {
-    background-color: var(--status-error-hover) !important;
-  }
-
-  .swal-btn-cancel {
-    background-color: var(--alt-background-color) !important;
-    color: var(--alt-text-color) !important;
-  }
-
-  .swal-btn-cancel:hover {
-    background-color: var(--border-color) !important;
-    color: var(--text-color) !important;
-  }
-
   /* Minimal SweetAlert overlay blur only; no custom colors. */
   .sweet-overlay {
     background: var(--modal-overlay-bg, rgba(0, 0, 0, 0.3)) !important;
@@ -302,12 +208,12 @@
    availability.  The rules below are supplemental / non-critical. */
 
   /* Update column links - ensure pointer cursor */
-  .updatecolumn a,
-  .updatecolumn a.exec {
-    cursor: pointer !important;
+  .compose-updatecolumn a,
+  .compose-updatecolumn a.exec {
+    cursor: pointer;
   }
 
-  .updatecolumn a:hover {
+  .compose-updatecolumn a:hover {
     text-decoration: none;
   }
 
