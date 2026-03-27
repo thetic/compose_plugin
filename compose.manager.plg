@@ -10,7 +10,7 @@
 <!ENTITY packagefile "&packageName;.txz">
 <!ENTITY github "mstrhakr/compose_plugin">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
-<!ENTITY packageURL "https://github.com/&github;/main/download/v&version;/&packagefile;">
+<!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
 <!ENTITY pluginLOC "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
 ]>
