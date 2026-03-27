@@ -20,6 +20,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   PLUGIN_NAME: compose.manager
@@ -246,6 +250,30 @@ jobs:
 
           echo "Updated PLG changelog"
 
+      - name: Sync pluginURL and README for branch
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          PLG_FILE="${{ env.PLUGIN_NAME }}.plg"
+          README_FILE="source/compose.manager/README.md"
+
+          # Ensure pluginURL entity references the current branch
+          CURRENT_URL_BRANCH=$(grep -oP '<!ENTITY pluginURL.*github;/\K[^/]+' "$PLG_FILE" || echo "unknown")
+          if [[ "$CURRENT_URL_BRANCH" != "$BRANCH" ]]; then
+            echo "Fixing pluginURL branch: $CURRENT_URL_BRANCH → $BRANCH"
+            sed -i "s|/&github;/[^/]*/|/\&github;/${BRANCH}/|" "$PLG_FILE"
+          fi
+
+          # Ensure README title matches branch disposition
+          if [[ "$BRANCH" == "dev" ]]; then
+            if ! grep -q '^\*\*Compose Manager Plus (Beta)\*\*$' "$README_FILE"; then
+              sed -i '1s|^\*\*Compose Manager Plus.*\*\*$|**Compose Manager Plus (Beta)**|' "$README_FILE"
+            fi
+          else
+            if grep -q '^\*\*Compose Manager Plus (Beta)\*\*$' "$README_FILE"; then
+              sed -i '1s|^\*\*Compose Manager Plus (Beta)\*\*$|**Compose Manager Plus**|' "$README_FILE"
+            fi
+          fi
+
       - name: Commit changelog and create tag
         run: |
           NEW_TAG="${{ steps.tag.outputs.tag }}"
@@ -253,9 +281,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add "${{ env.PLUGIN_NAME }}.plg"
+          git add "${{ env.PLUGIN_NAME }}.plg" "source/compose.manager/README.md"
           git diff --cached --quiet && echo "No changelog changes" || \
             git commit -m "chore: update changelog for ${NEW_TAG} [skip ci]"
+
+          # Rebase on latest remote to avoid non-fast-forward rejection
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "${GITHUB_REF_NAME}"
 
           # Create and push the tag
