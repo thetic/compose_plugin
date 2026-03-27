@@ -28,10 +28,12 @@
 >
 
 <CHANGES>
-###2026.03.26-dev.1148
-- Bug Fixes (compose): improve toggle placement for advanced view in tabbed and standalone modes
+###2026.03.26-dev.2018
+- Bug Fixes (styles): update color variables and improve theme integration for modal and iframe components
+- Bug Fixes (escape): rename and unify HTML/attribute escape functions, interfered with Folder View Plus who had the same global
+- Bug Fixes (style): use dynamix fonts to prevent mismatches
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.26-dev.1148)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.26-dev.2018)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
