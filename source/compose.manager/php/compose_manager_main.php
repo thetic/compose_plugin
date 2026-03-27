@@ -297,16 +297,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     function composeLoadlist() {
         // Return a Promise so callers can reliably .then() / .catch() on completion
         return new Promise(function(resolve, reject) {
-            composeClientDebug('[composeLoadlist] start', null, 'daemon', 'debug');
             composeTimers.load = setTimeout(function() {
                 showComposeSpinner('Loading stack list...');
             }, 500);
 
             $.get('/plugins/compose.manager/php/compose_list.php')
             .done(function(data) {
-                try {
-                    composeClientDebug('[composeLoadlist] success', null, 'daemon', 'debug');
-                } catch (e) {}
                 clearTimeout(composeTimers.load);
 
                 // Insert the loaded content
