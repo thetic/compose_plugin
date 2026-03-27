@@ -28,15 +28,20 @@ $isResponsive = version_compare($unraidVersion, '7.2.0-beta', '>=');
 $tileTitle = _('Compose Stacks');
 $tileTitleAttr = _('Go to Compose Manager');
 $loadingText = _('Loading...');
+$composePage = $cfg['SHOW_COMPOSE_IN_HEADER_MENU'] === 'true' ? '/Compose' : '/Docker';
 
 // Build tile header
 if ($isResponsive) {
     $headerHtml = <<<EOT
 <span class='tile-header'>
     <span class='tile-header-left'>
-        <i class='fa fa-cubes f32'></i>
+        <a href='$composePage' title="$tileTitleAttr" style="color:inherit;text-decoration:none;">
+            <i class='fa fa-cubes f32'></i>
+        </a>
         <div class='section'>
-            <h3 class='tile-header-main'>$tileTitle</h3>
+            <a href='$composePage' title="$tileTitleAttr" style="color:inherit;text-decoration:none;">
+                <h3 class='tile-header-main'>$tileTitle</h3>
+            </a>
             <span class='compose-stacks button'>
                 <input type='checkbox' id='compose_stacks_toggle'>
             </span>
@@ -45,7 +50,7 @@ if ($isResponsive) {
     </span>
     <span class='tile-header-right'>
         <span class='tile-header-right-controls'>
-            <a href='/Docker/Compose' title="$tileTitleAttr">
+            <a href='/Settings/compose.manager.settings' title="Go to Settings">
                 <i class='fa fa-fw fa-cog control'></i>
             </a>
         </span>
@@ -54,14 +59,19 @@ if ($isResponsive) {
 EOT;
 } else {
     $headerHtml = <<<EOT
-<i class='fa fa-cubes f32'></i>
-<div class='section'>$tileTitle<br>
+<a href='$composePage' title="$tileTitleAttr" style="color:inherit;text-decoration:none;">
+    <i class='fa fa-cubes f32'></i>
+</a>
+<div class='section'>
+    <a href='$composePage' title="$tileTitleAttr" style="color:inherit;text-decoration:none;">
+        $tileTitle<br>
+    </a>
     <span class='compose-stacks button'>
         <input type='checkbox' id='compose_stacks_toggle'>
     </span>
     <span id='compose_stacks_status' class='compose-stacks switch'></span><br>
 </div>
-<a href='/Docker/Compose' title="$tileTitleAttr">
+<a href='/Settings/compose.manager.settings' title="Go to Settings">
     <i class='fa fa-cog control'></i>
 </a>
 EOT;
@@ -95,11 +105,11 @@ $styles = <<<EOT
     cursor: pointer;
     border-radius: 4px;
 }
-.compose-dash-stack:hover { background: rgba(255,255,255,0.05); }
+.compose-dash-stack:hover { background: var(--dynamix-tablesorter-tbody-row-alt-bg-color); }
 .compose-dash-expand {
     width: var(--compose-expand-width);
     flex-shrink: 0;
-    color: #666;
+    color: var(--alt-text-color);
 }
 .compose-dash-expand::before {
     display: inline-block;
@@ -121,7 +131,7 @@ $styles = <<<EOT
 .compose-dash-col { white-space: nowrap; flex-shrink: 0; }
 .compose-dash-col.update { width: var(--compose-update-width); }
 .compose-dash-col.containers { flex: 1; text-align: center; min-width: 0; }
-.compose-dash-col.runtime { width: var(--compose-runtime-width); color: #888; text-align: right; flex-shrink: 0; padding-right: 12px; }
+.compose-dash-col.runtime { width: var(--compose-runtime-width); color: var(--alt-text-color); text-align: right; flex-shrink: 0; padding-right: 12px; }
 .compose-dash-containers {
     display: none;
     padding: 4px 0 8px 0;
@@ -135,7 +145,7 @@ $styles = <<<EOT
     padding-left: calc(var(--compose-expand-width) + 8px);
     overflow: hidden;
 }
-.compose-dash-container:hover { background: rgba(255,255,255,0.03); }
+.compose-dash-container:hover { background: var(--dynamix-tablesorter-tbody-row-bg-color); }
 /* Container icon: 24px + 24px margins = 48px total to match stack icon area */
 .compose-dash-ct-icon { width: 24px; height: 24px; margin: 0 12px; cursor: pointer; flex-shrink: 0; }
 .compose-dash-ct-icon img { width: 24px; height: 24px; border-radius: 3px; }
@@ -144,10 +154,10 @@ $styles = <<<EOT
 .compose-dash-ct-state { font-size: 0.8em; margin-top: 1px; }
 .compose-dash-ct-cols { display: flex; align-items: center; gap: 8px; font-size: 0.85em; flex: 2; min-width: 0; overflow: hidden; }
 .compose-dash-ct-update { width: var(--compose-update-width); white-space: nowrap; flex-shrink: 0; }
-.compose-dash-ct-update .sha { font-family: monospace; font-size: 0.9em; }
-.compose-dash-ct-image { width: 0; flex-grow: 1; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.compose-dash-ct-runtime { width: var(--compose-runtime-width); color: #888; text-align: right; white-space: nowrap; flex-shrink: 0; padding-right: 12px; }
-.compose-dash-loading { color: #888; font-style: italic; padding: 8px; }
+.compose-dash-ct-update .sha { font-family: var(--font-bitstream); font-size: 0.9em; }
+.compose-dash-ct-image { width: 0; flex-grow: 1; color: var(--alt-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compose-dash-ct-runtime { width: var(--compose-runtime-width); color: var(--alt-text-color); text-align: right; white-space: nowrap; flex-shrink: 0; padding-right: 12px; }
+.compose-dash-loading { color: var(--alt-text-color); font-style: italic; padding: 8px; }
 </style>
 EOT;
 
@@ -166,7 +176,7 @@ $script = <<<'EOT'
     }
 
     // HTML escape function to prevent XSS
-    function escapeHtml(text) {
+    function composeEscapeHtml(text) {
         if (text === null || text === undefined) return '';
         var div = document.createElement('div');
         div.textContent = String(text);
@@ -174,7 +184,7 @@ $script = <<<'EOT'
     }
 
     // Escape for HTML attributes (more strict)
-    function escapeAttr(text) {
+    function composeEscapeAttr(text) {
         if (text === null || text === undefined) return '';
         return String(text)
             .replace(/&/g, '&amp;')
@@ -272,7 +282,9 @@ $script = <<<'EOT'
         opts.push({divider:true});
         opts.push({text:'Open Compose', icon:'fa-cubes', action:function(e){
             e.preventDefault();
-            location.href = '/Docker/Compose';
+EOT;
+$script .= "            location.href = '$composePage';";
+$script .= <<<'EOT'
         }});
 
         // Destroy and re-attach like Docker pattern
@@ -457,24 +469,38 @@ $script = <<<'EOT'
                 if (response.containers && response.containers.length > 0) {
                     var html = '';
                     response.containers.forEach(function(ct) {
-                        // API returns capitalized property names: State, ID, Icon, Name, WebUI, Image, UpdateStatus, LocalSha, RemoteSha
-                        var isRunning = ct.State === 'running';
+                        // Tolerate PascalCase/camelCase field variants from different API paths.
+                        var ctName = ct.Name || ct.name || ct.Service || ct.service || 'unknown';
+                        var ctState = ct.State || ct.state || '';
+                        var ctIdRaw = ct.ID || ct.Id || ct.id || ctName;
+                        var ctId = String(ctIdRaw || ctName);
+                        var ctIdShort = ctId.substring(0, 12);
+                        var ctIcon = ct.Icon || ct.icon || '/plugins/dynamix.docker.manager/images/question.png';
+                        var ctShell = ct.Shell || ct.shell || '/bin/bash';
+                        var ctWebUI = ct.WebUI || ct.webUI || ct.webui || '';
+                        var ctImage = ct.Image || ct.image || '';
+                        var ctUpdateStatus = ct.UpdateStatus || ct.updateStatus || 'unknown';
+                        var ctLocalSha = ct.LocalSha || ct.localSha || '';
+                        var ctRemoteSha = ct.RemoteSha || ct.remoteSha || '';
+                        var ctStartedAt = ct.StartedAt || ct.startedAt || '';
+
+                        var isRunning = ctState === 'running';
                         var stateIcon = isRunning ? 'fa-play' : 'fa-square';
                         var stateColor = isRunning ? 'green-text' : 'red-text';
                         var stateText = isRunning ? 'started' : 'stopped';
-                        var ctElId = 'dash-ct-' + ct.ID.substring(0, 12);
-                        var imgSrc = ct.Icon || '/plugins/dynamix.docker.manager/images/question.png';
-                        var shell = ct.Shell || '/bin/bash';
-                        var shortId = ct.ID.substring(0, 12);
-                        var webui = resolveContainerWebUI(ct.WebUI);
+                        var ctElId = 'dash-ct-' + ctIdShort;
+                        var imgSrc = ctIcon;
+                        var shell = ctShell;
+                        var shortId = ctIdShort;
+                        var webui = resolveContainerWebUI(ctWebUI);
                         // Parse image to get repo and tag
-                        var image = ct.Image || '';
+                        var image = ctImage;
                         var imageDisplay = image.replace(/^.*\//, ''); // Remove registry prefix
 
                         // Update status
-                        var updateStatus = ct.UpdateStatus || 'unknown';
-                        var localSha = ct.LocalSha || '';
-                        var remoteSha = ct.RemoteSha || '';
+                        var updateStatus = ctUpdateStatus;
+                        var localSha = ctLocalSha;
+                        var remoteSha = ctRemoteSha;
                         var updateHtml = '';
                         if (updateStatus === 'up-to-date') {
                             updateHtml = '<span class="green-text"><i class="fa fa-check"></i> current</span>';
@@ -485,14 +511,14 @@ $script = <<<'EOT'
                         }
 
                         // Container uptime - use shared smart formatting
-                        var ctUptime = formatUptime(ct.StartedAt, isRunning);
+                        var ctUptime = formatUptime(ctStartedAt, isRunning);
 
                         html += '<div class="compose-dash-container">';
-                        html += '<span class="compose-dash-ct-icon" id="' + ctElId + '" data-ct-name="' + ct.Name + '" data-ct-id="' + shortId + '" data-ct-running="' + (isRunning ? '1' : '0') + '" data-ct-webui="' + escapeAttr(webui) + '" data-ct-shell="' + escapeAttr(shell) + '">';
-                        html += '<img src="' + escapeAttr(imgSrc) + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';">';
+                        html += '<span class="compose-dash-ct-icon" id="' + ctElId + '" data-ct-name="' + composeEscapeAttr(ctName) + '" data-ct-id="' + composeEscapeAttr(shortId) + '" data-ct-running="' + (isRunning ? '1' : '0') + '" data-ct-webui="' + composeEscapeAttr(webui) + '" data-ct-shell="' + composeEscapeAttr(shell) + '">';
+                        html += '<img src="' + composeEscapeAttr(imgSrc) + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';">';
                         html += '</span>';
                         html += '<span class="compose-dash-ct-info">';
-                        html += '<div class="compose-dash-ct-name">' + ct.Name + '</div>';
+                        html += '<div class="compose-dash-ct-name">' + composeEscapeHtml(ctName) + '</div>';
                         html += '<div class="compose-dash-ct-state ' + stateColor + '"><i class="fa ' + stateIcon + '"></i> ' + stateText + '</div>';
                         html += '</span>';
                         html += '<span class="compose-dash-ct-cols">';
@@ -563,7 +589,7 @@ $script = <<<'EOT'
                     var stateClass = state === 'stopped' ? 'stopped' : 'started';
                     html += '<div class="compose-dash-stack outer stacks ' + stateClass + '" data-stackid="' + stackId + '" data-folder="' + stack.folder + '">';
                     html += '<i class="fa fa-chevron-right compose-dash-expand" id="compose-dash-exp-' + stackId + '"></i>';
-                    html += '<span class="compose-dash-icon" id="compose-dash-icon-' + stackId + '" data-stack-folder="' + stack.folder + '" data-stack-running="' + (isRunning ? '1' : '0') + '" data-stack-webui="' + escapeAttr(webui) + '"><img src="' + escapeAttr(imgSrc) + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';"></span>';
+                    html += '<span class="compose-dash-icon" id="compose-dash-icon-' + stackId + '" data-stack-folder="' + stack.folder + '" data-stack-running="' + (isRunning ? '1' : '0') + '" data-stack-webui="' + composeEscapeAttr(webui) + '"><img src="' + composeEscapeAttr(imgSrc) + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';"></span>';
                     html += '<span class="compose-dash-info">';
                     html += '<div class="compose-dash-name">' + $('<div>').text(stack.name).html() + '</div>';
                     html += '<div class="compose-dash-state ' + stateColor + '"><i class="fa ' + stateIcon + '"></i> ' + stateText + '</div>';

@@ -24,7 +24,13 @@ class SettingsPageTest extends TestCase
         // Default value expression should be present
         $this->assertStringContainsString("\$cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false'", $page);
     }
-
+    public function testSettingsPageSetsDoneReturnCookie(): void
+    {
+        $this->assertFileExists(__DIR__ . '/../../source/compose.manager/compose.manager.settings.page');
+        $page = file_get_contents(__DIR__ . '/../../source/compose.manager/compose.manager.settings.page');
+        $this->assertStringContainsString("var cookieName = 'compose_manager_settings_return'", $page);
+        $this->assertStringContainsString("window.done = function(k)", $page);
+    }
     public function testSettingsPageReflectsConfigTrue(): void
     {
         // Set config to true

@@ -24,3 +24,6 @@ composer.phar
 Thumbs.db
 .github/compose_plugin.code-workspace
 .github/workspace-instructions.md
+
+# Runtime config files (created at runtime, not source)
+autoupdate.json

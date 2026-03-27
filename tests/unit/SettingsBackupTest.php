@@ -80,7 +80,8 @@ class SettingsBackupTest extends TestCase
     {
         $source = $this->getPageSource();
         // Should have Unraid's file picker attributes
-        $this->assertStringContainsString('data-pickroot="/mnt"', $source);
+        $this->assertStringContainsString('data-pickroot="/"', $source);
+        $this->assertStringContainsString('data-picktop="/boot/config/plugins/compose.manager"', $source);
         $this->assertStringContainsString('data-pickfolders="true"', $source);
     }
 

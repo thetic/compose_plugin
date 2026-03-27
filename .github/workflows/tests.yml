@@ -3,6 +3,9 @@ permissions:
   contents: read
   packages: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 on:
   push:
     branches: [main, dev]
@@ -16,7 +19,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       
@@ -32,7 +35,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
       
       - name: Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
@@ -48,15 +51,15 @@ jobs:
         run: vendor/bin/phpunit --coverage-clover tests/coverage/clover.xml --log-junit tests/results/junit.xml
       
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: php-test-results
           path: tests/results/
       
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: always()
+        uses: actions/upload-artifact@v7
+        if: ${{ always() && hashFiles('tests/coverage/**') != '' }}
         with:
           name: php-coverage
           path: tests/coverage/
@@ -68,7 +71,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       
@@ -92,7 +95,7 @@ jobs:
           bats tests/unit/*.bats --formatter tap
       
       - name: Upload BATS results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: bats-test-results
@@ -105,7 +108,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       

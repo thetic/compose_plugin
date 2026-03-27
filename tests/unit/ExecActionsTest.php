@@ -27,6 +27,7 @@ class ExecActionsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        \StackInfo::clearCache();
         
         // Create test compose root
         $this->testComposeRoot = sys_get_temp_dir() . '/compose_exec_test_' . getmypid();

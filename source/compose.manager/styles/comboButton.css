@@ -1,12 +1,27 @@
   /* Compose Manager Custom Modal */
-  .compose-modal-overlay {
+  .compose-modal-overlay,
+  .stack-actions-overlay,
+  .editor-modal-overlay {
+    --compose-modal-z-index: 10002;
+    --modal-backdrop-blur: 8px;
     position: fixed;
-    z-index: 9999;
     inset: 0;
-    background: var(--modal-overlay-bg, rgba(0, 0, 0, 0.6));
+    background: var(--modal-overlay-bg);
+    backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+    -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+    transition: background-color 0.2s ease, backdrop-filter 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .compose-modal-overlay,
+  .editor-modal-overlay {
+    z-index: var(--compose-modal-z-index);
+  }
+
+  .stack-actions-overlay {
+    z-index: calc(var(--compose-modal-z-index) - 1);
   }
 
   .compose-modal {
@@ -44,92 +59,6 @@
     text-align: right;
     border-top: 1px solid var(--border-color);
   }
-/* 
-  .compose-modal input[type="text"] {
-    width: 100%;
-    padding: 8px 10px;
-    margin-bottom: 16px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--input-background-color);
-    color: var(--text-color);
-  }
-
-  .compose-modal button {
-    border: none;
-    border-radius: 4px;
-    padding: 8px 18px;
-    font-weight: bold;
-    margin-left: 8px;
-    cursor: pointer;
-    background: var(--brand-orange);
-    color: var(--action-primary-color);
-    transition: background 0.2s;
-  }
-
-  .compose-modal button.cancel {
-    background: var(--alt-background-color);
-    color: var(--alt-text-color);
-  }
-
-  .compose-modal button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
- */
-  /* The container <div> - needed to position the dropdown content */
-  .dropdown {
-    position: absolute;
-    display: inline-block;
-  }
-
-  /* Dropdown Content (Hidden by Default) */
-  .dropdown-content {
-    display: none;
-    position: relative;
-    background-color: var(--panel-bg);
-    min-width: 100px;
-    /* min-width: auto; */
-    z-index: 1;
-    right: 75px;
-  }
-
-  /* Links inside the dropdown */
-  .dropdown-content a {
-    color: var(--text-color);
-    padding: 12px 16px;
-    text-decoration: none;
-    display: block;
-  }
-
-  /* Change color of dropdown links on hover */
-  .dropdown-content a:hover {
-    background-color: var(--dropdown-hover-bg)
-  }
-
-  /* Show the dropdown menu on hover */
-  .dropdown:hover .dropdown-content {
-    display: block;
-  }
-
-  .combo-btn-group-left {
-    border-right-style: none !important;
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    margin-right: 0 !important;
-  }
-
-  .combo-btn-group-right {
-    border-left-style: none !important;
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    min-width: auto !important;
-    margin-right: 0 !important;
-  }
-
-  .combo-btn-subgroup {
-    display: inline;
-  }
 
   /* ============================================
    Minimal Custom Styles for Compose Manager
@@ -146,18 +75,9 @@
   }
 
   /* Stack Actions Modal (context menu) */
-  .stack-actions-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 9998;
-  }
-
   .stack-actions-modal {
     position: fixed;
-    z-index: 9999;
+    z-index: var(--compose-modal-z-index);
     background-color: var(--background-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -228,11 +148,11 @@
   }
 
   .stack-action-item.stack-action-danger {
-    color: #f44336;
+    color: var(--status-error);
   }
 
   .stack-action-item.stack-action-danger i {
-    color: #f44336;
+    color: var(--status-error);
   }
 
   .stack-action-item.disabled {
@@ -259,35 +179,27 @@
     color: var(--status-error);
   }
 
-  /* SweetAlert2 button customizations */
-  .swal-stack-name {
-    color: var(--brand-orange);
+  /* Minimal SweetAlert overlay blur only; no custom colors. */
+  .sweet-overlay {
+    background: var(--modal-overlay-bg, rgba(0, 0, 0, 0.3)) !important;
+    backdrop-filter: blur(var(--modal-backdrop-blur, 8px)) !important;
+    -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 8px)) !important;
+    transition: background-color 0.2s ease, backdrop-filter 0.2s ease;
+    opacity: unset !important;
   }
 
-  .swal-btn-danger {
-    background-color: var(--status-error) !important;
+  /* Minimal forced Shadowbox container theming (needed for inside code-path). */
+  /* SB wrapper and modal background is handled by unRAID core CSS (default-dynamix). */
+  #sb-wrapper-inner {
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
   }
-  .swal-btn-warning {
-    background-color: var(--brand-orange) !important;
-  }
-
-  /* Hover variants that follow the active Unraid theme */
-  .swal-btn-warning:hover {
-    background-color: var(--action-primary-bg-hover) !important;
-  }
-
-  .swal-btn-danger:hover {
-    background-color: var(--status-error-hover) !important;
-  }
-
-  .swal-btn-cancel {
-    background-color: var(--alt-background-color) !important;
-    color: var(--alt-text-color) !important;
-  }
-
-  .swal-btn-cancel:hover {
-    background-color: var(--border-color) !important;
-    color: var(--text-color) !important;
+  #sb-overlay {
+    background: var(--modal-overlay-bg, rgba(0, 0, 0, 0.3)) !important;
+    backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+    -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+    transition: background-color 0.2s ease, backdrop-filter 0.2s ease;
+    opacity: unset !important;
   }
 
   /* ── Stack table structural rules ──
@@ -296,12 +208,12 @@
    availability.  The rules below are supplemental / non-critical. */
 
   /* Update column links - ensure pointer cursor */
-  .updatecolumn a,
-  .updatecolumn a.exec {
-    cursor: pointer !important;
+  .compose-updatecolumn a,
+  .compose-updatecolumn a.exec {
+    cursor: pointer;
   }
 
-  .updatecolumn a:hover {
+  .compose-updatecolumn a:hover {
     text-decoration: none;
   }
 
@@ -325,30 +237,6 @@
 
   .compose-spinner {
     margin-right: 8px;
-  }
-
-  /* Local spinner overlay for Compose list (keeps behaviour separate from global spinner.fixed) */
-  .compose-local-spinner {
-    position: absolute;
-    right: 12px;
-    top: 8px;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
-    padding: 6px 10px;
-    border-radius: 6px;
-    z-index: 99999;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.95rem;
-  }
-
-  .compose-local-spinner i {
-    font-size: 1.1rem;
-  }
-
-  .compose-local-spinner-text {
-    color: #fff;
   }
 
   /* Spinner that overlays container image icons */
@@ -459,5 +347,5 @@
 
   /* Source data cells only — muted color (header inherits theme default) */
   .compose-ct-table td:nth-child(3) {
-    color: #606060;
+    color: var(--alt-text-color);
   }

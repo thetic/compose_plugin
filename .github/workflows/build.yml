@@ -5,11 +5,16 @@
 # - Builds TXZ package using Docker (Slackware)
 # - Calculates MD5 for integrity verification
 # - Creates GitHub releases with package attached
-# - Updates PLG file in dev branch
+# - Updates PLG file version/MD5 in the target branch (main or dev)
 #
 # Triggers:
-# - New tag matching date pattern: vYYYY.MM.DD[a-z]
+# - Called by tag-release.yml via workflow_call (primary path)
+# - Direct tag push (fallback / legacy)
 # - Manual workflow_dispatch for testing builds
+#
+# Tag format:
+# - Stable: vYYYY.MM.DD or vYYYY.MM.DDa
+# - Beta:   vYYYY.MM.DD-dev.HHMM
 
 name: Build & Release Plugin
 
@@ -17,10 +22,16 @@ on:
   push:
     tags:
       - "v20[0-9][0-9].[0-9][0-9].[0-9][0-9]*"
+  workflow_call:
+    inputs:
+      tag:
+        description: "The full tag name (e.g., v2026.03.15-dev.1234)"
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (e.g., 2026.02.01) - leave empty for test build"
+        description: "Version to build (e.g., 2026.02.01 or 2026.02.01-dev) - leave empty for test build"
         required: false
         default: ""
 
@@ -28,9 +39,8 @@ permissions:
   contents: write
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   PLUGIN_NAME: compose.manager
-  COMPOSE_VERSION: "5.0.2"
-  ACE_VERSION: "1.4.14"
 
 jobs:
   build:
@@ -41,15 +51,27 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
+
+      - name: Read component versions
+        run: |
+          while IFS='=' read -r key value; do
+            [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done < versions.env
 
       - name: Determine version
         id: version
         run: |
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/v* ]]; then
-            # Release tag - extract version (remove 'v' prefix)
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            # Called from tag-release.yml via workflow_call
+            VERSION="${{ inputs.tag }}"
+            VERSION="${VERSION#v}"  # strip 'v' prefix
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Direct tag push
             VERSION="${GITHUB_REF#refs/tags/v}"
           elif [[ -n "${{ github.event.inputs.version }}" ]]; then
             # Manual input
@@ -73,11 +95,13 @@ jobs:
           docker run --rm --tmpfs /tmp \
             -v $PWD/archive:/mnt/output:rw \
             -v $PWD/source:/mnt/source:ro \
+            -v /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro \
             -e TZ="America/New_York" \
-            -e COMPOSE_VERSION=${{ env.COMPOSE_VERSION }} \
-            -e ACE_VERSION=${{ env.ACE_VERSION }} \
+            -e COMPOSE_VERSION="$COMPOSE_VERSION" \
+            -e ACE_VERSION="$ACE_VERSION" \
             -e OUTPUT_FOLDER="/mnt/output" \
             -e PKG_VERSION="${VERSION}" \
+            -e CA_CERT="/etc/ssl/certs/ca-certificates.crt" \
             vbatts/slackware:latest /mnt/source/pkg_build.sh
 
           # Verify package was created
@@ -98,7 +122,7 @@ jobs:
           echo "Package MD5: ${MD5}"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: plugin-package
           path: |
@@ -109,42 +133,88 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
 
     steps:
+      - name: Determine release type
+        id: release_type
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          if [[ "$VERSION" == *"-dev"* ]]; then
+            echo "is_beta=true" >> $GITHUB_OUTPUT
+            echo "target_branch=dev" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "Release type: BETA (dev branch)"
+          else
+            echo "is_beta=false" >> $GITHUB_OUTPUT
+            echo "target_branch=main" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "Release type: STABLE (main branch)"
+          fi
+
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ steps.release_type.outputs.target_branch }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: plugin-package
           path: artifacts/
 
       - name: Prepare release notes
         id: notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.build.outputs.version }}"
+          TARGET_BRANCH="${{ steps.release_type.outputs.target_branch }}"
+          IS_BETA="${{ steps.release_type.outputs.is_beta }}"
 
           # Read component versions from release_info
           if [[ -f artifacts/release_info ]]; then
             COMPONENTS=$(cat artifacts/release_info)
           else
-            COMPONENTS="Compose v${{ env.COMPOSE_VERSION }}"
+            COMPONENTS="See release artifacts for component versions"
+          fi
+
+          # Beta-specific: find PR and latest stable tag for diff link
+          PR_SECTION=""
+          if [[ "$IS_BETA" == "true" ]]; then
+            TITLE="Compose Manager v${VERSION} (Beta)"
+            INSTALL_NOTE="**Beta Release** - Install from the beta channel for testing."
+
+            PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --head dev --base main --state open --json number --jq '.[0].number // empty')
+            LATEST_STABLE=$(git tag -l 'v*' | grep -v '\-dev' | sort -V | tail -1)
+
+            if [[ -n "$PR_NUMBER" || -n "$LATEST_STABLE" ]]; then
+              PR_SECTION=$'\n### Links\n'
+              if [[ -n "$PR_NUMBER" ]]; then
+                PR_SECTION+="- [PR #${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER})"$'\n'
+              fi
+              if [[ -n "$LATEST_STABLE" ]]; then
+                PR_SECTION+="- [Beta release diff](https://github.com/${{ github.repository }}/compare/${LATEST_STABLE}...v${VERSION})"$'\n'
+              fi
+            fi
+          else
+            TITLE="Compose Manager v${VERSION}"
+            INSTALL_NOTE=""
           fi
 
           # Create release body
           cat > release_body.md << EOF
-          ## Compose Manager v${VERSION}
+          ## ${TITLE}
+
+          ${INSTALL_NOTE}
+          ${PR_SECTION}
 
           ### Installation
 
           **Via Plugin Manager:**
           \`\`\`
-          https://raw.githubusercontent.com/${{ github.repository }}/main/${{ env.PLUGIN_NAME }}.plg
+          https://raw.githubusercontent.com/${{ github.repository }}/${TARGET_BRANCH}/${{ env.PLUGIN_NAME }}.plg
           \`\`\`
 
           ### Package Details
@@ -157,20 +227,22 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Compose Manager v${{ needs.build.outputs.version }}"
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: "Compose Manager v${{ needs.build.outputs.version }}${{ steps.release_type.outputs.is_beta == 'true' && ' (Beta)' || '' }}"
           body_path: release_body.md
           files: |
             artifacts/*.txz
           fail_on_unmatched_files: true
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.release_type.outputs.prerelease == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update PLG in main branch
+      - name: Update PLG in target branch
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           MD5="${{ needs.build.outputs.md5 }}"
+          TARGET_BRANCH="${{ steps.release_type.outputs.target_branch }}"
 
           # Configure git
           git config user.name "github-actions[bot]"
@@ -187,5 +259,5 @@ jobs:
 
           # Commit and push
           git add ${{ env.PLUGIN_NAME }}.plg
-          git commit -m "Release v${VERSION}" || echo "No changes to commit"
-          git push origin main
+          git commit -m "Release v${VERSION} [skip ci]" || echo "No changes to commit"
+          git push origin ${TARGET_BRANCH}

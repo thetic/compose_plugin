@@ -14,51 +14,75 @@ on:
     paths:
       - 'compose.manager.plg'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   sync-url:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     # Skip if this is already a bot commit (prevents infinite loops)
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    if: >-
+      !contains(github.event.head_commit.message, '[skip ci]')
+      && !startsWith(github.event.head_commit.message, 'Release v')
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check and fix pluginURL branch
+      - name: Check and fix pluginURL branch + README badge
         id: check
         run: |
           BRANCH="${GITHUB_REF_NAME}"
           PLG_FILE="compose.manager.plg"
-          
-          # Extract current branch from pluginURL entity
+          README_FILE="source/compose.manager/README.md"
+          NEEDS_COMMIT=false
+
+          # Ensure pluginURL uses the current branch
           CURRENT_URL_BRANCH=$(grep -oP '<!ENTITY pluginURL.*github;/\K[^/]+' "$PLG_FILE" || echo "unknown")
-          
           echo "Current branch: $BRANCH"
           echo "PLG pluginURL branch: $CURRENT_URL_BRANCH"
-          
+
           if [[ "$CURRENT_URL_BRANCH" != "$BRANCH" ]]; then
-            echo "Branch mismatch - fixing..."
-            
-            # Replace the branch in the pluginURL entity
+            echo "Branch mismatch - fixing pluginURL..."
             sed -i "s|/&github;/[^/]*/|/\&github;/${BRANCH}/|" "$PLG_FILE"
-            
-            echo "Fixed pluginURL:"
-            grep "<!ENTITY pluginURL" "$PLG_FILE"
-            
-            echo "needs_commit=true" >> $GITHUB_OUTPUT
+            NEEDS_COMMIT=true
           else
             echo "pluginURL already correct"
-            echo "needs_commit=false" >> $GITHUB_OUTPUT
           fi
+
+          # Ensure README disposition matches branch
+          if [[ "$BRANCH" == "dev" ]]; then
+            # dev should show beta
+            if grep -q "^\*\*Compose Manager Plus (Beta)\*\*$" "$README_FILE"; then
+              echo "README already has beta title (dev branch)"
+            else
+              echo "Setting README title to beta form for dev branch..."
+              sed -i '1s|^\*\*Compose Manager Plus.*\*\*$|**Compose Manager Plus (Beta)**|' "$README_FILE"
+              NEEDS_COMMIT=true
+            fi
+          else
+            # main should not show beta
+            if grep -q "^\*\*Compose Manager Plus (Beta)\*\*$" "$README_FILE"; then
+              echo "Removing beta title from README for main branch..."
+              sed -i '1s|^\*\*Compose Manager Plus (Beta)\*\*$|**Compose Manager Plus**|' "$README_FILE"
+              NEEDS_COMMIT=true
+            else
+              echo "README already has non-beta title for main branch"
+            fi
+          fi
+
+          echo "needs_commit=$NEEDS_COMMIT" >> $GITHUB_OUTPUT
 
       - name: Commit fix
         if: steps.check.outputs.needs_commit == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add compose.manager.plg
-          git commit -m "chore: sync pluginURL to ${GITHUB_REF_NAME} branch [skip ci]"
+
+          git add compose.manager.plg source/compose.manager/README.md
+          git commit -m "chore: sync pluginURL+README for ${GITHUB_REF_NAME} branch [skip ci]"
           git push

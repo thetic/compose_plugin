@@ -33,6 +33,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         table-layout: fixed
     }
 
+    /* Stabilize header row height across basic/advanced toggle transitions */
+    #compose_stacks thead tr th {
+	font-weight: normal;
+	font-size: 1.1rem;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	color: var(--dynamix-tablesorter-thead-th-text-color);
+	background-color: var(--dynamix-tablesorter-thead-th-bg-color);
+	padding: 8px 20px 8px 6px;
+	white-space: nowrap;
+	text-align: left;
+    }
+
     /* Clip overflowing content in fixed-layout cells */
     #compose_stacks th,
     #compose_stacks td {
@@ -123,7 +136,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     #compose_stacks tbody tr.stack-details-row {
-        background-color: rgba(0, 0, 0, 0.08) !important
+        background-color: var(--dynamix-sb-body-bg-color) !important
     }
 
     /* Autostart cell */
@@ -132,11 +145,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         padding-right: 20px
     }
 
-    /* Container sub-table source column: left-align (override theme) */
-    .compose-ct-table th:nth-child(3),
-    .compose-ct-table td:nth-child(3) {
-        text-align: left !important
-    }
 </style>
 
 <script src="/plugins/compose.manager/javascript/ace/ace.js" type="text/javascript"></script>
@@ -158,29 +166,143 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     var hideComposeFromDocker = <?php echo json_encode($hideComposeFromDocker); ?>;
     var composeCliVersion = <?php echo json_encode($composeVersion); ?>;
 
+    // ═══════════════════════════════════════════════════════════════════
+    // Standard factory functions for container and stack identity objects
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Create a normalized container info object from any raw source.
+     * Handles PascalCase→camelCase, resolves name from multiple field aliases,
+     * and derives hasUpdate/isPinned when not explicitly set.
+     *
+     * @param {Object} raw - Raw container object (from server, cache, or update response)
+     * @returns {Object} Normalized container info
+     */
+    function createContainerInfo(raw) {
+        if (!raw) return null;
+        var name = raw.name || raw.Name || raw.container || raw.Service || raw.service || '';
+        var service = raw.service || raw.Service || name;
+        var updateStatus = raw.updateStatus || raw.UpdateStatus || '';
+        var hasUpdate = (raw.hasUpdate !== undefined) ? !!raw.hasUpdate : (updateStatus === 'update-available');
+
+        return {
+            name: name,
+            service: service,
+            image: raw.image || raw.Image || '',
+            state: raw.state || raw.State || '',
+            isRunning: (raw.state || raw.State || '') === 'running',
+            hasUpdate: hasUpdate,
+            updateStatus: updateStatus,
+            localSha: raw.localSha || raw.LocalSha || '',
+            remoteSha: raw.remoteSha || raw.RemoteSha || '',
+            isPinned: (raw.isPinned !== undefined) ? !!raw.isPinned : false,
+            pinnedDigest: raw.pinnedDigest || raw.PinnedDigest || '',
+            icon: raw.icon || raw.Icon || '',
+            shell: raw.shell || raw.Shell || '/bin/bash',
+            webUI: raw.webUI || raw.WebUI || '',
+            ports: raw.ports || raw.Ports || [],
+            networks: raw.networks || raw.Networks || [],
+            volumes: raw.volumes || raw.Volumes || [],
+            id: raw.id || raw.Id || raw.ID || '',
+            created: raw.created || raw.Created || '',
+            startedAt: raw.startedAt || raw.StartedAt || ''
+        };
+    }
+
+    /**
+     * Create a normalized stack info object.
+     *
+     * @param {string} project - The project/stack folder name
+     * @param {Array} containers - Array of raw container objects (will be normalized)
+     * @param {Object} [opts] - Optional overrides (totalServices, lastChecked, etc.)
+     * @returns {Object} Normalized stack info
+     */
+    function createStackInfo(project, containers, opts) {
+        opts = opts || {};
+        var normalized = (containers || []).map(createContainerInfo).filter(Boolean);
+        var isRunning = normalized.some(function(c) { return c.isRunning; });
+        var hasUpdate = normalized.some(function(c) { return c.hasUpdate; });
+
+        return {
+            projectName: opts.projectName || project,
+            containers: normalized,
+            isRunning: (opts.isRunning !== undefined) ? opts.isRunning : isRunning,
+            hasUpdate: (opts.hasUpdate !== undefined) ? opts.hasUpdate : hasUpdate,
+            totalServices: opts.totalServices || normalized.length,
+            lastChecked: opts.lastChecked || null
+        };
+    }
+
+    /**
+     * Merge update status info from a previous stackInfo into a new one.
+     * Matches containers by name and copies update fields.
+     *
+     * @param {Object} stackInfo - The target stack info (mutated in place)
+     * @param {Object} prevStatus - Previously saved stack update status
+     * @returns {Object} The mutated stackInfo
+     */
+    function mergeStackUpdateStatus(stackInfo, prevStatus) {
+        if (!prevStatus) return stackInfo;
+
+        // Copy stack-level fields
+        ['lastChecked', 'updateAvailable', 'checking', 'checked'].forEach(function(k) {
+            if (typeof prevStatus[k] !== 'undefined') stackInfo[k] = prevStatus[k];
+        });
+
+        // Merge container-level update data
+        if (prevStatus.containers && stackInfo.containers) {
+            stackInfo.containers.forEach(function(c) {
+                var cName = c.name;
+                prevStatus.containers.forEach(function(pc) {
+                    var prev = (typeof pc.name === 'string') ? pc : createContainerInfo(pc);
+                    if (cName === prev.name) {
+                        if (prev.hasUpdate && !c.hasUpdate) c.hasUpdate = prev.hasUpdate;
+                        if (prev.updateStatus && !c.updateStatus) c.updateStatus = prev.updateStatus;
+                        if (prev.localSha && !c.localSha) c.localSha = prev.localSha;
+                        if (prev.remoteSha && !c.remoteSha) c.remoteSha = prev.remoteSha;
+                        if (prev.isPinned !== undefined) c.isPinned = prev.isPinned;
+                    }
+                });
+            });
+            // Recompute stack-level hasUpdate from merged containers
+            stackInfo.hasUpdate = stackInfo.containers.some(function(c) { return c.hasUpdate; });
+        }
+
+        return stackInfo;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+
     // Timers for async operations (plugin-specific to avoid collision with Unraid's global timers)
     var composeTimers = {};
+
+    function showComposeSpinner() {
+        var $spinner = $('div.spinner.fixed');
+        if (!$spinner.length) {
+            return;
+        }
+        $spinner.css({'z-index': 100000});
+        $spinner.stop(true, true).show('slow');
+    }
+
+    function hideComposeSpinner() {
+        var $spinner = $('div.spinner.fixed');
+        if (!$spinner.length) {
+            return;
+        }
+        $spinner.stop(true, true).hide('slow');
+    }
 
     // Load stack list asynchronously (namespaced to avoid conflict with Docker tab's loadlist)
     function composeLoadlist() {
         // Return a Promise so callers can reliably .then() / .catch() on completion
         return new Promise(function(resolve, reject) {
-            composeClientDebug('[composeLoadlist] start', null, 'daemon', 'debug');
-            // Ensure local spinner exists and show it after a short delay to avoid flash on fast loads
-            if ($('#compose-local-spinner').length === 0) {
-                // place spinner just above the list and ensure parent can position overlay if needed
-                $('#compose_list').before('<div id="compose-local-spinner" class="compose-local-spinner" style="display:none"><i class="fa fa-spin fa-circle-o-notch"></i> <span class="compose-local-spinner-text">Loading stack list...</span></div>');
-                $('#compose_list').parent().css('position', 'relative');
-            }
             composeTimers.load = setTimeout(function() {
-                $('#compose-local-spinner').fadeIn('fast');
+                showComposeSpinner('Loading stack list...');
             }, 500);
 
             $.get('/plugins/compose.manager/php/compose_list.php')
             .done(function(data) {
-                try {
-                    composeClientDebug('[composeLoadlist] success', null, 'daemon', 'debug');
-                } catch (e) {}
                 clearTimeout(composeTimers.load);
 
                 // Insert the loaded content
@@ -271,8 +393,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     });
                 } catch (e) {}
 
-                // Hide local spinner
-                $('#compose-local-spinner').fadeOut('fast');
+                // Hide compose spinner overlay
+                hideComposeSpinner();
 
                 // Show buttons now that content is loaded
                 $('input[type=button]').show();
@@ -289,8 +411,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     error: error
                 }, 'daemon', 'error');
                 clearTimeout(composeTimers.load);
-                $('#compose-local-spinner').fadeOut('fast');
-                $('#compose_list').html('<tr><td colspan="7" style="text-align:center;padding:20px;color:#c00;">Failed to load stack list. Please refresh the page.</td></tr>');
+                hideComposeSpinner();
+                $('#compose_list').html('<tr><td colspan="7" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
 
                 // Reject the promise so callers can handle the error
                 try { reject({xhr: xhr, status: status, error: error}); } catch (e) { reject(error); }
@@ -330,19 +452,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
 
         // Apply readmore to descriptions - scope to compose_stacks, exclude container detail rows
-        $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore').readmore({
+        var $readmoreEls = $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore');
+        $readmoreEls.readmore('destroy');
+        $readmoreEls.readmore({
             maxHeight: 32,
             moreLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",
             lessLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"
         });
 
-        // Apply current view mode (advanced/basic) via CSS class on table
-        var advanced = $.cookie('compose_listview_mode') === 'advanced';
-        if (advanced) {
-            $('#compose_stacks').addClass('cm-advanced-view');
-        } else {
-            $('#compose_stacks').removeClass('cm-advanced-view');
-        }
+        // Apply current view mode (advanced/basic) with centralized logic
+        applyListView(false);
 
         // Seed expandedStacks from any rows rendered expanded server-side
         $('.stack-details-row:visible').each(function() {
@@ -370,6 +489,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     function dirname(path) {
         return path.replace(/\\/g, '/').replace(/\/[^\/]*$/, '');
+    }
+
+    // Safely attempt to parse a JSON string; returns null on failure
+    function tryParseJson(str) {
+        if (!str || typeof str !== 'string') return null;
+        try { return JSON.parse(str); } catch (e) { return null; }
     }
 
     // Editor modal state
@@ -427,6 +552,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
     }
 
+    // Shared helpers for file-tree picker positioning and scroll tracking are now in common.js
+    // Please reference composePositionFileTreeForInput, composeTrackFileTreeForInput, composeBindFileTreeInputs from common.js
+
     // Initialize editor modal
     function initEditorModal() {
         // Initialize Ace editors for compose and env tabs only
@@ -471,7 +599,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
 
         // Initialize settings field change tracking
-        $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path').on('input', function() {
+        $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path').on('input change', function() {
             var fieldId = this.id.replace('settings-', '');
             var currentValue = $(this).val();
             var originalValue = editorModal.originalSettings[fieldId] || '';
@@ -567,6 +695,13 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }
             }
         });
+
+        // Close modal when clicking on the overlay background (not the inner modal content)
+        $('#editor-modal-overlay').off('click.editorModal').on('click.editorModal', function(e) {
+            if (e.target === this) {
+                closeEditorModal();
+            }
+        });
     }
 
     // Switch between tabs (compose / env / labels / settings)
@@ -581,21 +716,42 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $('.editor-tab').removeClass('active').attr('aria-selected', 'false');
         $('#editor-tab-' + tabName).addClass('active').attr('aria-selected', 'true');
 
-        // Update panels
-        $('.editor-panel').removeClass('active');
-        $('#editor-panel-' + tabName).addClass('active');
+        // Update panels and ensure inline display is correct (inline style may be persisted from tab host)
+        $('.editor-panel').each(function() {
+            var $panel = $(this);
+            if ($panel.attr('id') === 'editor-panel-' + tabName) {
+                $panel.addClass('active').css('display', 'flex');
+            } else {
+                $panel.removeClass('active').css('display', 'none');
+            }
+        });
 
         editorModal.currentTab = tabName;
 
         // Resize and focus editor if switching to compose or env tab
         if ((tabName === 'compose' || tabName === 'env') && editorModal.editors[tabName]) {
-            editorModal.editors[tabName].resize();
-            editorModal.editors[tabName].focus();
+            try {
+                editorModal.editors[tabName].resize();
+                editorModal.editors[tabName].renderer.updateFull();
+                editorModal.editors[tabName].focus();
+            } catch (e) {
+                console.warn('Compose Manager: editor resize failed', e);
+            }
         }
 
         // Load labels data if switching to labels tab for the first time
         if (tabName === 'labels' && !editorModal.labelsData) {
             loadLabelsData();
+        }
+    }
+
+    function refreshEditorContents(type) {
+        if (!editorModal.editors[type]) return;
+        try {
+            editorModal.editors[type].resize();
+            editorModal.editors[type].renderer.updateFull();
+        } catch (e) {
+            console.warn('Compose Manager: refreshEditorContents failed for ' + type, e);
         }
     }
 
@@ -630,24 +786,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
     }
 
-    // HTML escape function to prevent XSS
-    function escapeHtml(text) {
-        if (text === null || text === undefined) return '';
-        var div = document.createElement('div');
-        div.textContent = String(text);
-        return div.innerHTML;
-    }
-
-    // Escape for HTML attributes (more strict)
-    function escapeAttr(text) {
-        if (text === null || text === undefined) return '';
-        return String(text)
-            .replace(/&/g, '&amp;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-    }
+    // composeEscapeHtml / composeEscapeAttr are provided by common.js
 
     // Update status cache per stack
     var stackUpdateStatus = {};
@@ -786,7 +925,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 $row.find('.state').text().indexOf('partial') !== -1;
             if (isRunning) {
                 var $updateCell = $row.find('.compose-updatecolumn');
-                $updateCell.html('<span style="color:#267CA8"><i class="fa fa-refresh fa-spin"></i> checking...</span>');
+                $updateCell.html('<span class="compose-status-info"><i class="fa fa-refresh fa-spin"></i> checking...</span>');
             }
         });
 
@@ -877,27 +1016,50 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
 
         var stackNames = stacks.map(function(s) {
-            return escapeHtml(s.projectName);
+            return composeEscapeHtml(s.projectName);
         }).join('<br>');
         var title = autostartOnly ? 'Update Autostart Stacks?' : 'Update All Stacks?';
         var confirmText = 'Yes, update ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
 
-        swal({
-            title: title,
-            html: true,
-            text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be updated:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p style="color:#f80;"><i class="fa fa-warning"></i> This will pull new images and recreate containers.</p></div>',
-            type: 'warning',
-            showCancelButton: true,
-            confirmButtonText: confirmText,
-            cancelButtonText: 'Cancel'
-        }, function(confirmed) {
-            if (confirmed) {
-                executeUpdateAllStacks(stacks);
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--dynamix-box-inner-div-border-color);display:flex;align-items:center;gap:8px;">' +
+            '<input type="checkbox" id="swal-run-bg-updateall" style="width:16px;height:16px;cursor:pointer;">' +
+            '<label for="swal-run-bg-updateall" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
+            '</div>';
+
+        getConfig().then(function(pluginCfg) {
+            var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+            var disableWarnings = pluginCfg && pluginCfg.DISABLE_ACTION_WARNINGS === 'true';
+
+            if (disableWarnings) {
+                executeUpdateAllStacks(stacks, bgDefault, bgDefault);
+                return;
             }
+
+            swal({
+                title: title,
+                html: true,
+                text: '<div style="background:var(--alt-background-color);text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be updated:</p><div style="background:var(--background-color);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p class="compose-status-warning"><i class="fa fa-warning"></i> This will pull new images and recreate containers.</p></div>' + bgCheckboxHtml,
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonText: confirmText,
+                cancelButtonText: 'Cancel'
+            }, function(confirmed) {
+                if (confirmed) {
+                    var runInBackground = $('#swal-run-bg-updateall').is(':checked');
+                    executeUpdateAllStacks(stacks, runInBackground);
+                }
+            });
+
+            setTimeout(function() {
+                var $cb = $('#swal-run-bg-updateall');
+                if ($cb.length) {
+                    $cb.prop('checked', bgDefault);
+                }
+            }, 50);
         });
     }
 
-    function executeUpdateAllStacks(stacks) {
+    function executeUpdateAllStacks(stacks, background, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -921,12 +1083,23 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             action: 'markStackForRecheck',
             stacks: JSON.stringify(stackNames)
         }, function() {
-            $.post(compURL, {
-                action: 'composeUpdateMultiple',
-                paths: JSON.stringify(paths)
-            }, function(data) {
-                if (data) {
-                    openBox(data, 'Update All Stacks', height, width, true);
+            performComposeAction({
+                actionName: 'update',
+                title: 'Update All Stacks',
+                requestUrl: compURL,
+                payload: {
+                    action: 'composeUpdateMultiple',
+                    paths: JSON.stringify(paths)
+                },
+                background: background,
+                suppressBackgroundNotification: suppressBackgroundNotification,
+                pendingReload: false,
+                onComplete: function(parsed, data) {
+                    if (parsed && parsed.background) {
+                        stacks.forEach(function(s) {
+                            pollBackgroundCompletion(s.project);
+                        });
+                    }
                 }
             });
         });
@@ -979,7 +1152,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         // Update the stack row's update column (match Docker tab style)
         if (updateCount > 0) {
             // Updates available - orange "update ready" style with clickable link and SHA info
-            var updateHtml = '<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');">';
+            var updateHtml = '<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + composeEscapeAttr(stackName) + '\', \'' + composeEscapeAttr(stackId) + '\');">';
             updateHtml += '<span class="orange-text" style="white-space:nowrap;"><i class="fa fa-flash fa-fw"></i> ' + updateCount + ' update' + (updateCount > 1 ? 's' : '') + '</span>';
             updateHtml += '</a>';
 
@@ -991,20 +1164,20 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (updatesWithSha.length === 1) {
                     // Single update - show the SHA diff inline
                     var ct = updatesWithSha[0];
-                    updateHtml += '<div style="font-family:monospace;font-size:0.8em;margin-top:2px;">';
-                    updateHtml += '<span style="color:#f80;" title="' + escapeAttr(ct.localSha) + '">' + escapeHtml(ct.localSha.substring(0, 8)) + '</span>';
-                    updateHtml += ' <i class="fa fa-arrow-right" style="margin:0 2px;color:#3c3;font-size:0.9em;"></i> ';
-                    updateHtml += '<span style="color:#3c3;" title="' + escapeAttr(ct.remoteSha) + '">' + escapeHtml(ct.remoteSha.substring(0, 8)) + '</span>';
+                    updateHtml += '<div style="font-family:var(--font-bitstream);font-size:0.8em;margin-top:2px;">';
+                    updateHtml += '<span class="compose-status-warning" title="' + composeEscapeAttr(ct.localSha) + '">' + composeEscapeHtml(ct.localSha.substring(0, 8)) + '</span>';
+                    updateHtml += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 2px;font-size:0.9em;"></i> ';
+                    updateHtml += '<span class="compose-status-success" title="' + composeEscapeAttr(ct.remoteSha) + '">' + composeEscapeHtml(ct.remoteSha.substring(0, 8)) + '</span>';
                     updateHtml += '</div>';
                 } else if (updatesWithSha.length > 1) {
                     // Multiple updates - show expand hint
-                    updateHtml += '<div class="cm-advanced" style="font-size:0.8em;color:#999;margin-top:2px;">Expand for details</div>';
+                    updateHtml += '<div class="cm-advanced compose-text-muted" style="font-size:0.8em;margin-top:2px;">Expand for details</div>';
                 }
             }
 
             // Also show pinned count if any containers are pinned
             if (pinnedCount > 0) {
-                updateHtml += '<div style="font-size:0.8em;color:#17a2b8;margin-top:2px;"><i class="fa fa-thumb-tack fa-fw"></i> ' + pinnedCount + ' pinned</div>';
+                updateHtml += '<div class="compose-status-info" style="font-size:0.8em;margin-top:2px;"><i class="fa fa-thumb-tack fa-fw"></i> ' + pinnedCount + ' pinned</div>';
             }
             $updateCell.html(updateHtml);
         } else if (totalContainers > 0) {
@@ -1016,20 +1189,20 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             } else if (pinnedCount > 0) {
                 // Some containers pinned, rest up-to-date
                 var html = '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
-                html += '<div style="font-size:0.8em;color:#17a2b8;margin-top:2px;"><i class="fa fa-thumb-tack fa-fw"></i> ' + pinnedCount + ' pinned</div>';
-                html += '<div class="cm-advanced"><a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><span style="white-space:nowrap;"><i class="fa fa-cloud-download fa-fw"></i> force update</span></a></div>';
+                html += '<div class="cm-advanced compose-status-info" style="font-size:0.8em;margin-top:2px;"><i class="fa fa-thumb-tack fa-fw"></i> ' + pinnedCount + ' pinned</div>';
+                html += '<div class="cm-advanced"><a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + composeEscapeAttr(stackName) + '\', \'' + composeEscapeAttr(stackId) + '\');"><span style="white-space:nowrap;"><i class="fa fa-cloud-download fa-fw"></i> force update</span></a></div>';
                 $updateCell.html(html);
             } else {
                 // No updates, no pinned - green "up-to-date" style (like Docker tab)
                 // Basic view: just shows up-to-date
                 // Advanced view: shows force update link
                 var html = '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
-                html += '<div class="cm-advanced"><a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><span style="white-space:nowrap;"><i class="fa fa-cloud-download fa-fw"></i> force update</span></a></div>';
+                html += '<div class="cm-advanced"><a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + composeEscapeAttr(stackName) + '\', \'' + composeEscapeAttr(stackId) + '\');"><span style="white-space:nowrap;"><i class="fa fa-cloud-download fa-fw"></i> force update</span></a></div>';
                 $updateCell.html(html);
             }
         } else {
             // No containers found - show pull updates as clickable (for stacks that aren't running)
-            $updateCell.html('<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><i class="fa fa-cloud-download fa-fw"></i> pull updates</a>');
+            $updateCell.html('<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + composeEscapeAttr(stackName) + '\', \'' + composeEscapeAttr(stackId) + '\');"><i class="fa fa-cloud-download fa-fw"></i> pull updates</a>');
         }
 
         // Apply current view mode — cm-advanced elements are controlled by
@@ -1045,9 +1218,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         if (stackContainersCache[stackId] && stackInfo.containers) {
             stackContainersCache[stackId].forEach(function(cached) {
                 stackInfo.containers.forEach(function(updated) {
-                    if (cached.Name === updated.container) {
+                    if (cached.name === updated.name) {
                         cached.hasUpdate = updated.hasUpdate;
-                        cached.updateStatus = updated.status;
+                        cached.updateStatus = updated.updateStatus;
                         cached.localSha = updated.localSha || '';
                         cached.remoteSha = updated.remoteSha || '';
                         cached.isPinned = updated.isPinned || false;
@@ -1080,7 +1253,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         if ($stackRow.length === 0) return;
 
         var $updateCell = $stackRow.find('.compose-updatecolumn');
-        $updateCell.html('<span style="color:#267CA8"><i class="fa fa-refresh fa-spin"></i> checking...</span>');
+        $updateCell.html('<span class="compose-status-info"><i class="fa fa-refresh fa-spin"></i> checking...</span>');
 
         $.post(caURL, {
             action: 'checkStackUpdates',
@@ -1090,14 +1263,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 try {
                     var response = JSON.parse(data);
                     if (response.result === 'success') {
-                        var stackInfo = {
+                        var stackInfo = createStackInfo(stackName, response.updates, {
                             projectName: response.projectName,
-                            hasUpdate: false,
-                            containers: response.updates,
-                            isRunning: true // Stack was just updated, so it's running
-                        };
-                        response.updates.forEach(function(u) {
-                            if (u.hasUpdate) stackInfo.hasUpdate = true;
+                            isRunning: true
                         });
                         stackUpdateStatus[stackName] = stackInfo;
                         updateStackUpdateUI(stackName, stackInfo);
@@ -1135,75 +1303,55 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         return url;
     }
 
+    function isComposeAdvancedMode() {
+        return $.cookie('compose_listview_mode') === 'advanced';
+    }
+
     // Apply advanced/basic view based on cookie (used after async load)
     // Scoped to compose_stacks to avoid affecting Docker tab when tabs are joined.
-    // When animate=true (user clicked toggle), run a phased transition.
+    // When animate=true (user clicked toggle), run a simple symmetric transition.
     // When false (page load), instant class toggle.
-    // Uses compose-specific 'cm-advanced' / 'cm-advanced-view' classes
-    // so Docker tab's own '.advanced' toggle cannot interfere.
     function applyListView(animate) {
-        var advanced = $.cookie('compose_listview_mode') === 'advanced';
+        var advanced = isComposeAdvancedMode();
         var $table = $('#compose_stacks');
+        var $advanced = $table.find('.cm-advanced');
 
-        if (animate) {
-            var $changing = $table.find('.cm-advanced');
-
-            if (advanced) {
-                // Showing advanced columns: make visible at opacity 0, then fade in
-                var startHeight = $table.outerHeight();
-                $changing.css('opacity', 0);
-                $table.addClass('cm-advanced-view');
-                var endHeight = $table.outerHeight();
-
-                $table.css({
-                        height: startHeight,
-                        overflow: 'hidden'
-                    })
-                    .animate({
-                        height: endHeight
-                    }, 400);
-                $changing.animate({
-                    opacity: 1
-                }, 400).promise().done(function() {
-                    $table.css({
-                        height: '',
-                        overflow: ''
-                    });
-                    $changing.css('opacity', '');
-                });
-            } else {
-                // Hiding advanced columns: fade out, then remove class
-                var startHeight = $table.outerHeight();
-                $changing.animate({
-                    opacity: 0
-                }, 300).promise().done(function() {
-                    $table.removeClass('cm-advanced-view');
-                    var endHeight = $table.outerHeight();
-
-                    $table.css({
-                            height: startHeight,
-                            overflow: 'hidden'
-                        })
-                        .animate({
-                            height: endHeight
-                        }, 400, function() {
-                            $table.css({
-                                height: '',
-                                overflow: ''
-                            });
-                            $changing.css('opacity', '');
-                        });
-                });
-            }
-        } else {
-            if (advanced) {
+        var setClass = function(enabled) {
+            if (enabled) {
                 $table.addClass('cm-advanced-view');
             } else {
                 $table.removeClass('cm-advanced-view');
             }
+        };
+
+        if (!animate) {
+            setClass(advanced);
+            $table.css({height: '', overflow: ''});
+            $advanced.css({opacity: '', display: ''});
+        } else {
+            if (advanced) {
+                // basic -> advanced: enable class first, then fade in advanced cells
+                setClass(true);
+                $table.css({height: $table.outerHeight(), overflow: 'hidden'});
+                $advanced.stop(true, true).css({opacity: 0}).animate({opacity: 1}, 300, function() {
+                    $table.css({height: '', overflow: ''});
+                    $advanced.css({opacity: '', display: ''});
+                });
+            } else {
+                // advanced -> basic: fade out then disable class to avoid flicker
+                $table.css({height: $table.outerHeight(), overflow: 'hidden'});
+                $advanced.stop(true, true).animate({opacity: 0}, 300, function() {
+                    setClass(false);
+                    $table.css({height: '', overflow: ''});
+                    $advanced.css({opacity: '', display: ''});
+                });
+            }
         }
-        // Apply readmore to descriptions — exclude container detail rows to avoid double-application
-        $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore').readmore({
+
+        // Apply readmore to descriptions — exclude container detail rows; destroy first to avoid nested wrappers
+        var $readmoreEls = $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore');
+        $readmoreEls.readmore('destroy');
+        $readmoreEls.readmore({
             maxHeight: 32,
             moreLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",
             lessLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"
@@ -1236,7 +1384,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var disabled = $("#" + myID).attr('data-isup') == "1" ? "disabled" : "";
                 var notdisabled = $("#" + myID).attr('data-isup') == "1" ? "" : "disabled";
                 var stackName = $("#" + myID).attr("data-scriptname");
-                instance.content(escapeHtml(stackName) + "<br> \
+                instance.content(composeEscapeHtml(stackName) + "<br> \
                                     <center> \
                                     <input type='button' onclick='editName(&quot;" + myID + "&quot;);' value='Edit Name' " + disabled + "> \
                                     <input type='button' onclick='editDesc(&quot;" + myID + "&quot;);' value='Edit Description' > \
@@ -1249,27 +1397,29 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         // Add Advanced View toggle (like Docker tab)
         // Use compose-specific class to avoid conflict with Docker tab's advancedview when tabs are joined
-        // Check if .tabs exists (joined under Docker tab) or create standalone toggle (own tab under Tasks)
         var toggleHtml = '<span class="status compose-view-toggle"><span><input type="checkbox" class="compose-advancedview"></span></span>';
-        if ($(".tabs").length) {
-            $(".tabs").append(toggleHtml);
+
+        // In tabbed mode we must keep the toggle inside the compose content pane
+        // so it does not leak into the global tab bar, and in standalone mode it
+        // also appears above the compose stacks table.
+        var $toggleContainer = $('<div class="ToggleViewMode"></div>').html(toggleHtml);
+        var $tableWrapper = $('#compose_stacks').closest('.TableContainer');
+        if ($tableWrapper.length) {
+            $tableWrapper.before($toggleContainer);
+        } else if ($('#compose_stacks').length) {
+            $('#compose_stacks').before($toggleContainer);
+        } else if ($('.tabs').length) {
+            // Fallback for unusual layout: inject into tabs as a last resort
+            $('.tabs').append($toggleContainer);
         } else {
-            // Standalone page (xmenu under Tasks) - add toggle before the container area
-            // Style it to float right above the table for consistent positioning
-            var standaloneToggle = $('<div class="ToggleViewMode"></div>').html(toggleHtml);
-            var $tableWrapper = $('#compose_stacks').closest('.TableContainer');
-            if ($tableWrapper.length) {
-                $tableWrapper.before(standaloneToggle);
-            } else {
-                $('#compose_stacks').before(standaloneToggle);
-            }
+            $('body').prepend($toggleContainer);
         }
         // Inject Compose CLI version next to the page title
         if (composeCliVersion) {
             $('div.content').children('div.title').each(function() {
                 var txt = $(this).text().trim();
                 if (/Compose/i.test(txt) && !/Docker\s*Containers/i.test(txt)) {
-                    $(this).append(' <span style="font-size:0.75em;color:#606060;font-weight:normal;vertical-align:middle;">v' + escapeHtml(composeCliVersion) + '</span>');
+                    $(this).append(' <span class="compose-text-muted" style="font-size:0.75em;font-weight:normal;vertical-align:middle;">v' + composeEscapeHtml(composeCliVersion) + '</span>');
                 }
             });
         }
@@ -1295,74 +1445,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             applyListView(true);
         });
 
-        // Set up MutationObserver to detect when ebox (progress dialog) closes
-        // This is used to trigger update check after an update operation completes
-        var eboxObserver = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.removedNodes.length > 0) {
-                    mutation.removedNodes.forEach(function(node) {
-                        // Check if the removed node is the ebox or contains it
-                        if (node.id === 'ebox' || (node.querySelector && node.querySelector('#ebox'))) {
-                            // If there are stacks queued for update checks, process them
-                            if (pendingUpdateCheckStacks.length > 0) {
-                                // Copy and clear the list before processing
-                                var stacksToCheck = pendingUpdateCheckStacks.slice();
-                                pendingUpdateCheckStacks = [];
-
-                                // Delay slightly to let page state settle
-                                setTimeout(function() {
-                                    composeClientDebug('Update completed, running check for updates on stacks:', {
-                                        stacks: stacksToCheck
-                                    }, 'daemon', 'debug');
-                                    // Check each stack that was updated
-                                    stacksToCheck.forEach(function(stackName) {
-                                        checkStackUpdates(stackName);
-                                    });
-                                }, 1000);
-                            }
-
-                            // If there are stacks queued for compose list reload (start/stop), trigger a reload
-                            if (pendingComposeReloadStacks.length > 0) {
-                                // Immediately replace stale update-column text with a
-                                // loading spinner so the user never sees outdated "stopped"
-                                pendingComposeReloadStacks.forEach(function(project) {
-                                    var $row = $('#compose_stacks tr.compose-sortable[data-project="' + project + '"]');
-                                    if ($row.length) {
-                                        $row.find('.compose-updatecolumn').html(
-                                            '<span class="grey-text" style="white-space:nowrap;"><i class="fa fa-refresh fa-spin fa-fw"></i> loading…</span>'
-                                        );
-                                    }
-                                });
-                                // Tell the loadlist hook to skip composeLoadlist once
-                                skipNextComposeLoadlist = true;
-                                // Schedule a debounced processor to handle pending compose reloads
-                                composeClientDebug('[eboxObserver] pending-compose-reloads', {
-                                    pending: pendingComposeReloadStacks.slice()
-                                }, 'daemon', 'debug');
-                                schedulePendingComposeReloads(800);
-                            }
-
-                            // Sync Unraid's Docker containers widget after compose actions
-                            // (compose up/down/update changes containers that Docker's view needs to reflect)
-                            if (typeof window.loadlist === 'function') {
-                                setTimeout(function() {
-                                    composeClientDebug('[eboxObserver] calling-loadlist-for-docker-sync', {
-                                        pendingComposeReloadStacks: pendingComposeReloadStacks.slice()
-                                    }, 'daemon', 'debug');
-                                    window.loadlist();
-                                }, 1500);
-                            }
-                        }
-                    });
-                }
-            });
-        });
-
-        // Start observing the body for changes (ebox gets added/removed from body)
-        eboxObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+        // ebox observer removed; pending update checks are now processed from
+        // refreshStackRow and processPendingComposeReloads directly.
 
         // Load the stack list asynchronously (like Docker tab)
         // This defers the expensive docker commands to after the page renders
@@ -1464,7 +1548,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     function addStack() {
         // Show custom modal for stack creation
         var modalHtml = `
-            <div id="compose-stack-modal-overlay" class="compose-modal-overlay" style="display:flex;">
+            <div id="compose-stack-modal-overlay" class="compose-modal-overlay" style="display:flex;" onclick="if (event.target === this) closeComposeStackModal();">
                 <div class="compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-stack-modal-title" aria-describedby="compose-stack-modal-desc" tabindex="-1">
                     <div class="compose-modal-header">
                         <span id="compose-stack-modal-title">Add New Compose Stack</span>
@@ -1475,12 +1559,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         <input type="text" id="compose-stack-name" placeholder="Stack Name" autofocus>
                         <div id="compose-stack-modal-desc" style="font-weight:bold;margin-bottom:8px;">Description (optional)</div>
                         <input type="text" id="compose-stack-desc" placeholder="Description">
-                        <div id="compose-stack-modal-error" style="color:#f44336;margin-bottom:8px;display:none;"></div>
+                        <div id="compose-stack-modal-error" class="compose-status-danger" style="margin-bottom:8px;display:none;"></div>
                     
                         <details>
                             <summary>Advanced Options</summary></br>
                             <div style="font-weight:bold;margin-bottom:8px;">Indirect Path</div>
-                            <input type="text" id="compose-stack-indirect" placeholder="/mnt/user/compose/stackFolder">
+                            <input type="text" id="compose-stack-indirect" placeholder="/mnt/user/compose/stackFolder" data-pickroot="/" data-picktop="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
                         </details>
                     
                     </div>
@@ -1500,6 +1584,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var tempDiv = document.createElement('div');
         tempDiv.innerHTML = modalHtml;
         document.body.appendChild(tempDiv.firstElementChild);
+
+        // The add-stack modal is created dynamically, so attach the picker after insertion.
+        if ($.fn.fileTreeAttach) {
+            var $indirectInput = $('#compose-stack-indirect');
+            composeBindFileTreeInputs($indirectInput, {
+                zIndex: 100010,
+                minWidth: 320,
+                addClass: false
+            });
+        }
 
         window.closeComposeStackModal = function() {
             var overlay = document.getElementById('compose-stack-modal-overlay');
@@ -1754,12 +1848,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                                 var message = "";
                                 var type = "error";
                                 if (data) {
-                                    var response = JSON.parse(data);
-                                    if (response.result == "success") {
-                                        title = "Success";
+                                    try {
+                                        var response = JSON.parse(data);
+                                        if (response.result == "success") {
+                                            title = "Success";
+                                        }
+                                        message = response.message;
+                                        type = response.result;
+                                    } catch (e) {
+                                        message = "Invalid server response.";
                                     }
-                                    message = response.message;
-                                    type = response.result;
                                 }
                                 swal({
                                     title: title,
@@ -1783,25 +1881,200 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         UpdateStack(path, "");
     }
 
-    // Confirmed action handlers (no dialog, just execute)
-    function ComposeUpConfirmed(path, profile = "") {
-        var height = 800;
-        var width = 1200;
+    // Show a brief swal when a background command is dispatched
+    function notifyBackgroundStarted(label, shouldNotify = true) {
+        if (!shouldNotify) return;
 
-        // Mark stack for local reload and show per-row spinner
-        var stackNameForReload = basename(path);
-        if (pendingComposeReloadStacks.indexOf(stackNameForReload) === -1) pendingComposeReloadStacks.push(stackNameForReload);
-        setStackActionInProgress(stackNameForReload, true);
+        swal({
+            title: 'Running in background',
+            text: label + ' has been started in the background.\nYou will receive a notification when it completes.',
+            type: 'info',
+            timer: 3000,
+            showConfirmButton: false
+        });
+    }
 
-        $.post(compURL, {
-            action: 'composeUp',
-            path: path,
-            profile: profile
-        }, function(data) {
-            if (data) {
-                openBox(data, "Stack " + basename(path) + " Up", height, width, true);
+    // Poll for background operation completion by checking if stack lock is released
+    // Once lock is released, refresh the stack and clear the checking state
+    function pollBackgroundCompletion(stackName, refreshDelayMs = 0) {
+        // Poll with adaptive frequency to handle both fast and slow operations:
+        //   0–60s:   every 2s   (30 checks)
+        //   60s–5m:  every 5s   (48 checks)
+        //   5m–30m:  every 15s  (100 checks)
+        // Total coverage: ~30 minutes before giving up
+        var elapsed = 0; // seconds
+        var timeoutHandle;
+
+        function getInterval() {
+            if (elapsed < 60) return 2000;
+            if (elapsed < 300) return 5000;
+            return 15000;
+        }
+
+        function check() {
+            $.post(caURL, {
+                action: 'checkStackLock',
+                script: stackName
+            }, function(response) {
+                try {
+                    var parsed = JSON.parse(response);
+                    if (parsed.result === 'success' && !parsed.locked) {
+                        // Lock is released — clear spinner first, then fetch fresh data
+                        // so refreshStackByProject always wins and overwrites the restored state
+                        setStackActionInProgress(stackName, false);
+                        setTimeout(function() {
+                            refreshStackByProject(stackName);
+                            processPendingUpdateChecks();
+                        }, refreshDelayMs);
+                        return; // stop scheduling
+                    }
+                } catch (e) {
+                    composeClientDebug('[pollBackgroundCompletion] Parse error', e, 'daemon', 'error');
+                }
+
+                // Schedule next check if still within timeout (30 minutes)
+                var interval = getInterval();
+                elapsed += interval / 1000;
+                if (elapsed < 1800) {
+                    timeoutHandle = setTimeout(check, interval);
+                } else {
+                    composeClientDebug('[pollBackgroundCompletion] Timeout after 30m', {stack: stackName}, 'daemon', 'warn');
+                    setStackActionInProgress(stackName, false);
+                }
+            });
+        }
+
+        // Start first check after 2 seconds
+        elapsed += 2;
+        timeoutHandle = setTimeout(check, 2000);
+    }
+
+    function composeActionStateText(actionName) {
+        var map = {
+            up: 'starting...',
+            down: 'stopping...',
+            stop: 'stopping...',
+            restart: 'restarting...',
+            pull: 'pulling...',
+            update: 'updating...',
+            forceUpdate: 'updating...',
+            composeUpPullBuild: 'pulling and rebuilding...'
+        };
+        return map[actionName] || 'checking...';
+    }
+
+    function performComposeAction(opts) {
+        opts = opts || {};
+        var stackName = opts.stackName;
+        var actionName = opts.actionName || '';
+        var title = opts.title || (actionName ? actionName.replace(/([A-Z])/g, ' $1').trim() : 'Compose Action');
+        var requestUrl = opts.requestUrl || compURL;
+        var payload = opts.payload || {};
+        var background = opts.background || false;
+        var suppressBackgroundNotification = opts.suppressBackgroundNotification || false;
+        var pendingReload = opts.pendingReload || false;
+        var actionStateText = opts.actionStateText || composeActionStateText(actionName);
+        var onComplete = opts.onComplete;
+
+        if (pendingReload && stackName) {
+            if (pendingComposeReloadStacks.indexOf(stackName) === -1) {
+                pendingComposeReloadStacks.push(stackName);
+                schedulePendingComposeReloads();
             }
-        })
+        }
+
+        if (stackName) {
+            setStackActionInProgress(stackName, true, actionStateText);
+        }
+
+        payload.background = background ? 1 : 0;
+
+        $.post(requestUrl, payload, function(data) {
+            var parsed = tryParseJson(data);
+            if (parsed && parsed.background) {
+                if (stackName && !pendingReload) {
+                    setStackActionInProgress(stackName, true, actionStateText);
+                }
+                if (!suppressBackgroundNotification) {
+                    notifyBackgroundStarted(title, true);
+                }
+                if (stackName) {
+                    pollBackgroundCompletion(stackName, opts.refreshDelayMs || 0);
+                }
+            } else if (data) {
+                if (stackName && !pendingReload) {
+                    setStackActionInProgress(stackName, false);
+                }
+                openBox(data, title, 800, 1200, true);
+            }
+            if (typeof onComplete === 'function') {
+                onComplete(parsed, data);
+            }
+        }).fail(function() {
+            if (stackName && !pendingReload) {
+                setStackActionInProgress(stackName, false);
+            }
+            if (typeof onComplete === 'function') {
+                onComplete(null, null);
+            }
+        });
+    }
+
+    function confirmedComposeAction(path, opts) {
+        opts = opts || {};
+        var stackName = basename(path);
+        opts = $.extend(true, {
+            actionName: '',
+            titlePrefix: '',
+            requestUrl: compURL,
+            payload: {
+                path: path,
+                profile: opts.profile || ''
+            },
+            background: false,
+            suppressBackgroundNotification: false,
+            pendingReload: true,
+            refreshDelayMs: 0,
+            actionStateText: null,
+            onComplete: null,
+            preAction: null
+        }, opts);
+
+        if (opts.preAction) {
+            opts.preAction(function() {
+                var nextOpts = $.extend({}, opts);
+                nextOpts.preAction = null;
+                confirmedComposeAction(path, nextOpts);
+            });
+            return;
+        }
+
+        performComposeAction({
+            stackName: stackName,
+            actionName: opts.actionName,
+            title: (opts.titlePrefix ? opts.titlePrefix + ': ' : '') + stackName,
+            requestUrl: opts.requestUrl,
+            payload: $.extend({}, opts.payload, { path: path, profile: opts.profile || '' }),
+            background: opts.background,
+            suppressBackgroundNotification: opts.suppressBackgroundNotification,
+            pendingReload: opts.pendingReload,
+            refreshDelayMs: opts.refreshDelayMs,
+            actionStateText: opts.actionStateText,
+            onComplete: opts.onComplete
+        });
+    }
+
+    // Confirmed action handlers (no dialog, just execute)
+    function ComposeUpConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
+        confirmedComposeAction(path, {
+            actionName: 'up',
+            titlePrefix: 'Compose Up',
+            requestUrl: compURL,
+            payload: { action: 'composeUp', path: path, profile: profile },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
+        });
     }
 
     // Recreate containers without pulling (for label changes)
@@ -1815,7 +2088,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             profile: profile
         }, function(data) {
             if (data) {
-                openBox(data, "Recreate Stack " + basename(path), height, width, true);
+                openBox(data, "Compose Recreate: " + basename(path), height, width, true);
             }
         })
     }
@@ -1824,28 +2097,83 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         showStackActionDialog('up', path, profile);
     }
 
-    function ComposeDownConfirmed(path, profile = "") {
-        var height = 800;
-        var width = 1200;
-
-        // Mark stack for local reload and show per-row spinner
-        var stackNameForReloadDown = basename(path);
-        if (pendingComposeReloadStacks.indexOf(stackNameForReloadDown) === -1) pendingComposeReloadStacks.push(stackNameForReloadDown);
-        setStackActionInProgress(stackNameForReloadDown, true);
-
-        $.post(compURL, {
-            action: 'composeDown',
-            path: path,
-            profile: profile
-        }, function(data) {
-            if (data) {
-                openBox(data, "Stack " + basename(path) + " Down", height, width, true);
-            }
-        })
+    function ComposeDownConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
+        confirmedComposeAction(path, {
+            actionName: 'down',
+            titlePrefix: 'Compose Down',
+            requestUrl: compURL,
+            payload: { action: 'composeDown', path: path, profile: profile },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
+        });
     }
 
     function ComposeDown(path, profile = "") {
         showStackActionDialog('down', path, profile);
+    }
+
+    // Stop stack without removing containers
+    function ComposeStopConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
+        confirmedComposeAction(path, {
+            actionName: 'stop',
+            titlePrefix: 'Compose Stop',
+            requestUrl: compURL,
+            payload: { action: 'composeStop', path: path, profile: profile },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
+        });
+    }
+
+    function ComposeStop(path, profile = "") {
+        showStackActionDialog('stop', path, profile);
+    }
+
+    // Restart stack (recreate containers without pulling)
+    function ComposeRestartConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
+        confirmedComposeAction(path, {
+            actionName: 'restart',
+            titlePrefix: 'Compose Restart',
+            requestUrl: compURL,
+            payload: { action: 'composeUpRecreate', path: path, profile: profile },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true,
+            refreshDelayMs: 1000
+        });
+    }
+
+    function ComposeRestart(path, profile = "") {
+        showStackActionDialog('restart', path, profile);
+    }
+
+    // Force update stack (pull and rebuild even without detected updates)
+    function ForceUpdateStackConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
+        var stackName = basename(path);
+        if (pendingUpdateCheckStacks.indexOf(stackName) === -1) {
+            pendingUpdateCheckStacks.push(stackName);
+        }
+
+        confirmedComposeAction(path, {
+            preAction: function(done) {
+                $.post(caURL, {
+                    action: 'markStackForRecheck',
+                    stacks: JSON.stringify([stackName])
+                }, done);
+            },
+            actionName: 'forceUpdate',
+            titlePrefix: 'Force Update',
+            requestUrl: compURL,
+            payload: { action: 'composeUpPullBuild', path: path, profile: profile },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
+        });
+    }
+
+    function ForceUpdateStack(path, profile = "") {
+        showStackActionDialog('forceUpdate', path, profile);
     }
 
     // Prompt user to recreate containers after label changes
@@ -1885,8 +2213,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             title: "Recreate Containers?",
             text: '<div style="text-align:left;max-width:400px;margin:0 auto;">' +
                 '<p>Container labels (icon, WebUI) have been saved.</p>' +
-                '<p style="color:#f80;"><i class="fa fa-exclamation-triangle"></i> <strong>Containers must be recreated</strong> for these changes to take effect.</p>' +
-                '<p style="font-size:0.9em;color:#999;">This will briefly restart the affected containers. Your data will be preserved.</p>' +
+                '<p class="compose-status-warning"><i class="fa fa-exclamation-triangle"></i> <strong>Containers must be recreated</strong> for these changes to take effect.</p>' +
+                '<p class="compose-text-muted" style="font-size:0.9em;">This will briefly restart the affected containers. Your data will be preserved.</p>' +
                 '</div>',
             html: true,
             type: "warning",
@@ -1919,6 +2247,41 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     // Using array to support Update All Stacks operation
     var pendingUpdateCheckStacks = [];
 
+    // Process the queued stacks from pending update checks.
+    // This is called from refreshStackRow and processPendingComposeReloads.
+    function processPendingUpdateChecks() {
+        if (!pendingUpdateCheckStacks || pendingUpdateCheckStacks.length === 0) {
+            return;
+        }
+
+        var stacksToCheck = pendingUpdateCheckStacks.slice();
+        pendingUpdateCheckStacks = [];
+        var deferredStacks = [];
+
+        // Delay slightly to let the UI settle after row refresh
+        setTimeout(function() {
+            composeClientDebug('Processing pending update checks', {
+                stacks: stacksToCheck
+            }, 'daemon', 'debug');
+
+            stacksToCheck.forEach(function(stackName) {
+                if (composeStackActionInProgress[stackName]) {
+                    // Update action still in progress; defer until completion.
+                    deferredStacks.push(stackName);
+                    composeClientDebug('Deferring pending update check while action is in progress', {
+                        stack: stackName
+                    }, 'daemon', 'info');
+                } else {
+                    checkStackUpdates(stackName);
+                }
+            });
+
+            if (deferredStacks.length > 0) {
+                pendingUpdateCheckStacks = pendingUpdateCheckStacks.concat(deferredStacks);
+            }
+        }, 1000);
+    }
+
     // >0 while refreshStackRow AJAX calls are in-flight; the loadlist
     // hook skips composeLoadlist until all pending refreshes complete.
     var pendingComposeRefreshCount = 0;
@@ -1930,6 +2293,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Track stacks that need a full compose list reload after start/stop operations
     var pendingComposeReloadStacks = [];
+    // Track stacks currently in progress (e.g. background start/stop/update)
+    var composeStackActionInProgress = {};
     // Timer for batching compose reloads to avoid duplicate refreshes
     var pendingComposeReloadTimer = null;
 
@@ -1986,6 +2351,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }, 'daemon', 'error');
             }
         });
+
+        // After reload sequence, process any pending update checks.
+        processPendingUpdateChecks();
     }
 
     // Helper to refresh a single stack by project name (wrapper for refreshStackRow)
@@ -2008,41 +2376,31 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(data) {
             if (data) {
                 try {
+                    composeClientDebug('[refreshStackRow] response', {
+                        project: project,
+                        data: data
+                    }, 'daemon', 'info');
                     var response = JSON.parse(data);
                     if (response.result === 'success') {
                         var containers = response.containers || [];
-                        // Normalize PascalCase keys
-                        containers.forEach(function(c) {
-                            if (c.UpdateStatus !== undefined && c.updateStatus === undefined) c.updateStatus = c.UpdateStatus;
-                            if (c.LocalSha !== undefined && c.localSha === undefined) c.localSha = c.LocalSha;
-                            if (c.RemoteSha !== undefined && c.remoteSha === undefined) c.remoteSha = c.RemoteSha;
-                            if (c.hasUpdate === undefined && c.updateStatus) {
-                                c.hasUpdate = (c.updateStatus === 'update-available');
-                            }
-                        });
+                        // Normalize all containers via factory function (PascalCase→camelCase)
+                        containers = containers.map(createContainerInfo).filter(Boolean);
                         // Merge saved update status so we don't lose checked info
-                        if (stackUpdateStatus[project] && stackUpdateStatus[project].containers) {
-                            containers.forEach(function(container) {
-                                var cName = container.Name || container.Service;
-                                stackUpdateStatus[project].containers.forEach(function(update) {
-                                    if (cName === (update.container || update.name || update.service)) {
-                                        if (update.hasUpdate !== undefined) container.hasUpdate = update.hasUpdate;
-                                        if (update.updateStatus || update.status) container.updateStatus = update.status || update.updateStatus;
-                                        if (update.localSha) container.localSha = update.localSha;
-                                        if (update.remoteSha) container.remoteSha = update.remoteSha;
-                                        if (update.isPinned !== undefined) container.isPinned = update.isPinned;
-                                    }
-                                });
-                            });
-                        }
+                        mergeUpdateStatus(containers, project);
                         // Update cache with fresh data
                         stackContainersCache[stackId] = containers;
                         stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
                         // Now update the row using the fresh cache
                         updateParentStackFromContainers(stackId, project);
                         // If details are expanded, refresh them too
-                        if (expandedStacks[stackId]) {
+                        // If details are expanded (by JS state or DOM visibility), refresh them
+                        var $detailsRow = $('#details-row-' + stackId);
+                        if (expandedStacks[stackId] || $detailsRow.is(':visible')) {
+                            expandedStacks[stackId] = true; // re-sync JS state with DOM
                             renderContainerDetails(stackId, containers, project);
+                            if (!$detailsRow.is(':visible')) {
+                                $detailsRow.slideDown(200);
+                            }
                         }
                     }
                 } catch (e) {
@@ -2055,10 +2413,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }
             }
             pendingComposeRefreshCount = Math.max(0, pendingComposeRefreshCount - 1);
+            processPendingUpdateChecks();
         }).fail(function() {
             // On network failure, fall back to cache-based update
             updateParentStackFromContainers(stackId, project);
             pendingComposeRefreshCount = Math.max(0, pendingComposeRefreshCount - 1);
+            processPendingUpdateChecks();
         });
     }
 
@@ -2069,8 +2429,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             inProgress: inProgress,
             text: text
         }, 'daemon', 'info');
+
+        if (inProgress) {
+            composeStackActionInProgress[stackName] = true;
+        } else {
+            delete composeStackActionInProgress[stackName];
+        }
+
         var $stackRow = $('#compose_stacks tr.compose-sortable[data-project="' + stackName + '"]');
         if ($stackRow.length === 0) return;
+        $stackRow.data('action-in-progress', inProgress ? true : null);
+        if (!inProgress) {
+            $stackRow.removeData('action-in-progress');
+        }
         var $icon = $stackRow.find('.compose-status-icon');
         var $state = $stackRow.find('.state');
         if (inProgress) {
@@ -2100,30 +2471,26 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
     }
 
-    function UpdateStackConfirmed(path, profile = "") {
-        var height = 800;
-        var width = 1200;
-
-        // Track this stack for update check when dialog closes
+    function UpdateStackConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
         var stackName = basename(path);
         if (pendingUpdateCheckStacks.indexOf(stackName) === -1) {
             pendingUpdateCheckStacks.push(stackName);
         }
 
-        // Mark stack for recheck server-side (persists across page reload)
-        $.post(caURL, {
-            action: 'markStackForRecheck',
-            stacks: JSON.stringify([stackName])
-        }, function() {
-            $.post(compURL, {
-                action: 'composeUpPullBuild',
-                path: path,
-                profile: profile
-            }, function(data) {
-                if (data) {
-                    openBox(data, "Update Stack " + basename(path), height, width, true);
-                }
-            });
+        confirmedComposeAction(path, {
+            preAction: function(done) {
+                $.post(caURL, {
+                    action: 'markStackForRecheck',
+                    stacks: JSON.stringify([stackName])
+                }, done);
+            },
+            actionName: 'update',
+            titlePrefix: 'Update',
+            requestUrl: compURL,
+            payload: { action: 'composeUpPullBuild', path: path, profile: profile },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
         });
     }
 
@@ -2170,27 +2537,48 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
 
         var stackNames = stacks.map(function(s) {
-            return escapeHtml(s.projectName);
+            return composeEscapeHtml(s.projectName);
         }).join('<br>');
         var title = autostartOnly ? 'Start Autostart Stacks?' : 'Start All Stacks?';
         var confirmText = autostartOnly ? 'Yes, start ' + stacks.length + ' autostart stack' + (stacks.length > 1 ? 's' : '') : 'Yes, start ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
 
-        swal({
-            title: title,
-            html: true,
-            text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be started:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div></div>',
-            type: 'warning',
-            showCancelButton: true,
-            confirmButtonText: confirmText,
-            cancelButtonText: 'Cancel'
-        }, function(confirmed) {
-            if (confirmed) {
-                executeStartAllStacks(stacks);
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--dynamix-box-inner-div-border-color);display:flex;align-items:center;gap:8px;">' +
+            '<input type="checkbox" id="swal-run-bg-startall" style="width:16px;height:16px;cursor:pointer;">' +
+            '<label for="swal-run-bg-startall" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
+            '</div>';
+
+        getConfig().then(function(pluginCfg) {
+            var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+            var disableWarnings = pluginCfg && pluginCfg.DISABLE_ACTION_WARNINGS === 'true';
+
+            if (disableWarnings) {
+                executeStartAllStacks(stacks, bgDefault, bgDefault);
+                return;
             }
+
+            swal({
+                title: title,
+                html: true,
+                text: '<div style="background:var(--alt-background-color);text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be started:</p><div style="background:var(--background-color);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div>' + bgCheckboxHtml + '</div>',
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonText: confirmText,
+                cancelButtonText: 'Cancel'
+            }, function(confirmed) {
+                if (confirmed) {
+                    var runInBackground = $('#swal-run-bg-startall').is(':checked');
+                    executeStartAllStacks(stacks, runInBackground);
+                }
+            });
+
+            setTimeout(function() {
+                var $cb = $('#swal-run-bg-startall');
+                if ($cb.length) $cb.prop('checked', bgDefault);
+            }, 50);
         });
     }
 
-    function executeStartAllStacks(stacks) {
+    function executeStartAllStacks(stacks, background, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -2212,9 +2600,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         $.post(compURL, {
             action: 'composeUpMultiple',
-            paths: JSON.stringify(paths)
+            paths: JSON.stringify(paths),
+            background: background ? 1 : 0
         }, function(data) {
-            if (data) {
+            var parsed = tryParseJson(data);
+            if (parsed && parsed.background) {
+                notifyBackgroundStarted('Start All Stacks', !suppressBackgroundNotification);
+                stacks.forEach(function(s) {
+                    pollBackgroundCompletion(s.project);
+                });
+            } else if (data) {
                 openBox(data, 'Start All Stacks', height, width, true);
             }
         });
@@ -2259,27 +2654,48 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
 
         var stackNames = stacks.map(function(s) {
-            return escapeHtml(s.projectName);
+            return composeEscapeHtml(s.projectName);
         }).join('<br>');
         var title = autostartOnly ? 'Stop Autostart Stacks?' : 'Stop All Stacks?';
         var confirmText = autostartOnly ? 'Yes, stop ' + stacks.length + ' autostart stack' + (stacks.length > 1 ? 's' : '') : 'Yes, stop ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
 
-        swal({
-            title: title,
-            html: true,
-            text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be stopped:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p style="color:#f80;margin-top:10px;"><i class="fa fa-exclamation-triangle"></i> Containers will be stopped and removed. Data in volumes will be preserved.</p></div>',
-            type: 'warning',
-            showCancelButton: true,
-            confirmButtonText: confirmText,
-            cancelButtonText: 'Cancel'
-        }, function(confirmed) {
-            if (confirmed) {
-                executeStopAllStacks(stacks);
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--dynamix-box-inner-div-border-color);display:flex;align-items:center;gap:8px;">' +
+            '<input type="checkbox" id="swal-run-bg-stopall" style="width:16px;height:16px;cursor:pointer;">' +
+            '<label for="swal-run-bg-stopall" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
+            '</div>';
+
+        getConfig().then(function(pluginCfg) {
+            var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+            var disableWarnings = pluginCfg && pluginCfg.DISABLE_ACTION_WARNINGS === 'true';
+
+            if (disableWarnings) {
+                executeStopAllStacks(stacks, bgDefault, bgDefault);
+                return;
             }
+
+            swal({
+                title: title,
+                html: true,
+                text: '<div style="background:var(--alt-background-color);text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be stopped:</p><div style="background:var(--background-color);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p class="compose-status-warning" style="margin-top:10px;"><i class="fa fa-exclamation-triangle"></i> Containers will be stopped and removed. Data in volumes will be preserved.</p>' + bgCheckboxHtml + '</div>',
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonText: confirmText,
+                cancelButtonText: 'Cancel'
+            }, function(confirmed) {
+                if (confirmed) {
+                    var runInBackground = $('#swal-run-bg-stopall').is(':checked');
+                    executeStopAllStacks(stacks, runInBackground);
+                }
+            });
+
+            setTimeout(function() {
+                var $cb = $('#swal-run-bg-stopall');
+                if ($cb.length) $cb.prop('checked', bgDefault);
+            }, 50);
         });
     }
 
-    function executeStopAllStacks(stacks) {
+    function executeStopAllStacks(stacks, background, suppressBackgroundNotification = false) {
         var height = 800;
         var width = 1200;
 
@@ -2301,26 +2717,36 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         $.post(compURL, {
             action: 'composeDownMultiple',
-            paths: JSON.stringify(paths)
+            paths: JSON.stringify(paths),
+            background: background ? 1 : 0
         }, function(data) {
-            if (data) {
+            var parsed = tryParseJson(data);
+            if (parsed && parsed.background) {
+                notifyBackgroundStarted('Stop All Stacks', !suppressBackgroundNotification);
+                stacks.forEach(function(s) {
+                    pollBackgroundCompletion(s.project);
+                });
+            } else if (data) {
                 openBox(data, 'Stop All Stacks', height, width, true);
             }
         });
     }
 
     // Helper to merge update status into containers array
+    // Uses createContainerInfo for consistent name resolution
     function mergeUpdateStatus(containers, project) {
         if (!containers || !stackUpdateStatus[project] || !stackUpdateStatus[project].containers) {
             return containers;
         }
         containers.forEach(function(container) {
+            var cInfo = createContainerInfo(container);
             stackUpdateStatus[project].containers.forEach(function(update) {
-                if (container.Name === update.container) {
-                    container.hasUpdate = update.hasUpdate;
-                    container.updateStatus = update.status;
-                    container.localSha = update.localSha || '';
-                    container.remoteSha = update.remoteSha || '';
+                var uInfo = createContainerInfo(update);
+                if (cInfo.name === uInfo.name) {
+                    container.hasUpdate = uInfo.hasUpdate;
+                    container.updateStatus = uInfo.updateStatus;
+                    container.localSha = uInfo.localSha;
+                    container.remoteSha = uInfo.remoteSha;
                 }
             });
         });
@@ -2335,15 +2761,20 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         // Find the stack row (scoped to compose_stacks)
         var $stackRow = $('#compose_stacks tr.compose-sortable[data-project="' + project + '"]');
         var stackId = '';
+        var displayName = stackName; // Default to folder name
+        var hasBuild = false;
         if ($stackRow.length > 0) {
             stackId = $stackRow.attr('id').replace('stack-row-', '');
+            // Get display name from data attribute
+            displayName = $stackRow.data('projectname') || stackName;
+            hasBuild = $stackRow.data('hasbuild') == "1";
         }
 
         // Check if we have cached container data
         if (stackId && stackContainersCache[stackId] && stackContainersCache[stackId].length > 0) {
             // Merge update status into cached data before rendering
             var containers = mergeUpdateStatus(stackContainersCache[stackId], project);
-            renderStackActionDialog(action, stackName, path, profile, containers);
+            renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
         } else {
             // Fetch container details first
             $.post(caURL, {
@@ -2364,72 +2795,117 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }
                 // Merge update status into freshly fetched data
                 containers = mergeUpdateStatus(containers, project);
-                renderStackActionDialog(action, stackName, path, profile, containers);
+                renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
             }).fail(function() {
-                renderStackActionDialog(action, stackName, path, profile, []);
+                renderStackActionDialog(action, displayName, path, profile, [], hasBuild);
             });
         }
     }
 
-    function renderStackActionDialog(action, stackName, path, profile, containers) {
+    function renderStackActionDialog(action, displayName, path, profile, containers, hasBuild) {
+        hasBuild = hasBuild || false;
         // Action-specific configuration
+        var pullLabel = hasBuild ? 'Build' : 'Pull';
         var config = {
             'up': {
-                title: 'Start ' + escapeHtml(stackName) + '?',
-                description: 'This will start all containers in <b>' + escapeHtml(stackName) + '</b>.',
-                listTitle: 'CONTAINERS TO START',
+                title: 'Compose Up: ' + composeEscapeHtml(displayName),
+                description: 'This will create and start all containers in <b>' + composeEscapeHtml(displayName) + '</b>.',
+                listTitle: 'CONTAINERS',
                 warning: 'Images will be pulled if not present locally.',
                 warningIcon: 'info-circle',
-                warningColor: '#08f',
-                confirmText: 'Start Stack',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-ui-dropdownchecklist-color'),
+                confirmText: 'Compose Up',
                 showVersionArrow: false,
                 confirmedFn: ComposeUpConfirmed
             },
             'down': {
-                title: 'Stop ' + escapeHtml(stackName) + '?',
-                description: 'This will shut down all containers in <b>' + escapeHtml(stackName) + '</b>.',
-                listTitle: 'CONTAINERS TO STOP',
+                title: 'Compose Down: ' + composeEscapeHtml(displayName),
+                description: 'This will stop and remove all containers in <b>' + composeEscapeHtml(displayName) + '</b>.',
+                listTitle: 'CONTAINERS',
                 warning: 'Containers will be removed but data in volumes is preserved.',
                 warningIcon: 'exclamation-triangle',
-                warningColor: '#f80',
-                confirmText: 'Stop Stack',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-sb-message-link-color'),
+                confirmText: 'Compose Down',
                 showVersionArrow: false,
                 confirmedFn: ComposeDownConfirmed
             },
+            'stop': {
+                title: 'Compose Stop: ' + composeEscapeHtml(displayName),
+                description: 'This will stop all containers in <b>' + composeEscapeHtml(displayName) + '</b> without removing them.',
+                listTitle: 'CONTAINERS',
+                warning: 'Containers will be stopped but not removed. Use Compose Up to start them again.',
+                warningIcon: 'info-circle',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-ui-dropdownchecklist-color'),
+                confirmText: 'Compose Stop',
+                showVersionArrow: false,
+                confirmedFn: ComposeStopConfirmed
+            },
+            'restart': {
+                title: 'Compose Restart: ' + composeEscapeHtml(displayName),
+                description: 'This will restart all containers in <b>' + composeEscapeHtml(displayName) + '</b>.',
+                listTitle: 'CONTAINERS',
+                warning: 'Containers will be recreated. Data in volumes is preserved.',
+                warningIcon: 'info-circle',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-ui-dropdownchecklist-color'),
+                confirmText: 'Compose Restart',
+                showVersionArrow: false,
+                confirmedFn: ComposeRestartConfirmed
+            },
+            'pull': {
+                title: pullLabel + ': ' + composeEscapeHtml(displayName),
+                description: 'This will ' + (hasBuild ? 'build images for' : 'pull the latest images for') + ' <b>' + composeEscapeHtml(displayName) + '</b> without starting containers.',
+                listTitle: 'CONTAINERS',
+                warning: hasBuild ? 'Images will be built from Dockerfile.' : 'Images will be pulled from the registry.',
+                warningIcon: 'info-circle',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-ui-dropdownchecklist-color'),
+                confirmText: pullLabel,
+                showVersionArrow: false,
+                confirmedFn: ComposePullConfirmed
+            },
             'update': {
-                title: 'Update ' + escapeHtml(stackName) + '?',
-                description: 'This will pull the latest images and recreate containers in <b>' + escapeHtml(stackName) + '</b>.',
-                listTitle: 'CONTAINERS TO UPDATE',
+                title: 'Update: ' + composeEscapeHtml(displayName),
+                description: 'This will pull the latest images and recreate containers in <b>' + composeEscapeHtml(displayName) + '</b>.',
+                listTitle: 'CONTAINERS',
                 warning: 'Running containers will be recreated with the latest images.',
                 warningIcon: 'exclamation-triangle',
-                warningColor: '#f80',
-                confirmText: 'Update Stack',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--brand-orange') || window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-sb-message-link-color'),
+                confirmText: 'Update',
                 showVersionArrow: true,
                 confirmedFn: UpdateStackConfirmed
+            },
+            'forceUpdate': {
+                title: 'Force Update: ' + composeEscapeHtml(displayName),
+                description: 'This will pull the latest images and rebuild containers in <b>' + composeEscapeHtml(displayName) + '</b>, even if no updates are detected.',
+                listTitle: 'CONTAINERS',
+                warning: 'All containers will be recreated with freshly pulled images.',
+                warningIcon: 'exclamation-triangle',
+                warningColor: window.getComputedStyle(document.documentElement).getPropertyValue('--brand-orange') || window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-sb-message-link-color'),
+                confirmText: 'Force Update',
+                showVersionArrow: false,
+                confirmedFn: ForceUpdateStackConfirmed
             }
         };
-
         var cfg = config[action];
         if (!cfg) return;
 
         // Build HTML content for the dialog
-        var html = '<div style="text-align:left;max-width:450px;margin:0 auto;">';
+        var html = '<div style="text-align:left;max-width:450px;margin:0 auto;color:var(--text-color, var(--dynamix-sb-body-text-color));">';
         html += '<div style="margin-bottom:18px;">' + cfg.description + '</div>';
 
         // Container list with icons
         if (containers && containers.length > 0) {
-            html += '<div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:12px 14px;margin:12px 0;">';
-            html += '<div style="font-weight:bold;margin-bottom:10px;font-size:0.9em;color:#999;"><i class="fa fa-cubes"></i> ' + cfg.listTitle + '</div>';
+            html += '<div style="background:var(--alt-background-color);border-radius:6px;padding:12px 14px;margin:12px 0;">';
+            html += '<div class="compose-text-muted" style="font-weight:bold;margin-bottom:10px;font-size:0.9em;"><i class="fa fa-cubes"></i> ' + cfg.listTitle + '</div>';
 
             containers.forEach(function(container, index) {
-                var containerName = container.Name || container.Service || 'Unknown';
-                var shortName = container.Service || containerName.replace(/^[^-]+-/, '');
-                var image = container.Image || '';
+                var containerName = container.name || container.service || 'Unknown';
+                var shortName = container.service || containerName.replace(/^[^-]+-/, '');
+                var image = container.image || '';
                 var imageParts = image.split(':');
                 var imageName = imageParts[0].split('/').pop();
                 var imageTag = imageParts[1] || 'latest';
-                var state = container.State || 'unknown';
-                var stateColor = state === 'running' ? '#3c3' : (state === 'paused' ? '#f80' : '#888');
+                var state = container.state || 'unknown';
+                var stateClass = state === 'running' ? 'compose-status-success' : (state === 'paused' ? 'compose-status-warning' : 'compose-text-muted');
                 var stateIcon = state === 'running' ? 'play' : (state === 'paused' ? 'pause' : 'square');
 
                 // Check if this container has an update available
@@ -2438,42 +2914,42 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var localSha = container.localSha || '';
                 var remoteSha = container.remoteSha || '';
 
-                var iconSrc = (container.Icon && (container.Icon.indexOf('http://') === 0 || container.Icon.indexOf('https://') === 0 || container.Icon.indexOf('data:image/') === 0)) ?
-                    escapeAttr(container.Icon) :
+                var iconSrc = (container.icon && (container.icon.indexOf('http://') === 0 || container.icon.indexOf('https://') === 0 || container.icon.indexOf('data:image/') === 0)) ?
+                    composeEscapeAttr(container.icon) :
                     '/plugins/dynamix.docker.manager/images/question.png';
 
                 // Grey out containers without updates when showing update dialog
                 var rowOpacity = (cfg.showVersionArrow && !hasUpdate && updateStatus === 'up-to-date') ? '0.5' : '1';
                 var isLast = (index === containers.length - 1);
-                var borderStyle = isLast ? '' : 'border-bottom:1px solid rgba(255,255,255,0.1);';
+                var borderStyle = isLast ? '' : 'border-bottom:1px solid var(--dynamix-box-inner-div-border-color);';
 
                 html += '<div style="display:flex;align-items:center;padding:8px 4px;' + borderStyle + 'opacity:' + rowOpacity + ';">';
                 html += '<img src="' + iconSrc + '" style="width:28px;height:28px;margin-right:10px;border-radius:4px;" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
                 html += '<div style="flex:1;">';
-                html += '<div style="font-weight:bold;">' + escapeHtml(shortName);
+                html += '<div style="font-weight:bold;">' + composeEscapeHtml(shortName);
                 // Show update badge if update is available (for update action)
                 if (cfg.showVersionArrow && hasUpdate) {
-                    html += ' <span style="background:#f80;color:#fff;font-size:0.7em;padding:2px 6px;border-radius:3px;margin-left:6px;">UPDATE</span>';
+                    html += ' <span class="compose-status-warning" style="font-size:0.7em;padding:2px 6px;border-radius:3px;margin-left:6px;">UPDATE</span>';
                 } else if (cfg.showVersionArrow && updateStatus === 'up-to-date') {
-                    html += ' <span style="color:#3c3;font-size:0.8em;margin-left:6px;"><i class="fa fa-check"></i></span>';
+                    html += ' <span class="compose-status-success" style="font-size:0.8em;margin-left:6px;"><i class="fa fa-check"></i></span>';
                 }
                 html += '</div>';
-                html += '<div style="font-size:0.85em;color:#999;margin-top:2px;">';
-                html += '<i class="fa fa-' + stateIcon + '" style="color:' + stateColor + ';margin-right:4px;"></i>';
-                html += escapeHtml(imageName) + ' : <span style="color:#f0a000;">' + escapeHtml(imageTag) + '</span>';
+                html += '<div class="compose-text-muted" style="font-size:0.85em;margin-top:2px;">';
+                html += '<i class="fa fa-' + stateIcon + ' ' + stateClass + '" style="margin-right:4px;"></i>';
+                html += composeEscapeHtml(imageName) + ' : <span class="compose-status-info">' + composeEscapeHtml(imageTag) + '</span>';
 
                 // Show SHA info for update action
                 if (cfg.showVersionArrow) {
                     if (hasUpdate && localSha && remoteSha) {
                         // Has update - show current SHA → new SHA
-                        html += '<div style="font-family:monospace;font-size:0.9em;margin-top:2px;">';
-                        html += '<span style="color:#f80;" title="' + escapeAttr(localSha) + '">' + escapeHtml(localSha.substring(0, 8)) + '</span>';
-                        html += ' <i class="fa fa-arrow-right" style="margin:0 4px;color:#3c3;"></i> ';
-                        html += '<span style="color:#3c3;" title="' + escapeAttr(remoteSha) + '">' + escapeHtml(remoteSha.substring(0, 8)) + '</span>';
+                        html += '<div style="font-family:var(--font-bitstream);font-size:0.9em;margin-top:2px;">';
+                        html += '<span class="compose-status-warning" title="' + composeEscapeAttr(localSha) + '">' + composeEscapeHtml(localSha.substring(0, 8)) + '</span>';
+                        html += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 4px;"></i> ';
+                        html += '<span class="compose-status-success" title="' + composeEscapeAttr(remoteSha) + '">' + composeEscapeHtml(remoteSha.substring(0, 8)) + '</span>';
                         html += '</div>';
                     } else if (localSha) {
                         // No update - just show current SHA (greyed)
-                        html += '<div style="font-family:monospace;font-size:0.9em;color:#666;margin-top:2px;" title="' + escapeAttr(localSha) + '">' + escapeHtml(localSha.substring(0, 8)) + '</div>';
+                        html += '<div style="font-family:var(--font-bitstream);font-size:0.9em;margin-top:2px;" title="' + composeEscapeAttr(localSha) + '"><span class="compose-text-muted">' + composeEscapeHtml(localSha.substring(0, 8)) + '</span></div>';
                     }
                 }
                 html += '</div></div></div>';
@@ -2484,36 +2960,103 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         // Warning/info text
         html += '<div style="color:' + cfg.warningColor + ';margin-top:14px;font-size:0.9em;"><i class="fa fa-' + cfg.warningIcon + '"></i> ' + cfg.warning + '</div>';
+
+        // Run-in-background checkbox (appended after config is fetched below)
+        var bgCheckboxHtml = '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--dynamix-box-inner-div-border-color);display:flex;align-items:center;gap:8px;">' +
+            '<input type="checkbox" id="swal-run-bg-checkbox" style="width:16px;height:16px;cursor:pointer;">' +
+            '<label for="swal-run-bg-checkbox" style="cursor:pointer;user-select:none;margin:0;font-size:0.95em;">Run in background</label>' +
+            '</div>';
+        html += bgCheckboxHtml;
         html += '</div>';
 
-        // Use native swal (SweetAlert 1.x) with callback style
-        swal({
-            title: cfg.title,
-            text: html,
-            html: true,
-            type: 'warning',
-            showCancelButton: true,
-            confirmButtonText: cfg.confirmText,
-            cancelButtonText: 'Cancel'
-        }, function(confirmed) {
-            if (confirmed) {
-                cfg.confirmedFn(path, profile);
+        // Fetch config to determine default checkbox state, then show swal (or skip warnings)
+        getConfig().then(function(pluginCfg) {
+            var bgDefault = pluginCfg && pluginCfg.RUN_IN_BACKGROUND_DEFAULT === 'true';
+            var disableWarnings = pluginCfg && pluginCfg.DISABLE_ACTION_WARNINGS === 'true';
+
+            if (disableWarnings) {
+                // In default background mode (warnings disabled and background enabled), don't show toast if background is used
+                cfg.confirmedFn(path, profile, bgDefault, bgDefault);
+                return;
             }
+
+            // Use native swal (SweetAlert 1.x) with callback style
+            swal({
+                title: cfg.title,
+                text: html,
+                html: true,
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonText: cfg.confirmText,
+                cancelButtonText: 'Cancel'
+            }, function(confirmed) {
+                if (confirmed) {
+                    // Capture checkbox state before swal destroys the DOM
+                    var runInBackground = $('#swal-run-bg-checkbox').is(':checked');
+                    // when running in background, suppress the extra notifyBackgroundStarted popup
+                    cfg.confirmedFn(path, profile, runInBackground, runInBackground);
+                }
+            });
+
+            // Set checkbox default state after swal renders (small delay for DOM)
+            setTimeout(function() {
+                var $cb = $('#swal-run-bg-checkbox');
+                if ($cb.length) {
+                    $cb.prop('checked', bgDefault);
+                }
+            }, 50);
+        });
+    }
+
+    function ViewLastCmdLog(project, displayName) {
+        $.post(caURL, {
+            action: 'getLastCmdLog',
+            script: project
+        }, function(response) {
+            var parsed = tryParseJson(response);
+            if (!parsed || parsed.result !== 'success') {
+                swal({ title: 'Error', text: 'Could not retrieve the log.', type: 'error' });
+                return;
+            }
+            if (!parsed.log) {
+                swal({ title: 'No log available', text: 'No command log has been saved for ' + composeEscapeHtml(displayName) + ' yet.\nRun a command to generate one.', type: 'info' });
+                return;
+            }
+            // Show log in a swal with a scrollable pre block
+            var logHtml = '<div style="text-align:left;">' +
+                '<pre style="background:var(--background-color, var(--dynamix-sb-body-bg-color)); color:var(--text-color, var(--dynamix-sb-body-text-color, var(--black))); border:1px solid var(--table-border-color, var(--dynamix-box-inner-div-border-color)); border-radius:4px;padding:12px;max-height:400px;overflow-y:auto;' +
+                'font-size:0.82em;line-height:1.4;white-space:pre-wrap;word-break:break-all;">' +
+                composeEscapeHtml(parsed.log) + '</pre></div>';
+            swal({
+                title: 'Last Cmd Log: ' + composeEscapeHtml(displayName),
+                text: logHtml,
+                html: true,
+                type: null,
+                confirmButtonText: 'Close'
+            });
+        });
+    }
+
+    function ComposePullConfirmed(path, profile = "", background = false, suppressBackgroundNotification = false) {
+        var stackName = basename(path);
+        performComposeAction({
+            stackName: stackName,
+            actionName: 'pull',
+            title: 'Compose Pull: ' + stackName,
+            requestUrl: compURL,
+            payload: {
+                action: 'composePull',
+                path: path,
+                profile: profile
+            },
+            background: background,
+            suppressBackgroundNotification: suppressBackgroundNotification,
+            pendingReload: true
         });
     }
 
     function ComposePull(path, profile = "") {
-        var height = 800;
-        var width = 1200;
-        $.post(compURL, {
-            action: 'composePull',
-            path: path,
-            profile: profile
-        }, function(data) {
-            if (data) {
-                openBox(data, "Stack " + basename(path) + " Pull", height, width, true);
-            }
-        })
+        showStackActionDialog('pull', path, profile);
     }
 
     function ComposeLogs(pathOrProject, profile = "") {
@@ -2625,6 +3168,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             case 'logs':
                 ComposeLogs(path);
                 break;
+            case 'viewCmdLog':
+                ViewLastCmdLog(project, projectName);
+                break;
             case 'edit':
                 openEditorModalByProject(project, projectName);
                 break;
@@ -2640,22 +3186,25 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var actionNames = {
             'up': 'Compose Up',
             'down': 'Compose Down',
-            'update': 'Update Stack',
-            'pull': 'Pull Images',
-            'logs': 'View Logs'
+            'stop': 'Compose Stop',
+            'restart': 'Compose Restart',
+            'update': 'Update',
+            'forceUpdate': 'Force Update',
+            'pull': 'Compose Pull',
+            'logs': 'Compose Logs'
         };
 
         // Build profile selection HTML with checkboxes for multi-select
         var profileHtml = '<div style="text-align: left;">';
-        profileHtml += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(128,128,128,0.3);">';
+        profileHtml += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--dynamix-box-inner-div-border-color);">';
         profileHtml += '<label style="font-weight:bold;"><input type="checkbox" id="profile_all" checked onchange="toggleAllProfiles(this)"> All Services (no profile filter)</label>';
         profileHtml += '</div>';
         profileHtml += '<div id="profile_list">';
         profiles.forEach(function(profile) {
-            profileHtml += '<label style="display:block;margin:5px 0;"><input type="checkbox" class="profile_checkbox" value="' + escapeHtml(profile) + '" disabled> ' + escapeHtml(profile) + '</label>';
+            profileHtml += '<label style="display:block;margin:5px 0;"><input type="checkbox" class="profile_checkbox" value="' + composeEscapeHtml(profile) + '" disabled> ' + composeEscapeHtml(profile) + '</label>';
         });
         profileHtml += '</div>';
-        profileHtml += '<div style="margin-top:10px;font-size:0.9em;color:#888;"><i class="fa fa-info-circle"></i> Select multiple profiles to include services from each.</div>';
+        profileHtml += '<div class="compose-text-muted" style="margin-top:10px;font-size:0.9em;"><i class="fa fa-info-circle"></i> Select multiple profiles to include services from each.</div>';
         profileHtml += '</div>';
 
         swal({
@@ -2682,8 +3231,17 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     case 'down':
                         ComposeDown(path, profileStr);
                         break;
+                    case 'stop':
+                        ComposeStop(path, profileStr);
+                        break;
+                    case 'restart':
+                        ComposeRestart(path, profileStr);
+                        break;
                     case 'update':
                         UpdateStack(path, profileStr);
+                        break;
+                    case 'forceUpdate':
+                        ForceUpdateStack(path, profileStr);
                         break;
                     case 'pull':
                         ComposePull(path, profileStr);
@@ -2722,8 +3280,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $('#editor-modal-title').text('Editing: ' + projectName);
         $('#editor-file-info').text(compose_root + '/' + project);
 
-        // Show loading state
-        $('#editor-modal-overlay').addClass('active');
+        // Ensure overlay is in top-level document layer for tabbed mode
+        // Appending to body makes the modal full-screen and avoids nested overflow limitations.
+        $('#editor-modal-overlay').appendTo('body').addClass('active');
         $('#editor-validation-compose').html('<i class="fa fa-spinner fa-spin editor-validation-icon"></i> Loading files...').removeClass('valid error warning');
 
         // Load all files and settings
@@ -2733,6 +3292,11 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         // Switch to appropriate initial tab (default to 'compose')
         var targetTab = initialTab || 'compose';
         switchTab(targetTab);
+        setTimeout(function() {
+            refreshEditorContents(targetTab);
+            refreshEditorContents('compose');
+            refreshEditorContents('env');
+        }, 100);
     }
 
     function loadEditorFiles(project) {
@@ -2795,10 +3359,15 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             script: project
         }).then(function(data) {
             if (data) {
-                var response = JSON.parse(data);
-                var desc = (response.content || '').replace(/<br>/g, '\n');
-                $('#settings-description').val(desc);
-                editorModal.originalSettings['description'] = desc;
+                try {
+                    var response = JSON.parse(data);
+                    var desc = (response.content || '').replace(/<br>/g, '\n');
+                    $('#settings-description').val(desc);
+                    editorModal.originalSettings['description'] = desc;
+                } catch (e) {
+                    $('#settings-description').val('');
+                    editorModal.originalSettings['description'] = '';
+                }
             }
         }).fail(function() {
             $('#settings-description').val('');
@@ -2811,7 +3380,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             script: project
         }).then(function(data) {
             if (data) {
+                try {
                 var response = JSON.parse(data);
+                } catch (e) { return; }
                 if (response.result === 'success') {
                     // Icon URL
                     var iconUrl = response.iconUrl || '';
@@ -2836,12 +3407,23 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                     // External compose path
                     var externalComposePath = response.externalComposePath || '';
-                    $('#settings-external-compose-path').val(externalComposePath);
-                    editorModal.originalSettings['external-compose-path'] = externalComposePath;
-                    if (externalComposePath) {
-                        $('#settings-external-compose-info').show();
-                    } else {
+                    var invalidIndirectPath = response.invalidIndirectPath || '';
+                    if (!externalComposePath && invalidIndirectPath) {
+                        // Pre-populate with the broken path so the user can fix it
+                        $('#settings-external-compose-path').val(invalidIndirectPath);
+                        editorModal.originalSettings['external-compose-path'] = '';
+                        editorModal.modifiedSettings.add('external-compose-path');
+                        $('#settings-invalid-indirect-warning').show();
                         $('#settings-external-compose-info').hide();
+                    } else {
+                        $('#settings-external-compose-path').val(externalComposePath);
+                        editorModal.originalSettings['external-compose-path'] = externalComposePath;
+                        $('#settings-invalid-indirect-warning').hide();
+                        if (externalComposePath) {
+                            $('#settings-external-compose-info').show();
+                        } else {
+                            $('#settings-external-compose-info').hide();
+                        }
                     }
 
                     // Default profile
@@ -2873,6 +3455,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             $('#settings-icon-preview').hide();
             $('#settings-available-profiles').hide();
             $('#settings-external-compose-info').hide();
+            $('#settings-invalid-indirect-warning').hide();
         });
     }
 
@@ -2923,7 +3506,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
             } catch (e) {
                 console.error('Failed to parse compose files for labels:', e);
-                $('#labels-services-container').html('<div class="labels-empty-state"><i class="fa fa-exclamation-triangle"></i> Error loading services: ' + escapeHtml(e.message) + '</div>');
+                $('#labels-services-container').html('<div class="labels-empty-state"><i class="fa fa-exclamation-triangle"></i> Error loading services: ' + composeEscapeHtml(e.message) + '</div>');
             }
         }).fail(function() {
             $('#labels-services-container').html('<div class="labels-empty-state"><i class="fa fa-exclamation-triangle"></i> Failed to load compose files</div>');
@@ -2964,29 +3547,29 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             editorModal.originalLabels[serviceKey + '_shell'] = shellValue;
 
             var iconSrc = iconValue || '/plugins/dynamix.docker.manager/images/question.png';
-            html += '<div class="labels-service" data-service="' + escapeAttr(serviceKey) + '">';
+            html += '<div class="labels-service" data-service="' + composeEscapeAttr(serviceKey) + '">';
             html += '<div class="labels-service-header">';
-            html += '<img class="labels-service-icon" id="label-icon-preview-' + escapeAttr(serviceKey) + '" src="' + escapeAttr(iconSrc) + '" alt="" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
-            html += '<span class="labels-service-name">' + escapeHtml(containerName) + '</span>';
+            html += '<img class="labels-service-icon" id="label-icon-preview-' + composeEscapeAttr(serviceKey) + '" src="' + composeEscapeAttr(iconSrc) + '" alt="" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
+            html += '<span class="labels-service-name">' + composeEscapeHtml(containerName) + '</span>';
             html += '</div>';
             html += '<div class="labels-service-fields">';
             html += '<div class="labels-field">';
             html += '<label><i class="fa fa-picture-o"></i> Icon URL</label>';
-            html += '<input type="text" id="label-' + escapeAttr(serviceKey) + '-icon" value="' + escapeAttr(iconValue) + '" placeholder="https://example.com/icon.png" data-service="' + escapeAttr(serviceKey) + '" data-field="icon">';
+            html += '<input type="text" id="label-' + composeEscapeAttr(serviceKey) + '-icon" value="' + composeEscapeAttr(iconValue) + '" placeholder="https://example.com/icon.png" data-service="' + composeEscapeAttr(serviceKey) + '" data-field="icon">';
             html += '</div>';
             html += '<div class="labels-field">';
             html += '<label><i class="fa fa-globe"></i> WebUI URL</label>';
-            html += '<input type="text" id="label-' + escapeAttr(serviceKey) + '-webui" value="' + escapeAttr(webuiValue) + '" placeholder="http://[IP]:[PORT:8080]/" data-service="' + escapeAttr(serviceKey) + '" data-field="webui">';
+            html += '<input type="text" id="label-' + composeEscapeAttr(serviceKey) + '-webui" value="' + composeEscapeAttr(webuiValue) + '" placeholder="http://[IP]:[PORT:8080]/" data-service="' + composeEscapeAttr(serviceKey) + '" data-field="webui">';
             html += '</div>';
             html += '<div class="labels-field">';
             html += '<label><i class="fa fa-terminal"></i> Shell</label>';
-            html += '<input type="text" id="label-' + escapeAttr(serviceKey) + '-shell" value="' + escapeAttr(shellValue) + '" placeholder="/bin/bash" data-service="' + escapeAttr(serviceKey) + '" data-field="shell">';
+            html += '<input type="text" id="label-' + composeEscapeAttr(serviceKey) + '-shell" value="' + composeEscapeAttr(shellValue) + '" placeholder="/bin/bash" data-service="' + composeEscapeAttr(serviceKey) + '" data-field="shell">';
             html += '</div>';
             html += '</div>';
             html += '</div>';
         }
 
-        // Check for deleted services in override that aren't in main
+        // Check for orphaned services in override that aren't in main (e.g., after rename)
         for (var serviceKey in overrideDoc.services) {
             if (!(serviceKey in mainDoc.services)) {
                 hasDeletedServices = true;
@@ -2997,15 +3580,15 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var shellValue = findLabelValue(overrideService, {}, shell_label);
 
                 var deletedIconSrc = iconValue || '/plugins/dynamix.docker.manager/images/question.png';
-                deletedHtml += '<div class="labels-service deleted" data-service="' + escapeAttr(serviceKey) + '" data-deleted="true">';
+                deletedHtml += '<div class="labels-service deleted" data-service="' + composeEscapeAttr(serviceKey) + '" data-deleted="true">';
                 deletedHtml += '<div class="labels-service-header">';
-                deletedHtml += '<img class="labels-service-icon" src="' + escapeAttr(deletedIconSrc) + '" alt="" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
-                deletedHtml += '<span class="labels-service-name">' + escapeHtml(containerName) + ' <span style="color:#f44336;font-size:0.8em;">(will be removed)</span></span>';
+                deletedHtml += '<img class="labels-service-icon" src="' + composeEscapeAttr(deletedIconSrc) + '" alt="" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
+                deletedHtml += '<span class="labels-service-name">' + composeEscapeHtml(containerName) + ' <span class="compose-status-danger" style="font-size:0.8em;">(will be removed on save)</span></span>';
                 deletedHtml += '</div>';
                 deletedHtml += '<div class="labels-service-fields">';
-                deletedHtml += '<div class="labels-field"><label><i class="fa fa-picture-o"></i> Icon</label><input type="text" value="' + escapeAttr(iconValue) + '" disabled></div>';
-                deletedHtml += '<div class="labels-field"><label><i class="fa fa-globe"></i> WebUI</label><input type="text" value="' + escapeAttr(webuiValue) + '" disabled></div>';
-                deletedHtml += '<div class="labels-field"><label><i class="fa fa-terminal"></i> Shell</label><input type="text" value="' + escapeAttr(shellValue) + '" disabled></div>';
+                deletedHtml += '<div class="labels-field"><label><i class="fa fa-picture-o"></i> Icon</label><input type="text" id="orphan-' + composeEscapeAttr(serviceKey) + '-icon" value="' + composeEscapeAttr(iconValue) + '" readonly></div>';
+                deletedHtml += '<div class="labels-field"><label><i class="fa fa-globe"></i> WebUI</label><input type="text" id="orphan-' + composeEscapeAttr(serviceKey) + '-webui" value="' + composeEscapeAttr(webuiValue) + '" readonly></div>';
+                deletedHtml += '<div class="labels-field"><label><i class="fa fa-terminal"></i> Shell</label><input type="text" id="orphan-' + composeEscapeAttr(serviceKey) + '-shell" value="' + composeEscapeAttr(shellValue) + '" readonly></div>';
                 deletedHtml += '</div>';
                 deletedHtml += '</div>';
             }
@@ -3017,7 +3600,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
         if (hasDeletedServices) {
             html += '<div class="labels-deleted-section">';
-            html += '<div class="labels-deleted-title" onclick="toggleDeletedServices(this)"><i class="fa fa-chevron-right"></i> Orphaned Services (will be removed on save)</div>';
+            html += '<div class="labels-deleted-title" onclick="toggleDeletedServices(this)"><i class="fa fa-chevron-right"></i> Orphaned Services (copy values before saving)</div>';
             html += '<div class="labels-deleted-services">' + deletedHtml + '</div>';
             html += '</div>';
         }
@@ -3337,7 +3920,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     externalComposePath: externalComposePath
                 }).then(function(data) {
                     if (data) {
-                        var response = JSON.parse(data);
+                        try {
+                            var response = JSON.parse(data);
+                        } catch (e) {
+                            if (saveErrors) saveErrors.push('Invalid server response when saving settings.');
+                            return false;
+                        }
                         if (response.result === 'success') {
                             editorModal.originalSettings['icon-url'] = iconUrl;
                             editorModal.originalSettings['webui-url'] = webuiUrl;
@@ -3409,7 +3997,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             overrideDoc.services[serviceKey].labels[shell_label] = shellValue;
         }
 
-        // Remove services from override that are no longer in main
+        // Remove services from override that are no longer in main.
+        // This is required because docker compose will fail if override has
+        // services that don't exist in the main compose file (no image defined).
         for (var serviceKey in overrideDoc.services) {
             if (!(serviceKey in mainDoc.services)) {
                 delete overrideDoc.services[serviceKey];
@@ -3475,7 +4065,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     function doCloseEditorModal() {
-        $('#editor-modal-overlay').removeClass('active');
+        $('#editor-modal-overlay').removeClass('active').appendTo('body');
         editorModal.currentProject = null;
         editorModal.currentTab = 'compose';
         editorModal.modifiedTabs = new Set();
@@ -3504,6 +4094,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $('#settings-icon-preview').hide();
         $('#settings-available-profiles').hide();
         $('#settings-external-compose-info').hide();
+        $('#settings-invalid-indirect-warning').hide();
+
+        // Hide any open file-tree pickers (so they don't float outside the modal)
+        $('.fileTree').slideUp('fast');
 
         // Clear labels container
         $('#labels-services-container').html('');
@@ -3513,7 +4107,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     function deleteStackByProject(project, projectName) {
-        var msgHtml = "Are you sure you want to delete <font color='red'><b>" + escapeHtml(projectName) + "</b></font> (<font color='green'>" + escapeHtml(compose_root) + "/" + escapeHtml(project) + "</font>)?";
+        var msgHtml = "Are you sure you want to delete <font color='red'><b>" + composeEscapeHtml(projectName) + "</b></font> (<font color='green'>" + composeEscapeHtml(compose_root) + "/" + composeEscapeHtml(project) + "</font>)?";
         swal({
             title: "Delete Stack?",
             text: msgHtml,
@@ -3580,8 +4174,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             expandedStacks[stackId] = true;
 
             if (stackContainersCache[stackId]) {
-                // Cached — content is already rendered in the DOM from last load.
-                // Just slide down without re-fetching to avoid flash/layout shift.
+                // Cached — always re-render from cache before showing.
+                // This prevents stale hidden DOM content when a stack changed
+                // state while details were collapsed.
+                renderContainerDetails(stackId, stackContainersCache[stackId], project);
                 $detailsRow.slideDown(200);
             } else {
                 // First load: fetch data, row stays hidden until render completes
@@ -3615,67 +4211,56 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             script: project
         }, function(data) {
             if (data) {
-                var response = JSON.parse(data);
-                if (response.result === 'success') {
-                    var containers = response.containers;
+                try {
+                    var response = JSON.parse(data);
+                    if (response.result === 'success') {
+                        var containers = response.containers;
 
-                    // Normalize PascalCase keys from server to camelCase used by client
-                    containers.forEach(function(c) {
-                        if (c.UpdateStatus !== undefined && c.updateStatus === undefined) c.updateStatus = c.UpdateStatus;
-                        if (c.LocalSha !== undefined && c.localSha === undefined) c.localSha = c.LocalSha;
-                        if (c.RemoteSha !== undefined && c.remoteSha === undefined) c.remoteSha = c.RemoteSha;
-                        // Derive hasUpdate from updateStatus if not set
-                        if (c.hasUpdate === undefined && c.updateStatus) {
-                            c.hasUpdate = (c.updateStatus === 'update-available');
-                        }
-                    });
+                        // Normalize all containers via factory function (PascalCase→camelCase)
+                        containers = containers.map(createContainerInfo).filter(Boolean);
 
-                    // Merge update status from stackUpdateStatus if available
-                    if (stackUpdateStatus[project] && stackUpdateStatus[project].containers) {
-                        containers.forEach(function(container) {
-                            var cName = container.Name || container.Service;
-                            stackUpdateStatus[project].containers.forEach(function(update) {
-                                if (cName === update.container) {
-                                    container.hasUpdate = update.hasUpdate;
-                                    container.updateStatus = update.status || update.updateStatus;
-                                    container.localSha = update.localSha || '';
-                                    container.remoteSha = update.remoteSha || '';
-                                }
-                            });
-                        });
+                        // Merge update status from stackUpdateStatus if available
+                        mergeUpdateStatus(containers, project);
+
+                        stackContainersCache[stackId] = containers;
+                        stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
+                        composeClientDebug('[loadStackContainerDetails] success', {
+                            stackId: stackId,
+                            project: project,
+                            containers: containers.length
+                        }, 'daemon', 'info');
+                        renderContainerDetails(stackId, containers, project);
+                        // Slide down details row now that content is rendered
+                        $('#details-row-' + stackId).slideDown(200);
+                    } else {
+                        // Escape error message to prevent XSS
+                        var errorMsg = composeEscapeHtml(response.message || 'Failed to load container details');
+                        $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> ' + errorMsg + '</div>');
+                        $('#details-row-' + stackId).slideDown(200);
+                        composeClientDebug('[loadStackContainerDetails] error', {
+                            stackId: stackId,
+                            project: project,
+                            message: errorMsg
+                        }, 'daemon', 'error');
                     }
-
-                    stackContainersCache[stackId] = containers;
-                    stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
-                    composeClientDebug('[loadStackContainerDetails] success', {
+                } catch (e) {
+                    $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> Failed to parse container details response</div>');
+                    $('#details-row-' + stackId).slideDown(200);
+                    composeClientDebug('[loadStackContainerDetails] parse-error', {
                         stackId: stackId,
                         project: project,
-                        containers: containers.length
-                    }, 'daemon', 'info');
-                    renderContainerDetails(stackId, containers, project);
-                    // Slide down details row now that content is rendered
-                    $('#details-row-' + stackId).slideDown(200);
-                } else {
-                    // Escape error message to prevent XSS
-                    var errorMsg = escapeHtml(response.message || 'Failed to load container details');
-                    $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> ' + errorMsg + '</div>');
-                    $('#details-row-' + stackId).slideDown(200);
-                    stackDetailsLoading[stackId] = false;
-                    composeClientDebug('[loadStackContainerDetails] error', {
-                        stackId: stackId,
-                        project: project,
-                        message: errorMsg
+                        err: e.toString()
                     }, 'daemon', 'error');
                 }
             } else {
                 $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> Failed to load container details</div>');
                 $('#details-row-' + stackId).slideDown(200);
-                stackDetailsLoading[stackId] = false;
                 composeClientDebug('[loadStackContainerDetails] empty-response', {
                     stackId: stackId,
                     project: project
                 }, 'daemon', 'warning');
             }
+            stackDetailsLoading[stackId] = false;
         }).fail(function() {
             $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> Failed to load container details</div>');
             $('#details-row-' + stackId).slideDown(200);
@@ -3700,19 +4285,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         html += '<thead><tr>';
         html += '<th class="ct-col-name">Container</th>';
         html += '<th class="ct-col-update">Update</th>';
-        html += '<th class="ct-col-source">Source</th>';
-        html += '<th class="ct-col-tag">Tag</th>';
-        html += '<th class="ct-col-net">Network</th>';
-        html += '<th class="ct-col-ip">Container IP</th>';
+        html += '<th class="cm-advanced ct-col-source">Source</th>';
+        html += '<th class="cm-advanced ct-col-tag">Tag</th>';
+        html += '<th class="cm-advanced ct-col-net">Network</th>';
+        html += '<th class="cm-advanced ct-col-ip">Container IP</th>';
         html += '<th class="ct-col-cport">Container Port</th>';
         html += '<th class="ct-col-lport">LAN IP:Port</th>';
         html += '</tr></thead>';
         html += '<tbody>';
 
         containers.forEach(function(container, idx) {
-            var containerName = container.Name || container.Service || 'Unknown';
-            var shortName = container.Service || containerName.replace(/^[^-]+-/, ''); // Prefer service name; fall back to stripping project prefix
-            var image = container.Image || '';
+            var containerName = container.name || container.service || 'Unknown';
+            var shortName = container.service || containerName.replace(/^[^-]+-/, ''); // Prefer service name; fall back to stripping project prefix
+            var image = container.image || '';
 
             // Parse image - handle docker.io/ prefix and @sha256: digest
             // Format could be: docker.io/library/redis:6.2-alpine@sha256:abc123...
@@ -3733,8 +4318,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             var imageParts = imageForParsing.split(':');
             var imageSource = imageParts[0] || ''; // Image name without tag
             var imageTag = (imageParts[1] || 'latest') + digestSuffix; // Include digest suffix if present
-            var state = container.State || 'unknown';
-            var containerId = (container.Id || containerName).substring(0, 12);
+            var state = container.state || 'unknown';
+            var containerId = String(container.id || containerName || '').substring(0, 12);
             var uniqueId = 'ct-' + stackId + '-' + idx;
 
             // Status like Docker tab
@@ -3746,8 +4331,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // Get networks and IPs
             var networkNames = [];
             var ipAddresses = [];
-            if (container.Networks && container.Networks.length > 0) {
-                container.Networks.forEach(function(net) {
+            if (container.networks && container.networks.length > 0) {
+                container.networks.forEach(function(net) {
                     networkNames.push(net.name || '-');
                     ipAddresses.push(net.ip || '-');
                 });
@@ -3760,8 +4345,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // Format ports - separate container ports and mapped ports
             var containerPorts = [];
             var lanPorts = [];
-            if (container.Ports && container.Ports.length > 0) {
-                container.Ports.forEach(function(p) {
+            if (container.ports && container.ports.length > 0) {
+                container.ports.forEach(function(p) {
                     // Format: "192.168.1.10:8080->80/tcp" or "80/tcp"
                     var parts = p.split('->');
                     if (parts.length === 2) {
@@ -3778,25 +4363,25 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // WebUI
             // WebUI — already resolved server-side by exec.php
             var webui = '';
-            if (container.WebUI) {
-                webui = container.WebUI;
+            if (container.webUI) {
+                webui = container.webUI;
                 if (!isValidWebUIUrl(webui)) webui = '';
             }
 
-            html += '<tr data-container="' + escapeAttr(containerName) + '" data-state="' + escapeAttr(state) + '" data-stackid="' + escapeAttr(stackId) + '">';
+            html += '<tr data-container="' + composeEscapeAttr(containerName) + '" data-state="' + composeEscapeAttr(state) + '" data-stackid="' + composeEscapeAttr(stackId) + '">';
 
             // Container name column - matches Docker tab exactly
             html += '<td class="ct-name">';
             html += '<span class="outer ' + outerClass + '">';
-            var containerShell = container.Shell || '/bin/sh';
-            html += '<span id="' + uniqueId + '" class="hand" data-name="' + escapeAttr(containerName) + '" data-state="' + escapeAttr(state) + '" data-webui="' + escapeAttr(webui) + '" data-stackid="' + escapeAttr(stackId) + '" data-shell="' + escapeAttr(containerShell) + '">';
+            var containerShell = container.shell || '/bin/sh';
+            html += '<span id="' + uniqueId + '" class="hand" data-name="' + composeEscapeAttr(containerName) + '" data-state="' + composeEscapeAttr(state) + '" data-webui="' + composeEscapeAttr(webui) + '" data-stackid="' + composeEscapeAttr(stackId) + '" data-shell="' + composeEscapeAttr(containerShell) + '">';
             // Use actual image like Docker tab - either container icon or default question.png
-            var iconSrc = (container.Icon && (isValidWebUIUrl(container.Icon) || container.Icon.startsWith('data:image/'))) ?
-                container.Icon :
+            var iconSrc = (container.icon && (isValidWebUIUrl(container.icon) || container.icon.startsWith('data:image/'))) ?
+                container.icon :
                 '/plugins/dynamix.docker.manager/images/question.png';
-            html += '<img src="' + escapeAttr(iconSrc) + '" class="img" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
+            html += '<img src="' + composeEscapeAttr(iconSrc) + '" class="img" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
             html += '</span>';
-            html += '<span class="inner"><span class="appname">' + escapeHtml(shortName) + '</span><br>';
+            html += '<span class="inner"><span class="appname">' + composeEscapeHtml(shortName) + '</span><br>';
             html += '<i class="fa fa-' + shape + ' ' + statusText + ' ' + color + '"></i><span class="state">' + statusText + '</span>';
             html += '</span></span>';
             html += '</td>';
@@ -3814,19 +4399,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 // Image is pinned with SHA256 digest - show pinned status
                 html += '<span class="cyan-text" style="white-space:nowrap;"><i class="fa fa-thumb-tack fa-fw"></i> pinned</span>';
                 if (ctPinnedDigest) {
-                    html += '<div style="font-family:monospace;font-size:0.85em;color:#17a2b8;margin-top:2px;">' + escapeHtml(ctPinnedDigest) + '</div>';
+                    html += '<div style="font-family:var(--font-bitstream);font-size:0.85em;margin-top:2px;"><span class="compose-status-info">' + composeEscapeHtml(ctPinnedDigest.substring(0, 12)) + '</span></div>';
                 }
             } else if (ctHasUpdate) {
                 // Update available - orange "update ready" style with SHA diff
-                html += '<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(project) + '\', \'' + escapeAttr(stackId) + '\');">';
+                html += '<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + composeEscapeAttr(project) + '\', \'' + composeEscapeAttr(stackId) + '\');">';
                 html += '<span class="orange-text" style="white-space:nowrap;"><i class="fa fa-flash fa-fw"></i> update ready</span>';
                 html += '</a>';
                 if (ctLocalSha && ctRemoteSha) {
                     // Always show SHA diff (not just in advanced view)
-                    html += '<div style="font-family:monospace;font-size:0.85em;margin-top:2px;">';
-                    html += '<span style="color:#f80;" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 8)) + '</span>';
-                    html += ' <i class="fa fa-arrow-right" style="margin:0 4px;color:#3c3;"></i> ';
-                    html += '<span style="color:#3c3;" title="' + escapeAttr(ctRemoteSha) + '">' + escapeHtml(ctRemoteSha.substring(0, 8)) + '</span>';
+                    html += '<div style="font-family:var(--font-bitstream);font-size:0.85em;margin-top:2px;">';
+                    html += '<span class="compose-status-warning" title="' + composeEscapeAttr(ctLocalSha) + '">' + composeEscapeHtml(ctLocalSha.substring(0, 8)) + '</span>';
+                    html += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 4px;"></i> ';
+                    html += '<span class="compose-status-success" title="' + composeEscapeAttr(ctRemoteSha) + '">' + composeEscapeHtml(ctRemoteSha.substring(0, 8)) + '</span>';
                     html += '</div>';
                 }
             } else if (ctUpdateStatus === 'up-to-date') {
@@ -3834,31 +4419,31 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 html += '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
                 if (ctLocalSha) {
                     // Show SHA in advanced view only for up-to-date containers (15 chars)
-                    html += '<div class="cm-advanced" style="font-family:monospace;font-size:0.85em;color:#666;" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 15)) + '</div>';
+                    html += '<div class="cm-advanced" style="font-family:var(--font-bitstream);font-size:0.85em;" title="' + composeEscapeAttr(ctLocalSha) + '"><span class="compose-text-muted">' + composeEscapeHtml(ctLocalSha.substring(0, 15)) + '</span></div>';
                 }
             } else {
                 // Unknown/not checked
-                html += '<span style="white-space:nowrap;color:#888;"><i class="fa fa-question-circle fa-fw"></i> not checked</span>';
+                html += '<span class="compose-text-muted" style="white-space:nowrap;"><i class="fa fa-question-circle fa-fw"></i> not checked</span>';
             }
             html += '</td>';
 
             // Source (image name without tag)
-            html += '<td><span class="docker_readmore" style="color:#606060;">' + escapeHtml(imageSource) + '</span></td>';
+            html += '<td class="cm-advanced"><span class="docker_readmore compose-text-muted">' + composeEscapeHtml(imageSource) + '</span></td>';
 
             // Tag (image tag) — truncated with ellipsis via CSS if too long
-            html += '<td class="ct-col-tag-cell"><span class="ct-tag" title="' + escapeAttr(imageTag) + '">' + escapeHtml(imageTag) + '</span></td>';
+            html += '<td class="cm-advanced ct-col-tag-cell"><span class="ct-tag" title="' + composeEscapeAttr(imageTag) + '">' + composeEscapeHtml(imageTag) + '</span></td>';
 
             // Network
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + networkNames.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + networkNames.map(composeEscapeHtml).join('<br>') + '</span></td>';
 
             // Container IP
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(composeEscapeHtml).join('<br>') + '</span></td>';
 
             // Container Port
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.map(composeEscapeHtml).join('<br>') + '</span></td>';
 
             // LAN IP:Port
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + lanPorts.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + lanPorts.map(composeEscapeHtml).join('<br>') + '</span></td>';
 
             html += '</tr>';
         });
@@ -3872,22 +4457,22 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         // DOM updates (e.g. a full list reload) that may remove the row.
         try {
             setTimeout(function() {
-                try {
-                    updateParentStackFromContainers(stackId, project);
-                } catch (e) {
-                    composeClientDebug('[renderContainerDetails] update-parent-failed', {
-                        err: e.toString(),
-                        stackId: stackId,
-                        project: project
-                    }, 'daemon', 'error');
-                }
-                // Mark that we just rendered so immediate subsequent update-driven
-                // refreshes don't re-trigger another load (breaks the render -> update -> render loop)
+                // Mark as just rendered before any parent-row update so
+                // updateStackUpdateUI can suppress re-entrant detail reloads.
                 try {
                     stackDetailsJustRendered[stackId] = true;
                 } catch (ex) {
                     composeClientDebug('[renderContainerDetails] set-just-rendered-failed', {
                         err: ex.toString(),
+                        stackId: stackId,
+                        project: project
+                    }, 'daemon', 'error');
+                }
+                try {
+                    updateParentStackFromContainers(stackId, project);
+                } catch (e) {
+                    composeClientDebug('[renderContainerDetails] update-parent-failed', {
+                        err: e.toString(),
                         stackId: stackId,
                         project: project
                     }, 'daemon', 'error');
@@ -3937,29 +4522,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     function buildStackInfoFromCache(stackId, project) {
         var containers = stackContainersCache[stackId] || [];
         var definedServices = stackDefinedServicesCache[stackId] || containers.length;
-        var stackInfo = {
-            projectName: project,
-            containers: [],
-            isRunning: false,
-            hasUpdate: false,
-            totalServices: definedServices  // Track total defined services for accurate status
-        };
-        containers.forEach(function(c) {
-            var name = c.Name || c.Service || '';
-            var ct = {
-                container: name,
-                hasUpdate: !!c.hasUpdate,
-                updateStatus: c.updateStatus || '',
-                localSha: c.localSha || '',
-                remoteSha: c.remoteSha || '',
-                isPinned: !!c.isPinned,
-                isRunning: (c.State === 'running')
-            };
-            if (ct.hasUpdate) stackInfo.hasUpdate = true;
-            if (ct.isRunning) stackInfo.isRunning = true;
-            stackInfo.containers.push(ct);
-        });
-        return stackInfo;
+        return createStackInfo(project, containers, { totalServices: definedServices });
     }
 
     // Update only the parent stack row using cached container details
@@ -3979,37 +4542,22 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             // Update the update-column using existing helper (expects stackInfo)
             var stackInfo = buildStackInfoFromCache(stackId, project);
             // Merge any previously saved update status so we don't lose 'checked' state
-            var prevStatus = stackUpdateStatus[project] || {};
-            ['lastChecked', 'updateAvailable', 'checking', 'updateStatus', 'checked'].forEach(function(k) {
-                if (typeof prevStatus[k] !== 'undefined') stackInfo[k] = prevStatus[k];
-            });
-
-            // Also merge container-level update data from previous status
-            if (prevStatus.containers && stackInfo.containers) {
-                stackInfo.containers.forEach(function(c) {
-                    var cName = c.name || c.service;
-                    prevStatus.containers.forEach(function(pc) {
-                        var pcName = pc.name || pc.service || pc.container;
-                        if (cName === pcName) {
-                            if (pc.hasUpdate !== undefined && !c.hasUpdate) c.hasUpdate = pc.hasUpdate;
-                            if (pc.updateStatus && !c.updateStatus) c.updateStatus = pc.updateStatus;
-                            if (pc.localSha && !c.localSha) c.localSha = pc.localSha;
-                            if (pc.remoteSha && !c.remoteSha) c.remoteSha = pc.remoteSha;
-                            if (pc.isPinned !== undefined) c.isPinned = pc.isPinned;
-                        }
-                    });
-                });
-                // Recompute hasUpdate from merged containers
-                stackInfo.hasUpdate = stackInfo.containers.some(function(c) {
-                    return c.hasUpdate;
-                });
-            }
+            mergeStackUpdateStatus(stackInfo, stackUpdateStatus[project] || {});
 
             // Cache the merged update status and apply UI update
             stackUpdateStatus[project] = stackInfo;
             // Skip updating the update column if a check is currently in progress
             if (!isChecking) {
                 updateStackUpdateUI(project, stackInfo);
+            }
+
+            // If the stack has an in-progress action, keep the temporary status icon/text until completion.
+            if (composeStackActionInProgress[project]) {
+                composeClientDebug('[updateParentStackFromContainers] skipping icon/state update while action in progress', {
+                    stackId: stackId,
+                    project: project
+                }, 'daemon', 'debug');
+                return;
             }
 
             // Update the stack row status icon and state text based on container states
@@ -4034,12 +4582,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 newState = anyRunning ? 'started' : (anyPaused ? 'paused' : 'stopped');
                 $stateEl.text(newState);
             }
-            composeClientDebug('[updateParentStackFromContainers] state', {
-                project: project,
-                newState: newState,
-                runningCount: runningCount,
-                totalCount: totalCount
-            }, 'daemon', 'debug');
 
             // Update the containers count cell (3rd column) to reflect cached values
             try {
@@ -4054,13 +4596,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var shape = newState === 'started' ? 'play' : (newState === 'paused' ? 'pause' : (newState === 'partial' ? 'exclamation-circle' : 'square'));
                 var colorClass = newState === 'started' ? 'green-text' : (newState === 'paused' || newState === 'partial' ? 'orange-text' : 'grey-text');
 
-                // Debug: record classes before we touch the icon
-                composeClientDebug('[updateParentStackFromContainers] icon-before-classes', {
-                    project: project,
-                    classes: $icon.attr('class'),
-                    origClass: $icon.data('orig-class')
-                }, 'daemon', 'debug');
-
                 // Remove spinner / temporary classes and any previous fa-<name> classes
                 $icon.removeClass('fa-refresh fa-spin compose-status-spinner');
                 // Use a regex that matches the full fa-<name> (including hyphens) to ensure
@@ -4069,27 +4604,61 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     return (cls.match(/fa-[^\s]+/g) || []).join(' ');
                 });
 
-                // Debug: record classes after removal
-                composeClientDebug('[updateParentStackFromContainers] icon-after-removal', {
-                    project: project,
-                    classes: $icon.attr('class')
-                }, 'daemon', 'debug');
-
                 // Remove any previous color classes
                 $icon.removeClass('green-text orange-text grey-text cyan-text');
 
                 // Apply the new shape and color
                 $icon.addClass('fa fa-' + shape + ' ' + colorClass + ' compose-status-icon');
-                // Debug: report final classes for diagnostic purposes
-                composeClientDebug('[updateParentStackFromContainers] icon-classes', {
-                    project: project,
-                    classes: $icon.attr('class')
-                }, 'daemon', 'debug');
+
                 // Clear any saved orig-class since we've now applied the new state
                 if ($icon.data('orig-class')) {
                     $icon.removeData('orig-class');
                 }
             }
+
+            // Update data-isup and data-running so context menu reflects new state
+            var newIsUp = anyRunning ? '1' : '0';
+            $stackRow.data('isup', newIsUp).attr('data-isup', newIsUp);
+            var $iconSpan = $stackRow.find('span[data-stackid]');
+            $iconSpan.data('isup', newIsUp).attr('data-isup', newIsUp);
+            $iconSpan.data('running', runningCount).attr('data-running', runningCount);
+
+            // Rebind stack context menu so options (Up/Down/Stop/etc.) match new state
+            var stackElementId = 'stack-' + stackId;
+            if ($('#' + stackElementId).length) {
+                addComposeStackContext(stackElementId);
+            }
+
+            // Update the uptime column (4th td, index 3)
+            try {
+                var $uptimeCell = $stackRow.find('td').eq(3);
+                var uptimeText = 'stopped';
+                var uptimeClass = 'grey-text';
+                if (anyRunning) {
+                    // Find the earliest startedAt among running containers
+                    var earliest = null;
+                    stackInfo.containers.forEach(function(c) {
+                        if (c.isRunning && c.startedAt) {
+                            // Docker timestamps have nanosecond precision e.g. "2026-03-11T12:34:56.789012345Z"
+                            // JS Date only handles milliseconds — trim excess fractional digits
+                            var ts = c.startedAt.replace(/(\.\d{3})\d+(Z|[+-]\d{2}:\d{2})$/, '$1$2');
+                            var t = new Date(ts).getTime();
+                            if (!isNaN(t) && (earliest === null || t < earliest)) earliest = t;
+                        }
+                    });
+                    if (earliest !== null) {
+                        var secs = Math.max(0, Math.floor((Date.now() - earliest) / 1000));
+                        if (secs < 60) uptimeText = '< 1 min';
+                        else if (secs < 3600) uptimeText = Math.floor(secs / 60) + ' min' + (Math.floor(secs / 60) !== 1 ? 's' : '');
+                        else if (secs < 86400) uptimeText = Math.floor(secs / 3600) + ' hour' + (Math.floor(secs / 3600) !== 1 ? 's' : '');
+                        else uptimeText = Math.floor(secs / 86400) + ' day' + (Math.floor(secs / 86400) !== 1 ? 's' : '');
+                    } else {
+                        uptimeText = 'running';
+                    }
+                    uptimeClass = 'green-text';
+                }
+                $uptimeCell.html('<span class="' + uptimeClass + '">' + uptimeText + '</span>');
+            } catch (e) {}
 
             // Re-apply view mode (advanced/basic) to ensure column content visibility
             applyListView();
@@ -4232,6 +4801,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
         });
 
+        // Ensure stale menu bindings don't persist across state transitions
+        $el.off('contextmenu');
         context.attach('#' + elementId, opts);
     }
 
@@ -4303,7 +4874,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             containerAction: action
         }, function(data) {
             if (data) {
-                var response = JSON.parse(data);
+                try {
+                    var response = JSON.parse(data);
+                } catch (e) { return; }
                 if (response.result === 'success') {
                     // Refresh the container details
                     // Also mark the parent stack for a compose-list reload so the stack-level
@@ -4366,7 +4939,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     }
                     swal({
                         title: 'Action Failed',
-                        text: escapeHtml(response.message) || 'Failed to ' + action + ' container',
+                        text: composeEscapeHtml(response.message) || 'Failed to ' + action + ' container',
                         type: 'error'
                     });
                 }
@@ -4414,6 +4987,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         var path = $row.data('path');
         var profiles = $row.data('profiles') || [];
         var webuiUrl = $row.data('webui') || '';
+        var hasBuild = $row.data('hasbuild') == "1";
 
         // Check if updates are available for this stack
         var hasUpdates = false;
@@ -4427,40 +5001,25 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             above: false
         });
 
-        // WebUI link (if configured and stack is running)
-        if (webuiUrl && isUp) {
-            opts.push({
-                text: 'WebUI',
-                icon: 'fa-globe',
-                action: function(e) {
-                    e.preventDefault();
-                    var url = processWebUIUrl(webuiUrl);
-                    if (isValidWebUIUrl(url)) {
-                        window.open(url, '_blank');
-                    }
-                }
-            });
-            opts.push({
-                divider: true
-            });
-        }
-
-        // Compose Up
-        opts.push({
-            text: isUp ? 'Compose Up (Recreate)' : 'Compose Up',
-            icon: 'fa-play',
-            action: function(e) {
-                e.preventDefault();
-                if (profiles.length > 0) {
-                    showProfileSelector('up', path, profiles);
-                } else {
-                    ComposeUp(path);
-                }
-            }
-        });
-
-        // Compose Down (only if up)
+        // ===== STACK IS RUNNING =====
         if (isUp) {
+            // WebUI link (if configured)
+            if (webuiUrl) {
+                opts.push({
+                    text: 'WebUI',
+                    icon: 'fa-globe',
+                    action: function(e) {
+                        e.preventDefault();
+                        var url = processWebUIUrl(webuiUrl);
+                        if (isValidWebUIUrl(url)) {
+                            window.open(url, '_blank');
+                        }
+                    }
+                });
+                opts.push({ divider: true });
+            }
+
+            // Compose Down (stop and remove containers)
             opts.push({
                 text: 'Compose Down',
                 icon: 'fa-stop',
@@ -4473,34 +5032,132 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     }
                 }
             });
+
+            // Compose Stop (stop without removing)
+            opts.push({
+                text: 'Compose Stop',
+                icon: 'fa-pause',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('stop', path, profiles);
+                    } else {
+                        ComposeStop(path);
+                    }
+                }
+            });
+
+            // Compose Restart
+            opts.push({
+                text: 'Compose Restart',
+                icon: 'fa-refresh',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('restart', path, profiles);
+                    } else {
+                        ComposeRestart(path);
+                    }
+                }
+            });
+
+            opts.push({ divider: true });
+
+            // Update options based on whether updates are available
+            if (hasUpdates) {
+                // Update (when updates are available)
+                var updateLabel = hasBuild ? 'Update & Rebuild' : 'Update';
+                opts.push({
+                    text: updateLabel,
+                    icon: 'fa-cloud-download',
+                    action: function(e) {
+                        e.preventDefault();
+                        if (profiles.length > 0) {
+                            showProfileSelector('update', path, profiles);
+                        } else {
+                            UpdateStack(path);
+                        }
+                    }
+                });
+            } else {
+                // Force Update (when no updates detected)
+                var forceLabel = hasBuild ? 'Force Update & Rebuild' : 'Force Update';
+                opts.push({
+                    text: forceLabel,
+                    icon: 'fa-cloud-download',
+                    action: function(e) {
+                        e.preventDefault();
+                        if (profiles.length > 0) {
+                            showProfileSelector('forceUpdate', path, profiles);
+                        } else {
+                            ForceUpdateStack(path);
+                        }
+                    }
+                });
+            }
+
+        // ===== STACK IS STOPPED =====
+        } else {
+            // Compose Up
+            opts.push({
+                text: 'Compose Up',
+                icon: 'fa-play',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('up', path, profiles);
+                    } else {
+                        ComposeUp(path);
+                    }
+                }
+            });
+
+            opts.push({ divider: true });
+
+            // Pull/Build only (without starting)
+            var pullOnlyLabel = hasBuild ? 'Build' : 'Pull';
+            opts.push({
+                text: pullOnlyLabel,
+                icon: 'fa-download',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('pull', path, profiles);
+                    } else {
+                        ComposePull(path);
+                    }
+                }
+            });
+
+            // Update (pull/build and start)
+            var updateLabel = hasBuild ? 'Build & Up' : 'Pull & Up';
+            opts.push({
+                text: updateLabel,
+                icon: 'fa-cloud-download',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('update', path, profiles);
+                    } else {
+                        UpdateStack(path);
+                    }
+                }
+            });
         }
 
-        opts.push({
-            divider: true
-        });
+        opts.push({ divider: true });
 
-        // Update Stack - disabled if no updates available
-        var updateText = hasUpdates ? 'Update Stack' : 'Update Stack (no updates)';
+        // Check for Updates (always available)
         opts.push({
-            text: updateText,
-            icon: 'fa-cloud-download',
-            disabled: !hasUpdates,
+            text: 'Check for Updates',
+            icon: 'fa-search',
             action: function(e) {
                 e.preventDefault();
-                if (!hasUpdates) return;
-                if (profiles.length > 0) {
-                    showProfileSelector('update', path, profiles);
-                } else {
-                    UpdateStack(path);
-                }
+                checkStackUpdates(project);
             }
         });
 
-        opts.push({
-            divider: true
-        });
-
-        // Edit Stack
+        // Edit Stack (always available)
         opts.push({
             text: 'Edit Stack',
             icon: 'fa-edit',
@@ -4510,11 +5167,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
         });
 
-        opts.push({
-            divider: true
-        });
+        opts.push({ divider: true });
 
-        // View Logs
+        // View Logs (always available)
         opts.push({
             text: 'View Logs',
             icon: 'fa-navicon',
@@ -4524,11 +5179,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             }
         });
 
+        // View Last Cmd Log (always available)
         opts.push({
-            divider: true
+            text: 'View Last Cmd Log',
+            icon: 'fa-list-alt',
+            action: function(e) {
+                e.preventDefault();
+                ViewLastCmdLog(project, projectName);
+            }
         });
 
-        // Delete Stack (only if not running)
+        opts.push({ divider: true });
+
+        // Delete Stack
         if (!isUp) {
             opts.push({
                 text: 'Delete Stack',
@@ -4620,21 +5283,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 <HTML>
 
 <HEAD>
-    <style type="text/css">
-        .edit-stack-form .swal-footer {
-            display: table;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .edit-stack-form .swal-footer .swal-button-container {
-            display: table-row;
-        }
-
-        .edit-stack-form .swal-footer .swal-button-container .swal-button {
-            width: 150px;
-        }
-    </style>
 </HEAD>
 
 <BODY>
@@ -4665,7 +5313,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         <input type='button' value='Start All' onclick='startAllStacks();' id='startAllBtn'>
         <input type='button' value='Stop All' onclick='stopAllStacks();' id='stopAllBtn'>
         <input type='button' value='Check for Updates' onclick='checkAllUpdates();' id='checkUpdatesBtn'>
-        <input type='button' value='Update All' onclick='updateAllStacks();' id='updateAllBtn' disabled>
+        <input type='button' value='Update All' onclick='updateAllStacks();' id='updateAllBtn' disabled title='Show dialog with run-in-background checkbox, then update selected stacks'>
         <label style='margin-left:10px;cursor:pointer;vertical-align:middle;' title='When enabled, only stacks with Autostart enabled will be affected'>
             <input type='checkbox' id='autostartOnlyToggle' style='vertical-align:middle;'>
             <span style='vertical-align:middle;'>Autostart only</span>
@@ -4694,6 +5342,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             <div class="stack-actions-divider"></div>
             <button class="stack-action-item" onclick="executeStackAction('logs');">
                 <i class="fa fa-file-text-o"></i> View Logs
+            </button>
+            <button class="stack-action-item" onclick="executeStackAction('viewCmdLog');">
+                <i class="fa fa-list-alt"></i> View Last Cmd Log
             </button>
             <div class="stack-actions-divider"></div>
             <button class="stack-action-item" onclick="executeStackAction('editFiles');">
@@ -4845,16 +5496,19 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                         <div class="settings-field">
                             <label for="settings-external-compose-path">External Compose Path</label>
-                            <input type="text" id="settings-external-compose-path" placeholder="Default (uses compose file in project folder)">
+                            <input type="text" id="settings-external-compose-path" placeholder="Default (uses compose file in project folder)" data-pickroot="/" data-picktop="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
                             <div class="settings-field-help">Path to an external folder containing your compose file(s) (e.g., /mnt/user/appdata/myapp/). The folder must contain a file matching *compose*.yml. Leave empty to use the compose file stored in the project folder.</div>
+                            <div id="settings-invalid-indirect-warning" class="compose-status-danger" style="margin-top:8px;display:none;padding:8px 12px;border-radius:4px;">
+                                <span class="compose-status-danger" style="font-size:0.9em;"><i class="fa fa-exclamation-triangle"></i> <strong>Invalid external path.</strong> The path shown above is broken or the directory was not found. Correct the path and save to restore the stack, or clear it to use a local compose file instead.</span>
+                            </div>
                             <div id="settings-external-compose-info" style="margin-top:8px;display:none;">
-                                <span style="color:#c80;font-size:0.9em;"><i class="fa fa-info-circle"></i> This stack uses an external compose file. The Compose editor tab will load the file from the external path.</span>
+                                <span class="compose-status-warning" style="font-size:0.9em;"><i class="fa fa-info-circle"></i> This stack uses an external compose file. The Compose editor tab will load the file from the external path.</span>
                             </div>
                         </div>
 
                         <div class="settings-field">
                             <label for="settings-env-path">External ENV File Path</label>
-                            <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)">
+                            <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)" data-pickroot="/" data-picktop="/mnt" data-pickcloseonfile="true">
                             <div class="settings-field-help">Path to an external .env file (e.g., /mnt/user/appdata/myapp/.env). Leave empty to use the default .env file in the project folder.</div>
                         </div>
 
@@ -4866,8 +5520,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                                 <br>Leave empty to start all services. Available profiles are auto-detected from your compose file.
                             </div>
                             <div id="settings-available-profiles" style="margin-top:8px;display:none;">
-                                <span style="color:#888;font-size:0.9em;">Available profiles: </span>
-                                <span id="settings-profiles-list" style="font-family:monospace;"></span>
+                                <span class="compose-text-muted" style="font-size:0.9em;">Available profiles: </span>
+                                <span id="settings-profiles-list" style="font-family:var(--font-bitstream);"></span>
                             </div>
                         </div>
                     </div>
@@ -4899,6 +5553,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 initEditorModal();
             } catch (e) {
                 console.warn('Compose Manager: editor init error (non-fatal):', e);
+            }
+            // Attach Unraid folder/file browser to all path inputs on the page.
+            // The picker popup needs manual positioning for modals and overlay stacks.
+            if ($.fn.fileTreeAttach) {
+                var $pathInputs = $('input[data-pickroot]');
+                composeBindFileTreeInputs($pathInputs, {
+                    zIndex: 100010,
+                    minWidth: 320,
+                    addClass: true
+                });
             }
         });
 
@@ -4948,9 +5612,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         $(function() {
             (function hideComposeContainersFromDocker() {
                 if (!hideComposeFromDocker) return;
-                // In tabbed mode this doesn't make sense
-                if ($('.tabs').length) return;
-
                 function getComposeContainerNames() {
                     var names = {};
                     // Primary source: data-containers attribute on stack rows
@@ -5000,8 +5661,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                         if (composeNames[rowName.toLowerCase()]) {
                             $row.hide();
-                            // Also hide associated child/readmore rows
-                            $row.nextUntil('tr.sortable').hide();
                         }
                     });
                 }

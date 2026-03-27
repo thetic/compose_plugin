@@ -3,58 +3,121 @@
 [ -z "$COMPOSE_VERSION" ] && echo "Compose Version not set" && exit 2
 [ -z "$ACE_VERSION" ] && echo "ACE Version not set" && exit 4
 [ -z "$PKG_VERSION" ] && echo "Package Version not set" && exit 5
-tmpdir=/tmp/tmp.$(( $RANDOM * 19318203981230 + 40 ))
+tmpdir=/tmp/tmp.$((RANDOM * 19318203981230 + 40))
 version=$PKG_VERSION
 
 shopt -s extglob
+set -euo pipefail
+set +x
 
-#Install unzip build dependency
-wget --no-check-certificate https://slackware.uk/slackware/slackware64-14.2/slackware64/a/infozip-6.0-x86_64-3.txz
-upgradepkg --install-new infozip-6.0-x86_64-3.txz
+LOG_FILE=/tmp/build.log
+: > "$LOG_FILE"
 
-mkdir -p $tmpdir
+# Discover and validate CA bundle for wget in container.
+# Prefer explicit CA_CERT, then common system locations.
+get_ca_cert_path() {
+  if [[ -n "${CA_CERT:-}" && -f "$CA_CERT" ]]; then
+    echo "$CA_CERT"
+    return 0
+  fi
 
+  for candidate in "/etc/ssl/certs/ca-certificates.crt" "/etc/pki/tls/certs/ca-bundle.crt" "/etc/ssl/cert.pem"; do
+    if [[ -f "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  echo ""  # no cert found
+  return 1
+}
+
+CA_CERT=$(get_ca_cert_path || true)
+if [[ -z "$CA_CERT" ]]; then
+  echo "WARNING: No CA_CERT available; wget will fall back to --no-check-certificate (insecure)." | tee -a "$LOG_FILE"
+  CA_CERT=""
+fi
+
+run_quiet() {
+  # run the command, stream stdout/stderr to terminal and log file
+  "$@" 2>&1 | tee -a "$LOG_FILE"
+}
+
+# Note: run_quiet uses tee so log is live and stays in /tmp/build.log.
+
+wget_args() {
+  local args=("--https-only" "--secure-protocol=TLSv1_2")
+  if [[ -n "$CA_CERT" && -f "$CA_CERT" ]]; then
+    args+=("--ca-certificate=$CA_CERT")
+  else
+    args+=("--no-check-certificate")
+  fi
+  echo "${args[@]}"
+}
+
+echo "Installing unzip dependency..."
+run_quiet wget $(wget_args) https://slackware.uk/slackware/slackware64-14.2/slackware64/a/infozip-6.0-x86_64-3.txz
+run_quiet upgradepkg --install-new infozip-6.0-x86_64-3.txz
+
+echo "Creating temporary package structure at $tmpdir..."
+run_quiet mkdir -p "$tmpdir"
+
+echo "Copying source plugin files into temp structure..."
 mkdir -p $tmpdir/usr/local/emhttp/plugins/compose.manager
-cp -RT /mnt/source/compose.manager/ $tmpdir/usr/local/emhttp/plugins/compose.manager/
+run_quiet cp -RT /mnt/source/compose.manager/ $tmpdir/usr/local/emhttp/plugins/compose.manager/
 
-cd $tmpdir
+echo "Entering temp directory and setting file permissions..."
+cd $tmpdir || exit 1
 
-chmod -R +x $tmpdir/usr/local/emhttp/plugins/compose.manager/event/
-chmod -R +x $tmpdir/usr/local/emhttp/plugins/compose.manager/scripts/
-chmod -R +x $tmpdir/usr/local/emhttp/plugins/compose.manager/php/
+echo "Marking plugin scripts and PHP executable..."
+run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/event/"
+run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/scripts/"
+run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/php/"
 
-#Install the docker compose cli plugin
-wget --no-check-certificate https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64
-wget --no-check-certificate https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64.sha256
-sha256sum -c docker-compose-linux-x86_64.sha256 2>&1 | grep -q OK || exit 4
-rm docker-compose-linux-x86_64.sha256
+echo "Downloading Docker Compose CLI plugin v${COMPOSE_VERSION}..."
+run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64"
+run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64.sha256"
+run_quiet sha256sum -c docker-compose-linux-x86_64.sha256 | grep -q OK || exit 4
+run_quiet rm docker-compose-linux-x86_64.sha256
 
-mkdir -p $tmpdir/usr/lib/docker/cli-plugins/
-cp docker-compose-linux-x86_64 $tmpdir/usr/lib/docker/cli-plugins/docker-compose
-chmod -R +x $tmpdir/usr/lib/docker/cli-plugins/
-rm docker-compose-linux-x86_64
+echo "Installing Docker Compose CLI plugin v${COMPOSE_VERSION}..."
+run_quiet mkdir -p "$tmpdir/usr/lib/docker/cli-plugins/"
+run_quiet cp docker-compose-linux-x86_64 "$tmpdir/usr/lib/docker/cli-plugins/docker-compose"
+run_quiet chmod -R +x "$tmpdir/usr/lib/docker/cli-plugins/"
+run_quiet rm docker-compose-linux-x86_64
 
-#Install Ace Editor
-mkdir -p $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
-wget --no-check-certificate https://github.com/ajaxorg/ace-builds/archive/refs/tags/v${ACE_VERSION}.zip
-mkdir -p /tmp/ace
-unzip v${ACE_VERSION}.zip "ace-builds-${ACE_VERSION}/src-min-noconflict/*" -d "/tmp/ace"
-cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/!(mode-*|theme-*) $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
-cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*yaml.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
-cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*text.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
-cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/mode-sh.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
+echo "Installing Ace Editor v${ACE_VERSION}..."
+run_quiet mkdir -p "$tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/"
+run_quiet wget $(wget_args) "https://github.com/ajaxorg/ace-builds/archive/refs/tags/v${ACE_VERSION}.zip"
+run_quiet mkdir -p /tmp/ace
 
-cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*tomorrow.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
-cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*tomorrow_night.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
+echo "Unpacking Ace Editor v${ACE_VERSION}..."
+run_quiet unzip "v${ACE_VERSION}.zip" ace-builds-${ACE_VERSION}/src-min-noconflict/* -d "/tmp/ace"
 
-chmod -R +x $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
-rm -R /tmp/ace
-rm v${ACE_VERSION}.zip
+echo "Copying Ace Editor files to package structure..."
+run_quiet cp -RT "/tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict" "$tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/"
+# shellcheck disable=SC2086
+run_quiet cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*yaml.js "$tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/" >> "$LOG_FILE" 2>&1 || :
+# shellcheck disable=SC2086
+run_quiet cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*text.js "$tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/" >> "$LOG_FILE" 2>&1 || :
+# shellcheck disable=SC2086
+run_quiet cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/mode-sh.js "$tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/" >> "$LOG_FILE" 2>&1 || :
 
-# Create slack-desc for package description
-mkdir -p $tmpdir/install
+# The "Tomorrow" themes are used by default in the YAML editor, so we need to include those as well
+# shellcheck disable=SC2086
+run_quiet cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*tomorrow.js "$tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/" >> "$LOG_FILE" 2>&1 || :
+# shellcheck disable=SC2086
+run_quiet cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*tomorrow_night.js "$tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/" >> "$LOG_FILE" 2>&1 || :
+
+# Set execute permissions for Ace Editor files
+run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/"
+run_quiet rm -R /tmp/ace
+run_quiet rm "v${ACE_VERSION}.zip"
+
+echo "Creating package description (slack-desc)..."
+run_quiet mkdir -p $tmpdir/install
 cat > $tmpdir/install/slack-desc << 'EOF'
-compose.manager: Compose Manager - Docker Compose management for unRAID
+compose.manager: Compose Manager Plus - Docker Compose management for unRAID
 compose.manager:
 compose.manager: A plugin for managing Docker Compose stacks on unRAID.
 compose.manager: Provides a web UI to create, manage, and monitor your
@@ -67,15 +130,27 @@ compose.manager:
 compose.manager: https://github.com/mstrhakr/compose_plugin
 EOF
 
-makepkg -l y -c y $OUTPUT_FOLDER/compose.manager-package-${version}.txz
+# Build the package
+run_quiet makepkg -l y -c y "$OUTPUT_FOLDER/compose.manager-package-${version}.txz"
 
+# Copy build log into output folder for debugging archives
+if [ -d "$OUTPUT_FOLDER" ]; then
+  run_quiet cp "$LOG_FILE" "$OUTPUT_FOLDER/build.log" 2>/dev/null || true
+fi
+
+# Change to root
 cd /
 
-MD5=`md5sum $OUTPUT_FOLDER/compose.manager-package-${version}.txz`
+# Calculate the MD5 checksum of the package
+MD5=$(md5sum "$OUTPUT_FOLDER/compose.manager-package-${version}.txz")
 
-echo "MD5: $MD5"
+# Write release info to a file in the output folder
+{
+  echo "MD5: $MD5"
+  echo "Compose v${COMPOSE_VERSION}"
+  echo "Ace v${ACE_VERSION}"
+  echo ""
+  echo "MD5: $(echo "$MD5" | head -n1 | awk '{print $1;}')"
+} >> "$OUTPUT_FOLDER/release_info"
 
-echo "Compose v${COMPOSE_VERSION}" >> $OUTPUT_FOLDER/release_info
-echo "Ace v${ACE_VERSION}" >> $OUTPUT_FOLDER/release_info
-echo "" >> $OUTPUT_FOLDER/release_info
-echo "MD5: $(echo $MD5 | head -n1 | awk '{print $1;}')" >> $OUTPUT_FOLDER/release_info
+echo "Build log preserved at $OUTPUT_FOLDER/build.log"

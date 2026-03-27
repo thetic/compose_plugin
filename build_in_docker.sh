@@ -1,12 +1,15 @@
 #!/bin/bash
+# shellcheck disable=SC1091
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+[ -f "${SCRIPT_DIR}/versions.env" ] && source "${SCRIPT_DIR}/versions.env"
 [ -z "$COMPOSE_VERSION" ] && COMPOSE_VERSION=5.0.2
 [ -z "$ACE_VERSION" ] && ACE_VERSION=1.43.5
 docker run --rm --tmpfs /tmp \
-    -v $PWD/archive:/mnt/output:rw \
+    -v "$PWD/archive:/mnt/output:rw" \
     -e TZ="America/New_York" \
-    -e COMPOSE_VERSION=$COMPOSE_VERSION \
-    -e ACE_VERSION=$ACE_VERSION \
+    -e COMPOSE_VERSION="$COMPOSE_VERSION" \
+    -e ACE_VERSION="$ACE_VERSION" \
     -e OUTPUT_FOLDER="/mnt/output" \
-    -v $PWD/source:/mnt/source:ro \
+    -v "$PWD/source:/mnt/source:ro" \
     vbatts/slackware:latest \
-    /mnt/source/pkg_build.sh $UI_VERSION_LETTER
+    /mnt/source/pkg_build.sh "$UI_VERSION_LETTER"

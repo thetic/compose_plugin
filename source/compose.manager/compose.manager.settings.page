@@ -1,8 +1,8 @@
-Icon="cubes"
-Author="dcflachs"
-Title="Compose"
-Type="xmenu"
 Menu="Utilities"
+Icon="cubes"
+Author="mstrhakr"
+Title="Compose Manager Plus"
+Type="xmenu"
 ---
 <?php
 include "/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php";
@@ -18,13 +18,11 @@ $ui_patch_help_class = $option_patch_ui ? "hidden" : "inline_help"; // hide help
 $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc -l")) != 0;
 ?>
 <link type="text/css" rel="stylesheet" href="<? autov('/webGui/styles/jquery.switchbutton.css') ?>">
+<link type="text/css" rel="stylesheet" href="<? autov('/webGui/styles/jquery.filetree.css') ?>">
 <script src="<? autov('/webGui/javascript/jquery.switchbutton.js') ?>"></script>
+<script src="<? autov('/webGui/javascript/jquery.filetree.js') ?>" charset="utf-8"></script>
+<script src="/plugins/compose.manager/javascript/common.js" type="text/javascript"></script>
 <style>
-    <?php
-    if ($option_patch_ui) {
-        echo "#compose-tab-settings dl:nth-last-of-type(2){display:none;}";
-    }
-    ?>
 
     /* Toggle switch overrides */
     #compose-tab-settings .switch-button-background,
@@ -40,7 +38,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     /* Tab styles */
     .compose-tabs {
         display: flex;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
         margin-bottom: 20px;
     }
 
@@ -57,12 +55,12 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     .compose-tab:hover {
-        background: rgba(128, 128, 128, 0.1);
+        background: var(--dynamix-box-inner-div-border-color);
         opacity: 1;
     }
 
     .compose-tab.active {
-        border: 1px solid rgba(128, 128, 128, 0.3);
+        border: 1px solid var(--dynamix-box-inner-div-border-color);
         border-bottom: 1px solid transparent;
         background: inherit;
         font-weight: bold;
@@ -77,7 +75,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         left: 0;
         right: 0;
         height: 2px;
-        background: var(--header-background, #ff8c2f);
+        background: var(--header-background);
     }
 
     .compose-tab-content {
@@ -92,7 +90,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     #compose-tab-settings h2 {
         margin: 25px 0 15px 0;
         padding-bottom: 8px;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
         font-size: 1.2em;
         font-weight: 600;
         color: inherit;
@@ -102,22 +100,67 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         margin-top: 10px;
     }
 
+    #compose-tab-settings {
+        --compose-settings-anchor: 35%;
+    }
+
     /* Button styling */
     #compose-tab-settings .orange-button,
     #compose-tab-backup .orange-button {
-        background: linear-gradient(to bottom, #f97316 0%, #ea580c 100%);
-        border: 1px solid #c2410c;
-        color: #fff;
+        background: linear-gradient(to bottom, var(--dynamix-jquery-ui-button-background-start), var(--dynamix-jquery-ui-button-background-end));
+        border: 1px solid var(--dynamix-jquery-ui-border-color);
+        color: var(--action-primary-color);
+        font-weight: 600;
+        text-shadow: 0 0 2px rgba(0,0,0,0.45);
     }
 
     #compose-tab-settings .orange-button:hover,
     #compose-tab-backup .orange-button:hover {
-        background: linear-gradient(to bottom, #fb923c 0%, #f97316 100%);
+        background: linear-gradient(to bottom, var(--hover-button-background), var(--hover-button-background));
+        color: var(--action-primary-color);
     }
 
     #compose-tab-settings .slim-button {
         padding: 4px 12px;
         margin-left: 10px;
+    }
+
+    /* Settings action bar stays visible near bottom while scrolling */
+    #compose-tab-settings dl.settings-actions {
+        position: fixed;
+        bottom: 45px;
+        left: var(--compose-settings-anchor);
+        transform: translateX(-50%);
+        width: max-content;
+        min-width: 280px;
+        background: var(--dynamix-jquery-ui-header-background);
+        border: 2px solid var(--dynamix-tooltipster-sidetip-box-border-color);
+        box-shadow: 0 2px 10px var(--dynamix-box-inner-div-border-color);
+        padding: 15px;
+        z-index: 9999;
+        border-radius: 6px;
+        display: block;
+    }
+
+    #compose-tab-settings dl.settings-actions dd {
+        display: block;
+        flex-wrap: nowrap;
+        justify-content: center;
+        gap: 8px;
+        align-items: center;
+        margin: 0;
+    }
+
+    #compose-tab-settings dl.settings-actions dd input {
+        margin: 5px;
+        width: auto;
+        min-width: 96px;
+        padding: 10px 10px;
+        line-height: 1.2;
+    }
+
+    #compose-tab-settings form {
+        padding-bottom: 85px; /* keep content from hiding under fixed action bar */
     }
 
     /* Disabled input styling */
@@ -132,9 +175,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     #compose-tab-backup blockquote {
         margin: 5px 0 15px 0;
         padding: 8px 12px;
-        border-left: 3px solid rgba(128, 128, 128, 0.3);
+        border-left: 3px solid var(--dynamix-box-inner-div-border-color);
         font-size: 0.9em;
-        color: #888;
+        color: var(--dynamix-sb-title-text-color);
     }
 
     #compose-tab-settings blockquote p,
@@ -144,7 +187,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     #compose-tab-settings blockquote code,
     #compose-tab-backup blockquote code {
-        background: rgba(128, 128, 128, 0.15);
+        background: var(--dynamix-sb-body-bg-color);
         padding: 1px 5px;
         border-radius: 3px;
         font-size: 0.95em;
@@ -152,28 +195,29 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     /* Log viewer styles */
     #compose-log-container {
-        font-family: monospace;
+        font-family: var(--font-bitstream);
         font-size: 12px;
-        background: #1e1e1e;
-        color: #d4d4d4;
+        background: var(--background-color, var(--dynamix-sb-body-bg-color));
+        color: var(--text-color, var(--dynamix-sb-body-text-color, var(--black)));
         padding: 10px;
         border-radius: 4px;
         height: 500px;
         overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
+        border: 1px solid var(--border-color, var(--dynamix-box-inner-div-border-color));
     }
 
     #compose-log-container .log-timestamp {
-        color: #6a9955;
+        color: var(--link-text-color, var(--dynamix-sb-message-link-color));
     }
 
     #compose-log-container .log-source {
-        color: #569cd6;
+        color: var(--alt-text-color, var(--dynamix-ui-dropdownchecklist-color));
     }
 
     #compose-log-container .log-message {
-        color: #d4d4d4;
+        color: inherit;
     }
 
     .log-controls {
@@ -195,7 +239,131 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     #log-line-count {
         margin-left: auto;
-        color: #888;
+        color: var(--dynamix-sb-title-text-color);
+    }
+
+    /* Auto-Updates styles - reuse backup-section layout */
+    #compose-tab-updates .backup-section {
+        margin-bottom: 20px;
+    }
+
+    #compose-tab-updates dl:has(blockquote.inline_help)>dt {
+        cursor: help;
+    }
+
+    /* Toggle switch in updates table */
+    #compose_updates .switch-button-background {
+        margin: 0 auto;
+    }
+
+    #compose_updates .switch-button-label {
+        margin-top: 0;
+    }
+
+    #compose_updates {
+        width: 100%;
+        max-width: 700px;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    #compose_updates th {
+        text-align: left;
+        padding: 6px 8px;
+        font-weight: 600;
+        border-bottom: 2px solid var(--dynamix-box-inner-div-border-color);
+        font-size: 0.9em;
+    }
+
+    #compose_updates th:nth-child(1) {
+        width: auto;
+    }
+
+    #compose_updates th:nth-child(2) {
+        width: 120px;
+        text-align: center;
+    }
+
+    #compose_updates th:nth-child(3) {
+        width: 100px;
+    }
+
+    #compose_updates th:nth-child(4) {
+        width: 90px;
+    }
+
+    #compose_updates th:nth-child(5) {
+        width: 140px;
+    }
+
+    /* Toggle All button in header */
+    #compose_updates th .toggle-all-btn {
+        cursor: pointer;
+        font-size: 1.2em;
+        vertical-align: middle;
+        color: var(--header-background);
+    }
+
+    #compose_updates th .toggle-all-btn:hover {
+        opacity: 0.8;
+    }
+
+    #compose_updates th .toggle-label {
+        margin-left: 6px;
+        font-weight: 600;
+    }
+
+    #compose_updates td {
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
+        vertical-align: middle;
+        font-size: 0.9em;
+    }
+
+    #compose_updates td:nth-child(2) {
+        text-align: center;
+    }
+
+    #compose_updates .au-placeholder {
+        display: inline-block;
+        color: var(--dynamix-tablesorter-text-color);
+        font-style: italic;
+        min-width: 30px;
+        width: 100%;
+        text-align: center;
+    }
+
+    #compose_updates .au-schedule {
+        width: 100%;
+        padding: 4px 6px;
+    }
+
+    #compose_updates .au-time {
+        width: 100%;
+        padding: 4px 6px;
+    }
+
+    #compose_updates .au-weekday,
+    #compose_updates .au-monthday {
+        width: 100%;
+        padding: 4px 6px;
+    }
+
+    #compose_updates .au-monthday {
+        max-width: 90px;
+    }
+
+    #compose_updates tbody tr:hover {
+        background: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
+    }
+
+    /* Alternating row colors for updates table */
+    #compose_updates tbody tr:nth-child(odd) {
+        background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
+    }
+
+    #compose_updates tbody tr:nth-child(even) {
+        background-color: transparent;
     }
 
     /* Backup / Restore tab styles */
@@ -212,7 +380,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     .backup-dest-input::placeholder {
-        color: #888;
+        color: var(--dynamix-sb-title-text-color);
         opacity: 1;
     }
 
@@ -221,7 +389,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         width: 700px;
         max-width: 100%;
         overflow-y: auto;
-        border: 1px solid rgba(128, 128, 128, 0.3);
+        border: 1px solid var(--dynamix-box-inner-div-border-color);
         border-radius: 4px;
         margin: 4px 0;
         box-sizing: border-box;
@@ -236,27 +404,27 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     .backup-archive-list th {
         position: sticky;
         top: 0;
-        background: var(--body-background, #1c1b1b);
+        background: var(--body-background);
         padding: 4px 8px;
         text-align: left;
         font-size: 0.85em;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
         white-space: nowrap;
     }
 
     .backup-archive-list td {
         padding: 3px 8px;
         font-size: 0.85em;
-        border-bottom: 1px solid rgba(128, 128, 128, 0.1);
+        border-bottom: 1px solid var(--dynamix-box-inner-div-border-color);
         white-space: nowrap;
     }
 
     .backup-archive-list tr.selected {
-        background: rgba(255, 140, 47, 0.15);
+        background: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
     }
 
     .backup-archive-list tr:hover {
-        background: rgba(128, 128, 128, 0.1);
+        background: var(--dynamix-box-inner-div-border-color);
         cursor: pointer;
     }
 
@@ -265,7 +433,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         width: 700px;
         max-width: 100%;
         overflow-y: auto;
-        border: 1px solid rgba(128, 128, 128, 0.3);
+        border: 1px solid var(--dynamix-box-inner-div-border-color);
         border-radius: 4px;
         padding: 4px 8px;
         margin: 4px 0;
@@ -280,7 +448,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     .backup-stack-checklist label:hover {
-        background: rgba(128, 128, 128, 0.1);
+        background: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
     }
 
     .backup-stack-checklist input[type="checkbox"] {
@@ -300,23 +468,103 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     .backup-status.success {
         display: block;
-        background: rgba(76, 175, 80, 0.15);
-        border: 1px solid rgba(76, 175, 80, 0.4);
-        color: #4caf50;
+        background: var(--dynamix-sb-message-bg-color);
+        border: 1px solid var(--dynamix-sweet-alert-icon-bg-color);
+        color: var(--dynamix-sb-message-text-color);
     }
 
     .backup-status.error {
         display: block;
-        background: rgba(244, 67, 54, 0.15);
-        border: 1px solid rgba(244, 67, 54, 0.4);
-        color: #f44336;
+        background: var(--dynamix-sb-message-bg-color);
+        border: 1px solid var(--dynamix-sweet-alert-icon-bg-color);
+        color: var(--dynamix-sweet-alert-text-color);
     }
 
     .backup-status.info {
         display: block;
-        background: rgba(33, 150, 243, 0.15);
-        border: 1px solid rgba(33, 150, 243, 0.4);
-        color: #2196f3;
+        background: var(--dynamix-sb-message-bg-color);
+        border: 1px solid var(--dynamix-sb-title-bg-color);
+        color: var(--dynamix-sb-title-text-color);
+    }
+
+    .compose-text-muted {
+        color: var(--dynamix-sb-title-text-color);
+    }
+
+    .compose-status-warning {
+        color: var(--brand-orange);
+        font-weight: 600;
+    }
+
+    .compose-status-danger {
+        color: var(--status-error);
+    }
+
+    .compose-status-success {
+        color: var(--status-success);
+    }
+
+    .compose-status-info {
+        color: var(--dynamix-sb-title-text-color);
+    }
+
+    #aggressive-mode-wrapper {
+        --aggressive-mode-offset: calc(var(--compose-settings-anchor) - 50%);
+        padding: 12px;
+        margin-bottom: 12px;
+        position: relative;
+        isolation: isolate;
+    }
+
+    #aggressive-mode-wrapper::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        max-width: 980px;
+        margin: 0 auto;
+        border: 2px solid transparent;
+        border-radius: 10px;
+        background-color: var(--background-color);
+        transform: translateX(var(--aggressive-mode-offset));
+        transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s, transform 0.2s;
+        z-index: -1;
+        pointer-events: none;
+    }
+
+    #aggressive-mode-wrapper.aggressive-mode-active::before {
+        border: 2px solid var(--brand-orange);
+        background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color, var(--dynamix-tablesorter-tbody-row-bg-color));
+        box-shadow: 0 0 0 2px var(--brand-focus-ring, rgba(255, 136, 0, 0.22));
+    }
+
+    #aggressive-mode-warning {
+        text-align: center;
+        font-weight: bold;
+        line-height: 1.4;
+        display: none;
+        position: relative;
+        left: 0;
+        width: min(900px, 100%);
+        max-width: 900px;
+        margin: 6px auto 0;
+        padding: 10px 12px;
+        box-sizing: border-box;
+        background: var(--dynamix-tablesorter-tbody-row-bg-color, var(--background-color));
+        color: var(--text-color, var(--dynamix-tablesorter-text-color));
+        border-radius: 8px;
+        border: 1px solid var(--brand-orange);
+        transform: translateX(var(--aggressive-mode-offset));
+    }
+
+    @media (max-width: 1200px) {
+        #compose-tab-settings dl.settings-actions {
+            left: 50%;
+        }
+
+        #aggressive-mode-wrapper::before,
+        #aggressive-mode-warning {
+            transform: translateX(0);
+        }
     }
 
     .backup-actions {
@@ -327,18 +575,11 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     .backup-actions .spinner {
         display: none;
-        width: 16px;
-        height: 16px;
-        border: 2px solid rgba(128, 128, 128, 0.3);
-        border-top: 2px solid #ff8c2f;
-        border-radius: 50%;
-        animation: backup-spin 0.8s linear infinite;
+        color: var(--dynamix-sb-message-link-color);
     }
 
-    @keyframes backup-spin {
-        to {
-            transform: rotate(360deg);
-        }
+    .backup-actions .spinner.visible {
+        display: inline-block;
     }
 
     .schedule-options {
@@ -370,6 +611,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         gap: 8px;
     }
 </style>
+<script src="<? autov('/plugins/compose.manager/javascript/common.js') ?>"></script>
 <script>
     var caURL = "/plugins/compose.manager/php/exec.php";
     var skipPatchUI = <?php echo json_encode($option_patch_ui); ?>; // true when Unraid >= 6.12
@@ -432,9 +674,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
 
     function checkProjectFolder() {
         var projects_folder_not_empty = <?php echo json_encode($projects_exist); ?>;
-        var original_folder = "<?php echo $cfg['PROJECTS_FOLDER'] ?>";
+        var original_folder = <?php echo json_encode($cfg['PROJECTS_FOLDER']); ?>;
 
-        if (projects_folder_not_empty & ($(this).val() != original_folder)) {
+        if (projects_folder_not_empty && ($(this).val() != original_folder)) {
             $("#PROJECTS_FOLDER_WARNING").show();
         } else {
             $("#PROJECTS_FOLDER_WARNING").hide();
@@ -447,6 +689,22 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     $(function() {
+        // Keep the initial states to determine if a safety confirmation is needed on save
+        var origDisableActionWarnings = $('#DISABLE_ACTION_WARNINGS').is(':checked');
+        var origRunInBackgroundDefault = $('#RUN_IN_BACKGROUND_DEFAULT').is(':checked');
+
+        // Attach Unraid folder/file browser to all path inputs on settings page using shared helpers from common.js
+        // Ensure common.js is loaded before this script
+        if ($.fn.fileTreeAttach && typeof composeBindFileTreeInputs === 'function') {
+            var $pathInputs = $('input[data-pickroot]');
+            // Use zIndex 95 to keep below global fixed header, minWidth 320.
+            composeBindFileTreeInputs($pathInputs, {
+                zIndex: 95,
+                minWidth: 320,
+                addClass: false
+            });
+        }
+
         var _ignorePatchUIChange = true; // prevent change handler from firing during initialization
         $('#PROJECTS_FOLDER').on("input", null, null, checkProjectFolder);
 
@@ -464,6 +722,18 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     off_label: 'NO'
                 });
             });
+        }
+
+        function updateAggressiveModeWarning() {
+            var isAggressive = $('#DISABLE_ACTION_WARNINGS').is(':checked') && $('#RUN_IN_BACKGROUND_DEFAULT').is(':checked');
+            var $wrapper = $('#aggressive-mode-wrapper');
+            if (isAggressive) {
+                $wrapper.addClass('aggressive-mode-active');
+                $('#aggressive-mode-warning').show();
+            } else {
+                $wrapper.removeClass('aggressive-mode-active');
+                $('#aggressive-mode-warning').hide();
+            }
         }
 
 
@@ -587,7 +857,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 }
             }
         }
-        
+
         // Handle dashboard tile toggle -> disable/enable hide containers option
         function toggleExpandByDefault() {
             var stacksDefaultExpanded = $('#STACKS_DEFAULT_EXPANDED').is(':checked');
@@ -610,27 +880,52 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         }
 
         // Convert checkbox values to true/false strings before form submission
-        $('form[name="compose_manager_settings"]').on('submit', function(e) {
-            var $form = $(this);
-
+        function serializeSettingsForm($form) {
             $('.compose-toggle').each(function() {
                 var $checkbox = $(this);
                 var name = $checkbox.attr('name');
                 // Remove any existing hidden field for this setting
                 $('input[type="hidden"][name="' + name + '"]').remove();
-                // Determine the value based on the setting type
                 var value;
                 if (name === 'OUTPUTSTYLE') {
                     value = $checkbox.is(':checked') ? 'ttyd' : 'basic';
                 } else {
                     value = $checkbox.is(':checked') ? 'true' : 'false';
                 }
-                // Add hidden field with the appropriate value
                 $checkbox.before('<input type="hidden" name="' + name + '" value="' + value + '">');
-                // Remove name from checkbox so it doesn't submit
                 $checkbox.removeAttr('name');
             });
+        }
 
+        $('form[name="compose_manager_settings"]').on('submit', function(e) {
+            var $form = $(this);
+            var currentDisableActionWarnings = $('#DISABLE_ACTION_WARNINGS').is(':checked');
+            var currentRunInBackgroundDefault = $('#RUN_IN_BACKGROUND_DEFAULT').is(':checked');
+            var isCrossed = currentDisableActionWarnings && currentRunInBackgroundDefault;
+            var isOrigCrossed = origDisableActionWarnings && origRunInBackgroundDefault;
+            var eitherChanged = (currentDisableActionWarnings !== origDisableActionWarnings) || (currentRunInBackgroundDefault !== origRunInBackgroundDefault);
+
+            if (isCrossed && eitherChanged) {
+                e.preventDefault();
+                swal({
+                    title: 'Confirm aggressive mode',
+                    text: 'Both Disable action warnings and Run in background are enabled and one or both have changed. This means actions will execute immediately in background. Proceed?',
+                    type: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, apply'
+                }, function(confirmed) {
+                    if (!confirmed) {
+                        // do nothing; keep user on settings page
+                        return;
+                    }
+                    serializeSettingsForm($form);
+                    $form.off('submit');
+                    $form.submit();
+                });
+                return;
+            }
+
+            serializeSettingsForm($form);
         });
 
         // Tab switching
@@ -655,10 +950,19 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             if (tabId === 'backup') {
                 loadBackupArchives();
             }
+            // Always load updates UI when switching to updates tab
+            if (tabId === 'updates') {
+                loadUpdatesUI();
+                refreshCronStatus();
+            }
         });
 
         // On page load, initialize toggles for all tabs only once
         initSwitchToggles($('.compose-tab-content'));
+
+        // Update inline warning when the aggressive-mode toggles change
+        $('#DISABLE_ACTION_WARNINGS, #RUN_IN_BACKGROUND_DEFAULT').change(updateAggressiveModeWarning);
+        updateAggressiveModeWarning();
 
         // Apply hide containers on load and on change
         toggleHideContainers();
@@ -684,7 +988,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         // Set only the correct tab and content as active
         $('.compose-tab[data-tab="' + savedTab + '"]').addClass('active');
         $('#compose-tab-' + savedTab).addClass('active');
-        
+
         // If the default tab is backup, load the backup list immediately
         if (savedTab === 'backup') {
             loadBackupArchives();
@@ -694,6 +998,12 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         if (savedTab === 'log') {
             loadLogs();
             startLogRefresh();
+        }
+
+        // If the default tab is updates, load updates UI immediately
+        if (savedTab === 'updates') {
+            loadUpdatesUI();
+            refreshCronStatus();
         }
     });
 
@@ -716,35 +1026,30 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                         container.scrollTop = container.scrollHeight;
                     }
                 } else {
-                    $('#compose-log-container').html('<span style="color: #f44;">Error loading logs: ' + (result.message || 'Unknown error') + '</span>');
+                    $('#compose-log-container').html('<span class="compose-status-danger">Error loading logs: ' + (result.message || 'Unknown error') + '</span>');
                 }
             } catch (e) {
-                $('#compose-log-container').html('<span style="color: #f44;">Error parsing response</span>');
+                $('#compose-log-container').html('<span class="compose-status-danger">Error parsing response</span>');
             }
         });
     }
 
     function formatLogEntries(logs) {
         if (!logs || logs.length === 0) {
-            return '<span style="color: #888;">No log entries found. Enable Debug Logging in Settings to capture compose commands.</span>';
+            return '<span class="compose-text-muted">No log entries found. Enable Debug Logging in Settings to capture compose commands.</span>';
         }
 
         var html = '';
         logs.forEach(function(entry) {
             html += '<div class="log-entry">';
-            html += '<span class="log-timestamp">' + escapeHtml(entry.timestamp) + '</span> ';
-            html += '<span class="log-source">' + escapeHtml(entry.source) + '</span>: ';
-            html += '<span class="log-message">' + escapeHtml(entry.message) + '</span>';
+            html += '<span class="log-timestamp">' + composeEscapeHtml(entry.timestamp) + '</span> ';
+            html += '<span class="log-source">' + composeEscapeHtml(entry.source) + '</span>: ';
+            html += '<span class="log-message">' + composeEscapeHtml(entry.message) + '</span>';
             html += '</div>';
         });
         return html;
     }
 
-    function escapeHtml(text) {
-        var div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
     function startLogRefresh() {
         stopLogRefresh();
@@ -839,10 +1144,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var $spinner = $btn.siblings('.spinner');
         if (spinning) {
             $btn.prop('disabled', true);
-            $spinner.show();
+            $spinner.addClass('visible');
         } else {
             $btn.prop('disabled', false);
-            $spinner.hide();
+            $spinner.removeClass('visible');
         }
     }
 
@@ -875,7 +1180,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     function loadBackupArchives() {
         var dir = $('#BACKUP_DESTINATION').val() || '';
         var $list = $('#backup-archive-list');
-        $list.html('<tr><td colspan="4" style="text-align:center;padding:15px;color:#888;font-style:italic;">Loading...</td></tr>');
+        $list.html('<tr><td colspan="4" class="compose-text-muted" style="text-align:center;padding:15px;font-style:italic;">Loading...</td></tr>');
 
         $.post(caURL, {
             action: 'listBackups',
@@ -886,10 +1191,10 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 if (result.result === 'success') {
                     renderArchiveList(result.archives);
                 } else {
-                    $list.html('<tr><td colspan="4" style="text-align:center;color:#f44;">Error loading archives</td></tr>');
+                    $list.html('<tr><td colspan="4" class="compose-status-danger" style="text-align:center;">Error loading archives</td></tr>');
                 }
             } catch (e) {
-                $list.html('<tr><td colspan="4" style="text-align:center;color:#f44;">Error parsing response</td></tr>');
+                $list.html('<tr><td colspan="4" class="compose-status-danger" style="text-align:center;">Error parsing response</td></tr>');
             }
         });
     }
@@ -898,18 +1203,18 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var $list = $('#backup-archive-list');
 
         if (!archives || archives.length === 0) {
-            $list.html('<tr><td colspan="4" style="text-align:center;padding:15px;color:#888;">No backups found. Create one using the button above.</td></tr>');
+            $list.html('<tr><td colspan="4" class="compose-text-muted" style="text-align:center;padding:15px;">No backups found. Create one using the button above.</td></tr>');
             return;
         }
 
         var html = '';
         archives.forEach(function(a) {
             var date = a.modified ? new Date(a.modified).toLocaleString() : a.filename;
-            html += '<tr data-archive="' + escapeHtml(a.filename) + '" onclick="selectArchive(this)">';
+            html += '<tr data-archive="' + composeEscapeAttr(a.filename) + '" onclick="selectArchive(this)">';
             html += '<td><input type="radio" name="backup_archive_select" style="pointer-events:none;"></td>';
-            html += '<td>' + escapeHtml(a.filename) + '</td>';
-            html += '<td>' + escapeHtml(a.size) + '</td>';
-            html += '<td>' + escapeHtml(date) + '</td>';
+            html += '<td>' + composeEscapeHtml(a.filename) + '</td>';
+            html += '<td>' + composeEscapeHtml(a.size) + '</td>';
+            html += '<td>' + composeEscapeHtml(date) + '</td>';
             html += '</tr>';
         });
 
@@ -928,7 +1233,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         selectedManifest = null;
 
         // Load stack list from archive
-        $('#restore-stack-checklist').html('<span style="color:#888;font-style:italic;">Reading archive contents...</span>');
+        $('#restore-stack-checklist').html('<span class="compose-text-muted" style="font-style:italic;">Reading archive contents...</span>');
         $('#btn-restore-stacks').prop('disabled', true);
         hideBackupStatus('#restore-status');
 
@@ -944,13 +1249,13 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     selectedManifest = result;
                     renderStackChecklist(result.stacks);
                 } else {
-                    $('#restore-stack-checklist').html('<span style="color:#f44;">' + escapeHtml(result.message || 'Failed to read archive.') + '</span>');
+                    $('#restore-stack-checklist').html('<span class="compose-status-danger">' + composeEscapeHtml(result.message || 'Failed to read archive.') + '</span>');
                 }
             } catch (e) {
-                $('#restore-stack-checklist').html('<span style="color:#f44;">Error parsing response.</span>');
+                $('#restore-stack-checklist').html('<span class="compose-status-danger">Error parsing response.</span>');
             }
         }).fail(function() {
-            $('#restore-stack-checklist').html('<span style="color:#f44;">Request failed. Check server logs.</span>');
+            $('#restore-stack-checklist').html('<span class="compose-status-danger">Request failed. Check server logs.</span>');
         });
     }
 
@@ -958,15 +1263,15 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         var $checklist = $('#restore-stack-checklist');
 
         if (!stacks || stacks.length === 0) {
-            $checklist.html('<span style="color:#888;">No stacks found in this archive.</span>');
+            $checklist.html('<span class="compose-text-muted">No stacks found in this archive.</span>');
             return;
         }
 
-        var html = '<label style="font-weight:bold;border-bottom:1px solid rgba(128,128,128,0.2);padding-bottom:6px;margin-bottom:4px;">' +
+        var html = '<label style="font-weight:bold;border-bottom:1px solid var(--dynamix-box-inner-div-border-color);padding-bottom:6px;margin-bottom:4px;">' +
             '<input type="checkbox" id="restore-select-all" onchange="toggleRestoreSelectAll(this)"> Select All (' + stacks.length + ' stacks)</label>';
 
         stacks.forEach(function(stack) {
-            html += '<label><input type="checkbox" class="restore-stack-cb" value="' + escapeHtml(stack) + '" onchange="updateRestoreButton()"> ' + escapeHtml(stack) + '</label>';
+            html += '<label><input type="checkbox" class="restore-stack-cb" value="' + composeEscapeAttr(stack) + '" onchange="updateRestoreButton()"> ' + composeEscapeHtml(stack) + '</label>';
         });
 
         $checklist.html(html);
@@ -1012,7 +1317,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             showCancelButton: true,
             confirmButtonText: 'Restore',
             cancelButtonText: 'Cancel',
-            confirmButtonColor: '#f97316'
+            confirmButtonColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-jquery-ui-button-background-end')
         }, function() {
             doRestore(stacks);
         });
@@ -1055,7 +1360,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             type: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Delete',
-            confirmButtonColor: '#d33'
+            confirmButtonColor: window.getComputedStyle(document.documentElement).getPropertyValue('--dynamix-jquery-ui-button-background-start')
         }, function() {
             $.post(caURL, {
                 action: 'deleteBackup',
@@ -1066,7 +1371,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     if (result.result === 'success') {
                         selectedArchive = null;
                         selectedManifest = null;
-                        $('#restore-stack-checklist').html('<span style="text-align:center;display:block;padding:15px;color:#888;font-size:0.85em;">Select a backup archive above to see its contents.</span>');
+                        $('#restore-stack-checklist').html('<span class="compose-text-muted" style="text-align:center;display:block;padding:15px;font-size:0.85em;">Select a backup archive above to see its contents.</span>');
                         $('#btn-restore-stacks').prop('disabled', true);
                         loadBackupArchives();
                     } else {
@@ -1168,11 +1473,321 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             }
         });
     }
+
+    // ========== Per-Stack Auto-Update Functions ==========
+    function updateScheduleControls($row) {
+        var schedule = $row.find('.au-schedule').val();
+        var $weekday = $row.find('.au-weekday');
+        var $monthday = $row.find('.au-monthday');
+        var $placeholder = $row.find('.au-placeholder');
+
+        if (schedule === 'weekly') {
+            $weekday.show().prop('disabled', false);
+            $monthday.hide().prop('disabled', true);
+            $placeholder.hide();
+        } else if (schedule === 'monthly') {
+            $weekday.hide().prop('disabled', true);
+            $monthday.show().prop('disabled', false);
+            $placeholder.hide();
+        } else {
+            $weekday.hide().prop('disabled', true);
+            $monthday.hide().prop('disabled', true);
+            $placeholder.show();
+        }
+    }
+
+    function updateToggleAllState() {
+        var $checkboxes = $('#updates-tbody .au-enabled');
+        if ($checkboxes.length === 0) return;
+        var allChecked = $checkboxes.filter(':checked').length === $checkboxes.length;
+        updateToggleAllIcon(allChecked);
+    }
+
+    function updateToggleAllIcon(allOn) {
+        var $icon = $('#toggle-all-updates i');
+        if (typeof allOn === 'undefined') {
+            var $checkboxes = $('#updates-tbody .au-enabled');
+            allOn = $checkboxes.length > 0 && $checkboxes.filter(':checked').length === $checkboxes.length;
+        }
+        if (allOn) {
+            $icon.removeClass('fa-toggle-off').addClass('fa-toggle-on');
+        } else {
+            $icon.removeClass('fa-toggle-on').addClass('fa-toggle-off');
+        }
+    }
+
+    function loadUpdatesUI() {
+        $('#updates-tbody').html('<tr><td colspan="5" class="compose-text-muted" style="text-align:center;padding:12px;">_(Loading stacks...)_</td></tr>');
+        $.post('/plugins/compose.manager/php/exec.php', {
+            action: 'listProjects'
+        }, function(projects) {
+            $.post('/plugins/compose.manager/php/autoupdate.php', {
+                action: 'getConfig'
+            }, function(cfg) {
+                // Response is already parsed as JSON by jQuery due to Content-Type header
+                if (typeof cfg !== 'object' || cfg === null) cfg = {};
+                $('#updates-tbody').empty();
+                projects.forEach(function(p) {
+                    var id = p.id;
+                    var key = p.path;
+                    var entry = cfg[key] || {};
+                    var enabled = entry.enabled ? 'checked' : '';
+                    var schedule = entry.schedule || 'daily';
+                    var time = entry.time || '02:00';
+                    var weekday = (entry.weekday !== undefined) ? entry.weekday : 0;
+                    var monthday = (entry.monthday !== undefined) ? entry.monthday : 1;
+                    var row = '<tr class="sortable" data-path="' + composeEscapeAttr(key) + '">';
+                    row += '<td>' + composeEscapeHtml(p.name) + '</td>';
+                    row += '<td><input type="checkbox" class="au-enabled compose-toggle" ' + enabled + '></td>';
+                    row += '<td><select class="au-schedule"><option value="daily">_(Daily)_</option><option value="weekly">_(Weekly)_</option><option value="monthly">_(Monthly)_</option></select></td>';
+                    row += '<td><input type="time" class="au-time" value="' + composeEscapeAttr(time) + '"></td>';
+                    row += '<td>';
+                    row += '<span class="au-placeholder">---</span>';
+                    row += '<select class="au-weekday">';
+                    row += '<option value="0">_(Sunday)_</option>';
+                    row += '<option value="1">_(Monday)_</option>';
+                    row += '<option value="2">_(Tuesday)_</option>';
+                    row += '<option value="3">_(Wednesday)_</option>';
+                    row += '<option value="4">_(Thursday)_</option>';
+                    row += '<option value="5">_(Friday)_</option>';
+                    row += '<option value="6">_(Saturday)_</option>';
+                    row += '</select>';
+                    row += '<input type="number" class="au-monthday" min="1" max="31" step="1" value="' + composeEscapeAttr(String(monthday)) + '">';
+                    row += '</td>';
+                    row += '</tr>';
+                    $('#updates-tbody').append(row);
+                    var $last = $('#updates-tbody tr').last();
+                    $last.find('.au-schedule').val(schedule);
+                    $last.find('.au-weekday').val(String(weekday));
+                    $last.find('.au-monthday').val(monthday);
+                    updateScheduleControls($last);
+                });
+                // Initialize toggle switches for all au-enabled checkboxes
+                $('#updates-tbody .au-enabled').each(function() {
+                    $(this).switchButton({
+                        labels_placement: 'right',
+                        on_label: '',
+                        off_label: ''
+                    });
+                });
+                // Sync toggle-all state
+                updateToggleAllState();
+            }, 'json').fail(function() {
+                $('#updates-tbody').html('<tr><td colspan="5" class="compose-status-danger" style="text-align:center;padding:12px;">_(Failed to load auto-update settings.)_</td></tr>');
+            });
+        }, 'json').fail(function() {
+            $('#updates-tbody').html('<tr><td colspan="5" class="compose-status-danger" style="text-align:center;padding:12px;">_(Failed to load stacks.)_</td></tr>');
+        });
+    }
+
+    function refreshCronStatus() {
+        $.post('/plugins/compose.manager/php/autoupdate.php', {
+            action: 'getCronStatus'
+        }, function(r) {
+            // Response is already parsed as JSON by jQuery due to Content-Type header
+            var installed = r && r.installed;
+            var $cb = $('#AUTOUPDATE_ENABLED');
+            var currentState = $cb.is(':checked');
+            // Only update if state changed to avoid flicker
+            if (currentState !== installed) {
+                // Click the switch-button-background to toggle visual state
+                var switchBg = $cb.next('.switch-button-background')[0];
+                if (switchBg) {
+                    switchBg.click();
+                } else {
+                    // Fallback if switchButton not yet initialized
+                    $cb.prop('checked', installed);
+                }
+            }
+        }, 'json').fail(function() {
+            // On failure, leave checkbox unchecked
+            var $cb = $('#AUTOUPDATE_ENABLED');
+            if ($cb.is(':checked')) {
+                var switchBg = $cb.next('.switch-button-background')[0];
+                if (switchBg) {
+                    switchBg.click();
+                } else {
+                    $cb.prop('checked', false);
+                }
+            }
+        });
+    }
+
+    function showUpdatesStatus(message, type) {
+        var $el = $('#updates-status');
+        $el.removeClass('success error info').addClass(type).text(message).show();
+        if (type === 'success') {
+            setTimeout(function() {
+                $el.fadeOut();
+            }, 8000);
+        }
+    }
+
+    function setUpdatesSpinner(spinning) {
+        var $btn = $('#save-updates');
+        var $spinner = $('#updates-spinner');
+        if (spinning) {
+            $btn.prop('disabled', true);
+            $spinner.addClass('visible');
+        } else {
+            $btn.prop('disabled', false);
+            $spinner.removeClass('visible');
+        }
+    }
+
+    // Initialize Updates tab when it's shown
+    $(function() {
+        // Apply default schedule/time to all rows
+        $('#apply-default').on('click', function() {
+            var s = $('#default-schedule').val();
+            var t = $('#default-time').val();
+            $('#updates-tbody tr').each(function() {
+                $(this).find('.au-schedule').val(s);
+                $(this).find('.au-time').val(t);
+                updateScheduleControls($(this));
+            });
+        });
+
+        $(document).on('change', '#updates-tbody .au-schedule', function() {
+            updateScheduleControls($(this).closest('tr'));
+        });
+
+        // Toggle all auto-updates on/off
+        $(document).on('click', '#toggle-all-updates', function() {
+            var $checkboxes = $('#updates-tbody .au-enabled');
+            if ($checkboxes.length === 0) return;
+
+            // Determine if we should turn all ON or OFF (if any are off, turn all on)
+            var anyOff = $checkboxes.filter(function() {
+                return !$(this).is(':checked');
+            }).length > 0;
+            var targetState = anyOff; // true = turn all on, false = turn all off
+
+            $checkboxes.each(function() {
+                if ($(this).is(':checked') !== targetState) {
+                    // Click the switch-button-background sibling to toggle
+                    var switchBg = $(this).next('.switch-button-background')[0];
+                    if (switchBg) switchBg.click();
+                }
+            });
+
+            // Update the toggle-all icon
+            updateToggleAllIcon();
+        });
+
+        // Sync toggle-all state when individual toggles change
+        $(document).on('change', '#updates-tbody .au-enabled', function() {
+            updateToggleAllState();
+        });
+
+        // Save auto-update settings (includes scheduler enable/disable)
+        $('#save-updates').on('click', function() {
+            setUpdatesSpinner(true);
+
+            var cfg = {};
+            $('#updates-tbody tr').each(function() {
+                var path = $(this).data('path');
+                if (!path) return;
+                var enabled = $(this).find('.au-enabled').is(':checked');
+                var schedule = $(this).find('.au-schedule').val();
+                var time = $(this).find('.au-time').val();
+                var weekday = parseInt($(this).find('.au-weekday').val(), 10);
+                var monthday = parseInt($(this).find('.au-monthday').val(), 10);
+                if (isNaN(weekday) || weekday < 0 || weekday > 6) weekday = 0;
+                if (isNaN(monthday) || monthday < 1 || monthday > 31) monthday = 1;
+                cfg[path] = {
+                    enabled: enabled,
+                    schedule: schedule,
+                    time: time,
+                    weekday: weekday,
+                    monthday: monthday
+                };
+            });
+            var defaults = {
+                schedule: $('#default-schedule').val(),
+                time: $('#default-time').val()
+            };
+            cfg['defaults'] = defaults;
+
+            var schedulerEnabled = $('#AUTOUPDATE_ENABLED').is(':checked');
+
+            // Save config first
+            $.post('/plugins/compose.manager/php/autoupdate.php', {
+                action: 'saveConfig',
+                data: JSON.stringify(cfg)
+            }, function(resp) {
+                if (!resp || !resp.ok) {
+                    setUpdatesSpinner(false);
+                    showUpdatesStatus('Failed to save settings.', 'error');
+                    return;
+                }
+
+                // Then update scheduler
+                var schedulerAction = schedulerEnabled ? 'installCron' : 'removeCron';
+                $.post('/plugins/compose.manager/php/autoupdate.php', {
+                    action: schedulerAction
+                }, function(d) {
+                    setUpdatesSpinner(false);
+                    refreshCronStatus();
+                    showUpdatesStatus('Auto-update settings saved.', 'success');
+                }, 'json').fail(function() {
+                    setUpdatesSpinner(false);
+                    showUpdatesStatus('Settings saved but scheduler update failed.', 'error');
+                });
+            }, 'json').fail(function() {
+                setUpdatesSpinner(false);
+                showUpdatesStatus('Failed to save settings.', 'error');
+            });
+        });
+
+        // Run auto-update now for enabled stacks (serialized to avoid overwhelming the server)
+        $('#run-now').on('click', function() {
+            var paths = [];
+            $('#updates-tbody tr').each(function() {
+                var path = $(this).data('path');
+                var enabled = $(this).find('.au-enabled').is(':checked');
+                if (enabled && path) {
+                    paths.push(path);
+                }
+            });
+            if (paths.length === 0) {
+                swal('Info', 'No stacks are enabled for auto-update.', 'info');
+                return;
+            }
+
+            showUpdatesStatus('Running auto-update for ' + paths.length + ' stack(s)...', 'info');
+
+            var idx = 0;
+            var completed = 0;
+
+            function runNext() {
+                if (idx >= paths.length) {
+                    showUpdatesStatus('Auto-update completed for ' + completed + ' stack(s).', 'success');
+                    return;
+                }
+                var p = paths[idx++];
+                $.post('/plugins/compose.manager/php/autoupdate.php', {
+                    action: 'runNow',
+                    path: p
+                }, function(data) {
+                    completed++;
+                    runNext();
+                }, 'json').fail(function() {
+                    console.log('runNow failed for path', p);
+                    runNext();
+                });
+            }
+            runNext();
+        });
+
+        // Note: Updates tab loading is now handled by the main tab switching handler
+    });
 </script>
 
 <!-- Tab Navigation -->
 <div class="compose-tabs">
     <div class="compose-tab active" data-tab="settings"><i class="fa fa-cog fa-fw"></i> _(Settings)_</div>
+    <div class="compose-tab" data-tab="updates"><i class="fa fa-refresh fa-fw"></i> _(Updates)_</div>
     <div class="compose-tab" data-tab="backup"><i class="fa fa-archive fa-fw"></i> _(Backup / Restore)_</div>
     <div class="compose-tab" data-tab="log"><i class="fa fa-file-text-o fa-fw"></i> _(Log)_</div>
     <div class="compose-tab" data-tab="credits"><i class="fa fa-star fa-fw"></i> _(Credits)_</div>
@@ -1189,7 +1804,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         <dl>
             <dt style="cursor: help;" onclick="toggleHelp(this)">_(Compose Project Directory)_:</dt>
             <dd>
-                <input type="text" name="PROJECTS_FOLDER" id="PROJECTS_FOLDER" autocomplete="off" spellcheck="false" value="<?= $cfg['PROJECTS_FOLDER'] ?>" placeholder="_(e.g.)_ /mnt/user/appdata/compose_projects" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" required pattern="^\/(mnt\/.+\/.+)||(\/boot\/config\/plugins\/compose\.manager\/projects)$">
+                <input type="text" name="PROJECTS_FOLDER" id="PROJECTS_FOLDER" autocomplete="off" spellcheck="false" value="<?= $cfg['PROJECTS_FOLDER'] ?>" placeholder="_(e.g.)_ /mnt/user/appdata/compose_projects" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/" data-picktop="/mnt" data-pickfolders="true" required pattern="^(\/mnt\/.+\/.+|\/boot\/config\/plugins\/compose\.manager\/projects)$">
                 <a class='info nohand' id="PROJECTS_FOLDER_WARNING" onclick="HelpButton();return false;" style="display: none;">
                     <i class='fa fa-warning orb yellow-orb'></i>
                     <span style='left:18px'><strong>Projects exist that will not be moved to the new project folder.</strong></span>
@@ -1211,6 +1826,37 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 </blockquote>
             </dd>
         </dl>
+
+        <div id="aggressive-mode-wrapper">
+
+            <dl>
+                <dt style="cursor: help;" onclick="toggleHelp(this)">_(Disable action warnings/confirmations)_:</dt>
+                <dd>
+                    <input type="checkbox" name="DISABLE_ACTION_WARNINGS" id="DISABLE_ACTION_WARNINGS" class="compose-toggle" <?= ($cfg['DISABLE_ACTION_WARNINGS'] ?? 'false') == 'true' ? 'checked' : '' ?>>
+                    <blockquote class="inline_help">
+                        When enabled, Compose actions (Up/Down/Stop/Restart/Pull/Update and all-stack actions) run immediately without confirmation dialogs.
+                        Background behavior is still controlled by the Run in Background setting.
+                    </blockquote>
+                </dd>
+            </dl>
+
+            <dl>
+                <dt style="cursor: help;" onclick="toggleHelp(this)">_(Run in Background by Default)_:</dt>
+                <dd>
+                    <input type="checkbox" name="RUN_IN_BACKGROUND_DEFAULT" id="RUN_IN_BACKGROUND_DEFAULT" class="compose-toggle" <?= ($cfg['RUN_IN_BACKGROUND_DEFAULT'] ?? 'false') == 'true' ? 'checked' : '' ?>>
+                    <blockquote class="inline_help">
+                        When enabled, the <em>Run in background</em> checkbox in action dialogs (Compose Up, Down, Update, etc.) will be checked by default.<br>
+                        Background runs skip the terminal window and send an Unraid notification on completion. The output is always saved to a per-stack log file viewable via the stack's context menu.
+                    </blockquote>
+                </dd>
+            </dl>
+
+            <div id="aggressive-mode-warning">
+                <span style="font-size:0.95em;">⚠️ <strong>Warning:</strong> action confirmations are disabled and commands default to background mode. Operations execute immediately in background.</span>
+            </div>
+
+        </div>
+
 
         <dl>
             <dt style="cursor: help;" onclick="toggleHelp(this)">_(Recreate During Autostart)_:</dt>
@@ -1379,27 +2025,199 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             </dd>
         </dl>
 
+        <?php if (!$option_patch_ui): ?>
         <dl>
             <dt style="cursor: help;" onclick="toggleHelp(this)">_(Patch Docker Page)_:</dt>
             <dd>
-                <input type="checkbox" name="PATCH_UI" class="compose-toggle" <?= $cfg['PATCH_UI'] == 'true' ? 'checked' : '' ?> <?= $option_patch_ui ? 'disabled' : '' ?>>
-                <?php if ($option_patch_ui) { ?>
-                    <span style="display:inline-block;margin-left:10px;color:#888;">Not needed on Unraid 6.12+ (compose integration is built-in)</span>
-                <?php } ?>
-                <input type=<?= $ui_patch_button_type ?> value="_(Patch Now)_" onclick="patchWebui()" class="slim-button" style="margin-left:15px;">
-                <input type=<?= $ui_unpatch_button_type ?> value="_(Unpatch)_" onclick="unpatchWebui()" class="slim-button" style="margin-left:15px;">
-                <blockquote class=<?= $ui_patch_help_class ?>>
-                    <strong>(Unraid 6.11 and earlier only)</strong> Patch the Docker page to better display compose-managed containers.<br>
-                    Not needed on Unraid 6.12+ where compose integration is built-in.
+                <input type="checkbox" name="PATCH_UI" class="compose-toggle" <?= $cfg['PATCH_UI'] == 'true' ? 'checked' : '' ?> >
+                <input type="button" value="_(Patch Now)_" onclick="patchWebui()" class="slim-button" style="margin-left:15px;">
+                <input type="button" value="_(Unpatch)_" onclick="unpatchWebui()" class="slim-button" style="margin-left:15px;">
+                <blockquote class="inline_help">
+                    <strong>(Unraid 6.11 and earlier only)</strong> Patch the Docker page to better display compose-managed containers.
+                </blockquote>
+            </dd>
+        </dl>
+        <?php endif; ?>
+
+        <dl class="settings-actions">
+            <dd><input type="submit" name="#default" value="_(Default)_"><input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"></dd>
+        </dl>
+    </form>
+</div>
+
+<script>
+(function(){
+    var cookieName = 'compose_manager_settings_return';
+    function getSafeReturnPath(existingPath) {
+        if (!document.referrer || document.referrer === window.location.href) {
+            return null;
+        }
+        try {
+            var ref = new URL(document.referrer, window.location.origin);
+            if (ref.origin !== window.location.origin) return null;
+            var p = ref.pathname.replace(/\/+$/, '');
+            if (p === '' || p === '/') return '/Settings';
+
+            var allowed = [
+                '/Settings',
+                '/Plugins',
+                '/Docker',
+                '/Compose',
+                '/Dashboard',
+                '/Favorites',
+            ];
+
+            for (var i = 0; i < allowed.length; i++) {
+                var cfg = <?= json_encode($cfg); ?>;
+                var showCompose = (cfg['SHOW_COMPOSE_IN_HEADER_MENU'] || '').toString().toLowerCase();
+                composeClientDebug('Checking referrer path ' + ref.pathname + ' against allowed path ' + allowed[i] + ' with showCompose=' + showCompose, null, 'debug', 'daemon');
+                if (existingPath && existingPath.toLowerCase() === '/docker' && showCompose === 'true') {
+                    composeClientDebug('Referrer is /Docker and showCompose is true, returning /Compose', null, 'warn', 'daemon');
+                    return '/Compose' + (ref.search || '');
+                } else if (existingPath && existingPath.toLowerCase() === '/compose' && showCompose === 'false') {
+                    composeClientDebug('Referrer is /Compose and showCompose is false, returning /Docker', null, 'warn', 'daemon');
+                    return '/Docker' + (ref.search || '');
+                }
+                if (p.toLowerCase() === allowed[i].toLowerCase()) {
+                    composeClientDebug('Referrer matches allowed path ' + allowed[i], null, 'debug', 'daemon');
+                    return ref.pathname + (ref.search || '');
+                }
+                if (allowed[i].toLowerCase().endsWith('/') && p.toLowerCase().startsWith(allowed[i].toLowerCase())) {
+                    composeClientDebug('Referrer matches allowed path prefix ' + allowed[i], null, 'debug', 'daemon');
+                    return ref.pathname + (ref.search || '');
+                }
+            }
+            composeClientDebug('Referrer path ' + ref.pathname + ' does not match any allowed paths', null, 'warn', 'daemon');
+            return null;
+        } catch (e) {
+            composeClientDebug('Error parsing referrer URL: ' + e.message, null, 'error', 'daemon');
+            return null;
+        }
+    }
+
+    var existingPath = $.cookie(cookieName);
+    var safePath = getSafeReturnPath(existingPath);
+    var returnPath;
+
+    if (safePath) {
+        returnPath = safePath;
+    } else if (existingPath) {
+        returnPath = existingPath;
+    } else {
+        returnPath = '/Settings';
+    }
+
+    $.cookie(cookieName, returnPath, { path: '/' });
+
+    var originalDone = window.done;
+    window.done = function(k) {
+        var saved = $.cookie(cookieName);
+        if (saved) {
+            $.removeCookie(cookieName, { path: '/' });
+            if (saved !== '' && saved !== window.location.pathname) {
+                location.replace(saved);
+                return;
+            }
+        }
+        if (typeof originalDone === 'function') {
+            originalDone(k);
+        } else if (k) {
+            var url = location.pathname.split('/');
+            var path = '/' + url[1];
+            for (var i = 2; i < url.length; i++) {
+                if (url[i] == k) break;
+                path += '/' + url[i];
+            }
+            $.removeCookie('one');
+            location.replace(path);
+        } else {
+            $.removeCookie('one');
+            location.replace('/Settings');
+        }
+    };
+})();
+</script>
+
+<!-- Updates Tab -->
+<div id="compose-tab-updates" class="compose-tab-content">
+
+    <!-- Auto-Update Settings Section -->
+    <div class="backup-section">
+        <div class="title"><span class="left"><i class="fa fa-clock-o icon"></i>_(Auto-Update Settings)_</span></div>
+
+        <dl>
+            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Enable Auto-Updates)_:</dt>
+            <dd>
+                <input type="checkbox" id="AUTOUPDATE_ENABLED" class="compose-toggle">
+                <blockquote class="inline_help">
+                    Enable the auto-update scheduler. When enabled, stacks with auto-update turned on<br>
+                    will be checked every 15 minutes and updated according to their individual schedules.
+                </blockquote>
+            </dd>
+        </dl>
+
+        <dl>
+            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Default Schedule)_:</dt>
+            <dd>
+                <div class="schedule-options">
+                    <label>_(Frequency)_:
+                        <select id="default-schedule">
+                            <option value="daily">_(Daily)_</option>
+                            <option value="weekly">_(Weekly)_</option>
+                            <option value="monthly">_(Monthly)_</option>
+                        </select>
+                    </label>
+                    <label>_(Time)_:
+                        <input type="time" id="default-time" value="02:00">
+                    </label>
+                    <input type="button" id="apply-default" class="slim-button" value="_(Apply to All Stacks)_">
+                </div>
+                <blockquote class="inline_help">
+                    Set the default schedule for new stacks. Use "Apply to All Stacks" to apply this<br>
+                    schedule to all existing stacks in the table below.
                 </blockquote>
             </dd>
         </dl>
 
         <dl>
             <dt>&nbsp;</dt>
-            <dd><input type="submit" name="#default" value="_(Default)_"><input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"></dd>
+            <dd>
+                <div class="backup-actions">
+                    <input type="button" id="save-updates" value="_(Save Settings)_" class="orange-button">
+                    <input type="button" id="run-now" value="_(Update Now)_" title="_(Run auto-update now for all enabled stacks)_">
+                    <i class="fa fa-spinner fa-spin spinner" id="updates-spinner"></i>
+                </div>
+                <div id="updates-status" class="backup-status"></div>
+            </dd>
         </dl>
-    </form>
+    </div>
+
+    <!-- Per-Stack Configuration Section -->
+    <div class="backup-section">
+        <div class="title"><span class="left"><i class="fa fa-cubes icon"></i>_(Stack Configuration)_</span></div>
+
+        <dl>
+            <dt>_(Stacks)_:</dt>
+            <dd>
+                <table id="compose_updates" class="tablesorter shift">
+                    <thead>
+                        <tr>
+                            <th>_(Stack)_</th>
+                            <th><span id="toggle-all-updates" class="toggle-all-btn" title="_(Toggle all auto-updates on/off)_"><i class="fa fa-toggle-off"></i></span><span class="toggle-label">_(Auto-Update)_</span></th>
+                            <th>_(Schedule)_</th>
+                            <th>_(Time)_</th>
+                            <th>_(On)_</th>
+                        </tr>
+                    </thead>
+                    <tbody id="updates-tbody">
+                        <tr>
+                            <td colspan="5" class="compose-text-muted" style="text-align:center;padding:12px;">_(Loading stacks...)_</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </dd>
+        </dl>
+    </div>
 </div>
 
 <!-- Backup / Restore Tab -->
@@ -1416,7 +2234,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                     value="<?= $cfg['BACKUP_DESTINATION'] ?? '' ?>"
                     placeholder="/boot/config/plugins/compose.manager/backups"
                     class="backup-dest-input"
-                    data-pickroot="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
+                    data-pickroot="/" data-picktop="/boot/config/plugins/compose.manager" data-pickfolders="true" data-pickcloseonfile="true">
                 <blockquote class="inline_help">
                     Path where backup archives will be stored.<br>
                     Leave blank to use the default: <code>/boot/config/plugins/compose.manager/backups</code>
@@ -1479,7 +2297,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 <div class="backup-actions">
                     <input type="button" id="btn-save-backup-settings" value="_(Save Settings)_" onclick="saveBackupSettings()" class="orange-button">
                     <input type="button" id="btn-create-backup" value="_(Backup Now)_" onclick="createBackupNow()">
-                    <div class="spinner"></div>
+                    <i class="fa fa-spinner fa-spin spinner"></i>
                 </div>
                 <div id="backup-create-status" class="backup-status"></div>
             </dd>
@@ -1505,7 +2323,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                         </thead>
                         <tbody id="backup-archive-list">
                             <tr>
-                                <td colspan="4" style="text-align:center;padding:15px;color:#888;">_(Switch to this tab to load backup list.)_</td>
+                                <td colspan="4" class="compose-text-muted" style="text-align:center;padding:15px;">_(Switch to this tab to load backup list.)_</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1523,7 +2341,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             <dt>_(Stacks in Archive)_:</dt>
             <dd>
                 <div class="backup-stack-checklist" id="restore-stack-checklist">
-                    <span style="text-align:center;display:block;padding:15px;color:#888;font-size:0.85em;">_(Select a backup archive above to see its contents.)_</span>
+                    <span class="compose-text-muted" style="text-align:center;display:block;padding:15px;font-size:0.85em;">_(Select a backup archive above to see its contents.)_</span>
                 </div>
             </dd>
         </dl>
@@ -1533,8 +2351,8 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             <dd>
                 <div class="backup-actions">
                     <input type="button" id="btn-restore-stacks" value="_(Restore Selected)_" onclick="restoreSelectedStacks()" class="orange-button" disabled>
-                    <div class="spinner"></div>
-                    <span id="restore-selected-count" style="color:#888;"></span>
+                    <i class="fa fa-spinner fa-spin spinner"></i>
+                    <span id="restore-selected-count" class="compose-text-muted"></span>
                 </div>
                 <div id="restore-status" class="backup-status"></div>
             </dd>
@@ -1575,7 +2393,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         <span id="log-line-count"></span>
     </div>
     <div id="compose-log-container">
-        <span style="color: #888;">_(Loading logs...)_</span>
+        <span class="compose-text-muted">_(Loading logs...)_</span>
     </div>
     <blockquote class="inline_help">
         <p>This log shows compose-related entries from the system log.</p>
@@ -1633,44 +2451,44 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     </div>
 
     <script>
-        (function(){
+        (function() {
             var repo = 'mstrhakr/compose_plugin';
             var perPage = 10;
             var $list = $('#contributors-list');
 
-            function showFallback(){
-                $list.html('<p>Unable to load contributors. View on GitHub: <a href="https://github.com/'+repo+'/graphs/contributors" target="_blank" rel="noopener noreferrer">'+repo+' — Contributors</a></p>');
+            function showFallback() {
+                $list.html('<p>Unable to load contributors. View on GitHub: <a href="https://github.com/' + repo + '/graphs/contributors" target="_blank" rel="noopener noreferrer">' + repo + ' — Contributors</a></p>');
             }
 
             // Use GitHub public contributors API (CORS-enabled). Limit to top N contributors.
-            $.getJSON('https://api.github.com/repos/'+repo+'/contributors?per_page='+perPage)
-            .done(function(data){
-                if(!data || !data.length){
-                    $list.html('<p>No contributors found. <a href="https://github.com/'+repo+'/graphs/contributors" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>');
-                    return;
-                }
+            $.getJSON('https://api.github.com/repos/' + repo + '/contributors?per_page=' + perPage)
+                .done(function(data) {
+                    if (!data || !data.length) {
+                        $list.html('<p>No contributors found. <a href="https://github.com/' + repo + '/graphs/contributors" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>');
+                        return;
+                    }
 
-                var html = '<ul style="list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:10px;">';
-                data.forEach(function(u){
-                    var login = u.login || '';
-                    var url = u.html_url || 'https://github.com/'+login;
-                    var avatar = (u.avatar_url || '').replace(/&s=\d+/,'') + '&s=96';
-                    var contributions = u.contributions || 0;
+                    var html = '<ul style="list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:10px;">';
+                    data.forEach(function(u) {
+                        var login = u.login || '';
+                        var url = u.html_url || 'https://github.com/' + login;
+                        var avatar = (u.avatar_url || '').replace(/&s=\d+/, '') + '&s=96';
+                        var contributions = u.contributions || 0;
 
-                    html += '<li style="width:220px;border:1px solid rgba(0,0,0,0.06);padding:8px;border-radius:6px;display:flex;gap:8px;align-items:center;">'
-                        + '<a href="'+url+'" target="_blank" rel="noopener noreferrer"><img src="'+avatar+'" alt="'+login+'" style="width:48px;height:48px;border-radius:4px;"></a>'
-                        + '<div style="flex:1;min-width:0;overflow:hidden;">'
-                            + '<a href="'+url+'" target="_blank" rel="noopener noreferrer" style="font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+login+'</a>'
-                            + '<span style="color:#666;font-size:0.9em;">'+contributions+' contributions</span>'
-                        + '</div>'
-                    + '</li>';
+                        html += '<li style="width:220px;border:1px solid var(--dynamix-box-inner-div-border-color);padding:8px;border-radius:6px;display:flex;gap:8px;align-items:center;">' +
+                            '<a href="' + url + '" target="_blank" rel="noopener noreferrer"><img src="' + avatar + '" alt="' + login + '" style="width:48px;height:48px;border-radius:4px;"></a>' +
+                            '<div style="flex:1;min-width:0;overflow:hidden;">' +
+                            '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + login + '</a>' +
+                            '<span style="color: var(--dynamix-sb-title-text-color);font-size:0.9em;">' + contributions + ' contributions</span>' +
+                            '</div>' +
+                            '</li>';
+                    });
+                    html += '</ul>';
+                    $list.html(html);
+                })
+                .fail(function() {
+                    showFallback();
                 });
-                html += '</ul>';
-                $list.html(html);
-            })
-            .fail(function(){
-                showFallback();
-            });
         })();
     </script>
 

@@ -45,26 +45,31 @@ function normalizeImageForUpdateCheck($image) {
  * Sanitize a stack name to create a safe folder name.
  * Removes special characters that could cause issues in paths.
  *
+ * @deprecated Moved to util.php. This stub remains for backward compatibility.
+ *
  * @param string $stackName The stack name to sanitize
  * @return string The sanitized folder name
  */
-function sanitizeFolderName($stackName) {
-    $folderName = str_replace('"', "", $stackName);
-    $folderName = str_replace("'", "", $folderName);
-    $folderName = str_replace("&", "", $folderName);
-    $folderName = str_replace("(", "", $folderName);
-    $folderName = str_replace(")", "", $folderName);
-    $folderName = preg_replace("/ {2,}/", " ", $folderName);
-    $folderName = preg_replace("/\s/", "_", $folderName);
-    return $folderName;
+if (!function_exists('sanitizeFolderName')) {
+    function sanitizeFolderName($stackName) {
+        $folderName = str_replace('"', "", $stackName);
+        $folderName = str_replace("'", "", $folderName);
+        $folderName = str_replace("&", "", $folderName);
+        $folderName = str_replace("(", "", $folderName);
+        $folderName = str_replace(")", "", $folderName);
+        $folderName = preg_replace("/ {2,}/", " ", $folderName);
+        $folderName = preg_replace("/\s/", "_", $folderName);
+        return $folderName;
+    }
 }
 
 /**
  * Build the common compose CLI arguments for a stack.
  *
+ * @deprecated Use StackInfo::fromProject($composeRoot, $stack)->buildComposeArgs() instead.
+ *
  * Resolves the project name, compose/override files, and env-file flag
- * from the stack directory.  Used by getStackContainers, checkStackUpdates,
- * and checkAllStacksUpdates to avoid duplicating this logic.
+ * from the stack directory.  Thin wrapper around StackInfo for backward compatibility.
  *
  * @param string $stack  Stack directory name (basename under $compose_root)
  * @return array{projectName: string, files: string, envFile: string}
@@ -72,28 +77,6 @@ function sanitizeFolderName($stackName) {
 function buildComposeArgs(string $stack): array {
     global $compose_root;
 
-    // Project name is always the sanitized directory basename, matching the -p flag in echoComposeCommand
-    // The name file is the display name only and must not affect Docker project identity
-    $projectName = sanitizeStr($stack);
-
-    $basePath = getPath("$compose_root/$stack");
-    $composeFile = findComposeFile($basePath) ?: "$basePath/compose.yaml";
-
-    $files = "-f " . escapeshellarg($composeFile);
-
-    // Resolve override selection: prefer correctly-named indirect override if present,
-    // otherwise use project override (migrating legacy project override when applicable).
     require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
-    $overridePath = OverrideInfo::fromStack($compose_root, $stack)->getOverridePath();
-    $files .= " -f " . escapeshellarg($overridePath);
-
-    $envFile = "";
-    if (is_file("$compose_root/$stack/envpath")) {
-        $envPath = trim(file_get_contents("$compose_root/$stack/envpath"));
-        if (is_file($envPath)) {
-            $envFile = "--env-file " . escapeshellarg($envPath);
-        }
-    }
-
-    return ['projectName' => $projectName, 'files' => $files, 'envFile' => $envFile];
+    return StackInfo::fromProject($compose_root, $stack)->buildComposeArgs();
 }

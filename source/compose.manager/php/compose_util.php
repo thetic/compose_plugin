@@ -9,24 +9,26 @@
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/compose_util_functions.php");
 
+$background = isset($_POST['background']) && $_POST['background'] == '1';
+
 switch ($_POST['action']) {
     case 'composeUp':
-        echoComposeCommand('up');
+        echoComposeCommand('up', false, $background);
         break;
     case 'composeUpRecreate':
-        echoComposeCommand('up', true);
+        echoComposeCommand('up', true, $background);
         break;
     case 'composeDown':
-        echoComposeCommand('down');
+        echoComposeCommand('down', false, $background);
         break;
     case 'composeUpPullBuild':
-        echoComposeCommand('update');
+        echoComposeCommand('update', false, $background);
         break;
     case 'composePull':
-        echoComposeCommand('pull');
+        echoComposeCommand('pull', false, $background);
         break;
     case 'composeStop':
-        echoComposeCommand('stop');
+        echoComposeCommand('stop', false, $background);
         break;
     case 'composeLogs':
         echoComposeCommand('logs');
@@ -34,19 +36,19 @@ switch ($_POST['action']) {
     case 'composeUpMultiple':
         $paths = isset($_POST['paths']) ? json_decode($_POST['paths'], true) : array();
         if (!empty($paths)) {
-            echoComposeCommandMultiple('up', $paths);
+            echoComposeCommandMultiple('up', $paths, $background);
         }
         break;
     case 'composeDownMultiple':
         $paths = isset($_POST['paths']) ? json_decode($_POST['paths'], true) : array();
         if (!empty($paths)) {
-            echoComposeCommandMultiple('down', $paths);
+            echoComposeCommandMultiple('down', $paths, $background);
         }
         break;
     case 'composeUpdateMultiple':
         $paths = isset($_POST['paths']) ? json_decode($_POST['paths'], true) : array();
         if (!empty($paths)) {
-            echoComposeCommandMultiple('update', $paths);
+            echoComposeCommandMultiple('update', $paths, $background);
         }
         break;
     case 'containerConsole':
@@ -79,10 +81,7 @@ switch ($_POST['action']) {
             exec($cmd);
 
             // Wait for ttyd to create the socket (up to 2s) to avoid 502
-            for ($i = 0; $i < 20; $i++) {
-                if (file_exists("/var/tmp/$socketName.sock")) break;
-                usleep(100000);
-            }
+            waitForTtydSocket($socketName);
 
             // /logterminal/ proxies to /var/tmp/<name>.sock with full
             // bidirectional WebSocket — writable because we omit -R.
@@ -107,10 +106,7 @@ switch ($_POST['action']) {
             exec($cmd);
 
             // Wait for ttyd to create the socket (up to 2s) to avoid 502
-            for ($i = 0; $i < 20; $i++) {
-                if (file_exists("/var/tmp/$socketName.sock")) break;
-                usleep(100000);
-            }
+            waitForTtydSocket($socketName);
 
             echo "/plugins/compose.manager/php/show_ttyd.php?socket=" . urlencode($socketName);
         }
