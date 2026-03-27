@@ -88,7 +88,7 @@ The built-in editor provides multiple tabs for managing your compose stack:
 
 Install via the **Community Applications** plugin in unRAID by going to the 'Apps' tab and searching for 'Compose Manager Plus'.
 
-![Screenshot of both Compose Manager Plus listings in the CA App Store](docs\images\ca-app-store.png)
+![Screenshot of both Compose Manager Plus listings in the CA App Store](docs/images/ca-app-store.png)
 
 Once there you will see both the main release and the beta release available to be installed. See below if you have Compose Manager already.
 
