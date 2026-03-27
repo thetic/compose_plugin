@@ -52,7 +52,11 @@ The built-in editor provides multiple tabs for managing your compose stack:
 
 ## Installation
 
-Install via the **Community Applications** plugin in unRAID, or manually by navigating to:
+Install via the **Community Applications** plugin in unRAID
+
+-- or --
+
+Install manually by navigating to:
 
 **Plugins → Install Plugin** and entering the plugin URL:
 
