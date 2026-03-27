@@ -156,7 +156,41 @@ class StackInfoTest extends TestCase
         $this->assertFileDoesNotExist("$stackDir/indirect.invalid");
     }
 
-    // ===========================================
+    public function testHiddenDirectoryIndirectNotFlaggedAsTraversal(): void
+    {
+        $stack = 'hidden-dir-indirect';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        $hiddenTarget = $this->tempRoot . '/.appdata/compose';
+        mkdir($stackDir);
+        mkdir($hiddenTarget, 0755, true);
+        file_put_contents("$stackDir/indirect", $hiddenTarget);
+        file_put_contents("$hiddenTarget/compose.yaml", "services:\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertTrue($info->isIndirect);
+        $this->assertSame($hiddenTarget, $info->composeSource);
+        $this->assertFileDoesNotExist("$stackDir/indirect.invalid");
+    }
+
+    public function testAllFromRootSkipsInvalidWithoutCrashing(): void
+    {
+        // Create a valid stack
+        $validDir = $this->tempRoot . '/valid-stack';
+        mkdir($validDir);
+        file_put_contents("$validDir/compose.yaml", "services:\n");
+
+        // Create an invalid directory (no compose file, no indirect)
+        $invalidDir = $this->tempRoot . '/not-a-stack';
+        mkdir($invalidDir);
+
+        $stacks = \StackInfo::allFromRoot($this->tempRoot);
+
+        $this->assertCount(1, $stacks);
+        $this->assertSame('valid-stack', $stacks[0]->projectFolder);
+    }
+
+    // =========================================== 
     // Compose File Resolution Tests
     // ===========================================
 

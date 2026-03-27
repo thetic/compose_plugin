@@ -172,7 +172,7 @@ class Path
 
     public static function hasTraversal(string $path): bool
     {
-        return strpos($path, '/.') !== false || strpos($path, './') !== false;
+        return strpos($path, '/..') !== false || strpos($path, '../') !== false;
     }
 }
 
@@ -1590,31 +1590,37 @@ class StackInfo
     private function updatePath(string $newProject): void
     {
         if ($newProject !== self::sanitizeProjectString($newProject)) {
-            $logmsg = "Attempted to update project name to '$newProject' which is not a valid sanitized project string.";
-            clientDebug($logmsg, ['attemptedName' => $newProject], 'daemon', 'error');
-            throw new \Exception($logmsg);
+            clientDebug("Attempted to update project name to '$newProject' which is not a valid sanitized project string.", ['attemptedName' => $newProject], 'daemon', 'error');
+            return;
         }
         if (self::hasRunningContainers($this->projectFolder)) {
             clientDebug("Cannot rename project folder from '$this->projectFolder' to '$newProject' because containers are currently running under the old project name.", ['old' => $this->projectFolder, 'new' => $newProject], 'daemon', 'warning');
             return;
         }
+        $oldProject = $this->projectFolder;
         $oldPath = $this->path;
         $this->projectFolder = $newProject;
         $this->setPath();
-        if (strtolower($oldPath) === strtolower($this->path)) {
+        if ($oldPath === $this->path) {
             return;
         }
         // Attempt to rename the directory to match the new project name
         if (is_dir($oldPath)) {
             if (!is_dir($this->path)) {
-                @rename($oldPath, $this->path);
-                clientDebug("Renamed project directory from '$oldPath' to '$this->path' to match sanitized project name '$newProject'.", ['from' => $oldPath, 'to' => $this->path], 'daemon', 'info');
+                if (@rename($oldPath, $this->path)) {
+                    clientDebug("Renamed project directory from '$oldPath' to '$this->path' to match sanitized project name '$newProject'.", ['from' => $oldPath, 'to' => $this->path], 'daemon', 'info');
+                    return;
+                }
+                clientDebug("Failed to rename project directory from '$oldPath' to '$this->path'. Keeping original path.", ['oldPath' => $oldPath, 'newPath' => $this->path], 'daemon', 'warning');
             } else {
                 clientDebug("Did not rename project directory from '$oldPath' to '$this->path' because the new path already exists.", ['oldPath' => $oldPath, 'newPath' => $this->path], 'daemon', 'warning');
             }
         } else {
-            clientDebug("Did not rename project directory from '$oldPath' to '$this->path' because the old path does not exist or the new path already exists. Manual intervention may be needed to resolve this.", ['oldPath' => $oldPath, 'newPath' => $this->path], 'daemon', 'warning');
+            clientDebug("Did not rename project directory from '$oldPath' to '$this->path' because the old path does not exist.", ['oldPath' => $oldPath, 'newPath' => $this->path], 'daemon', 'warning');
         }
+        // Revert to original path if rename didn't succeed, so the stack can still load
+        $this->projectFolder = $oldProject;
+        $this->setPath();
     }
 
 
@@ -1781,8 +1787,9 @@ class StackInfo
         foreach ($projects as $project) {
             try {
                 $stacks[] = self::fromProject($composeRoot, $project);
-            } catch (\RuntimeException $e) {
-                // skip non-stack directories
+            } catch (\Throwable $e) {
+                // skip non-stack directories (no compose file, invalid structure, etc.)
+                clientDebug("[allFromRoot] Skipped project '$project': " . $e->getMessage(), null, 'daemon', 'debug');
             }
         }
 
