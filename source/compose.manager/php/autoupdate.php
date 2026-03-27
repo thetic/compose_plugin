@@ -65,13 +65,15 @@ switch ($action) {
         echo json_encode(array('ok' => true));
         break;
     case 'installCron':
+        // Cron runs with a minimal PATH; use absolute PHP binary to avoid exit status 127.
+        $phpBinary = '/usr/bin/php';
         $cronDirEnv = getenv('COMPOSE_MANAGER_CRON_DIR');
         // If a cron directory is explicitly provided (e.g., in tests), keep legacy file-based behavior.
         if ($cronDirEnv !== false && $cronDirEnv !== '') {
             $cronDir = $cronDirEnv;
             $cronFile = rtrim($cronDir, '/') . '/compose_manager_autoupdate';
             $runner = escapeshellarg($plugin_root . "php/autoupdate_runner.php");
-            $line = "*/15 * * * * root php " . $runner . " >/dev/null 2>&1\n";
+            $line = "*/15 * * * * root " . escapeshellarg($phpBinary) . " " . $runner . " >/dev/null 2>&1\n";
             // ensure cron directory exists for test environments
             $cdir = dirname($cronFile);
             if (!is_dir($cdir)) mkdir($cdir, 0755, true);
@@ -85,7 +87,7 @@ switch ($action) {
             // Default behavior: use plugin-owned cron file and let update_cron sync it to the system
             $pluginCron = '/boot/config/plugins/compose.manager/compose.manager.cron';
             $runner = escapeshellarg($plugin_root . "php/autoupdate_runner.php");
-            $line = "*/15 * * * * root php " . $runner . " >/dev/null 2>&1\n";
+            $line = "*/15 * * * * root " . escapeshellarg($phpBinary) . " " . $runner . " >/dev/null 2>&1\n";
 
             if (!is_dir(dirname($pluginCron))) {
                 @mkdir(dirname($pluginCron), 0755, true);

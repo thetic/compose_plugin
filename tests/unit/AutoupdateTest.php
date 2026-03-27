@@ -99,4 +99,34 @@ class AutoupdateTest extends TestCase
         unlink($tmp . '/docker-compose.yml'); rmdir($tmp);
         $_POST = [];
     }
+
+    public function testInstallCronUsesAbsolutePhpBinary(): void
+    {
+        global $plugin_root;
+
+        $cronFile = $plugin_root . 'compose_manager_autoupdate';
+        if (is_file($cronFile)) {
+            unlink($cronFile);
+        }
+
+        $_POST = ['action' => 'installCron'];
+        ob_start();
+        include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php';
+        $out = ob_get_clean();
+
+        $response = json_decode($out, true);
+        $this->assertIsArray($response);
+        $this->assertArrayHasKey('ok', $response);
+        $this->assertTrue((bool)$response['ok']);
+        $this->assertFileExists($cronFile);
+
+        $line = file_get_contents($cronFile);
+        $this->assertStringContainsString('/usr/bin/php', $line);
+        $this->assertStringContainsString('autoupdate_runner.php', $line);
+
+        if (is_file($cronFile)) {
+            unlink($cronFile);
+        }
+        $_POST = [];
+    }
 }
