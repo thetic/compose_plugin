@@ -488,15 +488,16 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
     }
 
     .compose-status-warning {
-        color: var(--dynamix-ui-dropdownchecklist-color);
+        color: var(--brand-orange);
+        font-weight: 600;
     }
 
     .compose-status-danger {
-        color: var(--dynamix-sweet-alert-text-color);
+        color: var(--status-error);
     }
 
     .compose-status-success {
-        color: var(--dynamix-sb-message-text-color);
+        color: var(--status-success);
     }
 
     .compose-status-info {

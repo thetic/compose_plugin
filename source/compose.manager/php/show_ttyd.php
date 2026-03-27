@@ -15,11 +15,29 @@ $version = parse_ini_file("/etc/unraid-version");
 if (version_compare($version['version'], "6.10.0", "<")) {
     $url = "/dockerterminal/$socket_name/";
 }
+
+// Read active Dynamix theme — iframe pages don't inherit parent PHP vars.
+$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+require_once "$docroot/webGui/include/Wrappers.php";
+extract(parse_plugin_cfg('dynamix', true));
+$themeFile = 'gray';
+if (!empty($display['theme'])) {
+    $themeName = strtok($display['theme'], '-');
+    $themePath = "$docroot/webGui/styles/themes/{$themeName}.css";
+    if (is_file($themePath)) {
+        $themeFile = $themeName;
+    }
+}
+$themeSheetJson = json_encode("themes/{$themeFile}.css");
 ?>
 <!DOCTYPE html>
-<html style="height:100%;margin:0;padding:0;background:var(--background-color, var(--dynamix-sb-body-bg-color))">
+<html class="Theme--<?= htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') ?>" style="height:100%;margin:0;padding:0">
 
 <head>
+    <link rel="stylesheet" href="/webGui/styles/default-base.css">
+    <link rel="stylesheet" href="/webGui/styles/default-dynamix.css">
+    <link rel="stylesheet" href="/webGui/styles/default-color-palette.css">
+    <link rel="stylesheet" href="/webGui/styles/themes/<?= htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') ?>.css">
     <style>
         html,
         body {
@@ -27,7 +45,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             padding: 0;
             height: 100%;
             overflow: hidden;
-            background: var(--background-color, var(--dynamix-sb-body-bg-color));
+            background: var(--background-color);
             box-sizing: border-box
         }
 
@@ -47,82 +65,37 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             text-align: center;
             padding: 10px 0;
             margin: 0;
-            background: var(--background-color, var(--dynamix-sb-body-bg-color));
+            background: transparent;
             flex-shrink: 0
-        }
-
-        p.centered button {
-            margin: 0
-        }
-
-        input[type=button],
-        input[type=reset],
-        input[type=submit],
-        button,
-        button[type=button],
-        a.button {
-            font-family: clear-sans;
-            font-size: 1.1rem;
-            font-weight: bold;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            padding: 9px 18px;
-            text-decoration: none;
-            white-space: nowrap;
-            cursor: pointer;
-            outline: none;
-            border-radius: 4px;
-            border: 0;
-            color: var(--dynamix-jquery-ui-button-text-color);
-            background: linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end));
-            background-size: 100% 2px, 100% 2px, 2px 100%, 2px 100%
-        }
-
-        input:hover[type=button],
-        input:hover[type=reset],
-        input:hover[type=submit],
-        button:hover,
-        button:hover[type=button],
-        a.button:hover {
-            color: var(--dynamix-sb-message-text-color);
-            background: linear-gradient(90deg, var(--dynamix-jquery-ui-button-background-start) 0, var(--dynamix-jquery-ui-button-background-end));
         }
     </style>
 </head>
 
-<body style="background:var(--dynamix-sb-body-bg-color)">
+<body>
     <iframe id="ttyd-frame" src="<?= $url ?>"></iframe>
     <?php if ($showDone): ?>
-        <p class="centered"><button class="logLine" type="button" id="done-btn">Done</button></p>
+        <p class="centered ui-dialog-buttonpane">
+            <span class="ui-dialog-buttonset">
+                <button type="button" id="done-btn">Done</button>
+            </span>
+        </p>
     <?php endif; ?>
     <script>
         <?php if ($showDone): ?>
-            // Done button: close Shadowbox (if inside one) or close the window
             document.getElementById('done-btn').addEventListener('click', function() {
-                try {
-                    top.Shadowbox.close();
-                } catch (e) {}
-                try {
-                    window.close();
-                } catch (e) {}
+                try { top.Shadowbox.close(); } catch (e) {}
+                try { window.close(); } catch (e) {}
             });
         <?php endif; ?>
 
-        // Aggressively suppress "Leave Site?" prompt from ttyd's beforeunload handler.
-        // ttyd sets window.onbeforeunload after its JS loads, so we must continuously
-        // override it using an interval + Object.defineProperty on the iframe window.
+        // Suppress "Leave Site?" prompt from ttyd's beforeunload handler.
         function suppressBeforeUnload(win) {
             try {
-                // Prevent ttyd from setting onbeforeunload by making it a no-op property
                 Object.defineProperty(win, 'onbeforeunload', {
-                    get: function() {
-                        return null;
-                    },
-                    set: function() {
-                        /* swallow ttyd's assignment */ },
+                    get: function() { return null; },
+                    set: function() { /* swallow ttyd's assignment */ },
                     configurable: true
                 });
-                // Also catch addEventListener-based handlers
                 var origAdd = win.addEventListener.bind(win);
                 win.addEventListener = function(type, fn, opts) {
                     if (type === 'beforeunload') return;
@@ -131,32 +104,39 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             } catch (e) {}
         }
 
-        // Apply to parent window
         suppressBeforeUnload(window);
 
-        // Darken ALL Shadowbox container elements so no white peeks through.
-        // Uses CSS injection with !important to override Shadowbox's own styles.
+        // Hide Shadowbox info bar in parent — prevents it from pushing content
+        // past the wrapper's border-radius and showing a mismatched strip.
         try {
-            var doc = top.document;
-            if (!doc.getElementById('compose-sb-dark')) {
-                var s = doc.createElement('style');
-                s.id = 'compose-sb-dark';
-                s.textContent = '#sb-body,#sb-body-inner,#sb-player,#sb-info,#sb-info-inner,#sb-loading,#sb-wrapper-inner{background:var(--dynamix-sb-body-bg-color) !important;border-color:var(--dynamix-box-inner-div-border-color) !important}';
-                doc.head.appendChild(s);
-            }
+            var sbInfo = top.document.getElementById('sb-info');
+            if (sbInfo) sbInfo.style.display = 'none';
         } catch (e) {}
 
-        // Apply inside iframe once loaded (same-origin)
         var frame = document.getElementById('ttyd-frame');
         frame.addEventListener('load', function() {
             try {
                 suppressBeforeUnload(frame.contentWindow);
-                // Inject scrollbar styling
                 var fdoc = frame.contentDocument || frame.contentWindow.document;
+
+                // Add Theme-- class so .Theme--<name>:root variable blocks apply
+                fdoc.documentElement.classList.add('Theme--' + <?= json_encode($themeFile) ?>);
+
+                // Inject theme CSS into ttyd iframe so vars are defined there too
+                var sheets = ['default-base.css', 'default-dynamix.css', 'default-color-palette.css', <?= $themeSheetJson ?>];
+                sheets.forEach(function(sheet) {
+                    var link = fdoc.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.href = '/webGui/styles/' + sheet;
+                    fdoc.head.appendChild(link);
+                });
+
+                // Scrollbar styling for ttyd iframe
                 var s = fdoc.createElement('style');
                 s.textContent = '::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:var(--dynamix-box-inner-div-border-color);border-radius:4px}::-webkit-scrollbar-thumb{background:var(--dynamix-box-text-color);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:var(--dynamix-sb-title-text-color)}';
                 fdoc.head.appendChild(s);
-                // Force ttyd to recalculate terminal dimensions (fixes initial right margin)
+
+                // Recalculate terminal dimensions after CSS settles
                 setTimeout(function() {
                     frame.contentWindow.dispatchEvent(new Event('resize'));
                 }, 200);
