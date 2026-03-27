@@ -28,15 +28,10 @@
 >
 
 <CHANGES>
-###2026.03.27-dev.1500
-- Bug Fixes (main): wrap unguarded JSON.parse calls in try-catch to handle non-JSON server errors
-- Bug Fixes (ui): destroy readmore before re-applying to prevent nested wrappers on re-render
-- Bug Fixes (autoupdate): add 30-min timeout to docker compose pull/up to prevent indefinite hangs
-- Bug Fixes (settings): escape PROJECTS_FOLDER via json_encode and use logical AND instead of bitwise AND
-- Bug Fixes (autoupdate): add exclusive file lock to prevent concurrent runner data corruption
-- Bug Fixes (security): reject addStack when realpath fails instead of falling back to unsanitized input
+###2026.03.27-dev.1632
+- Bug Fixes (docs): correct image path separator in README for CA App Store screenshot
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.27-dev.1500)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.27-dev.1632)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
