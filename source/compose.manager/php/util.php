@@ -1009,15 +1009,12 @@ class StackInfo
         $this->projectFolder = $projectFolder;
         $this->setPath();
 
-        // Ensure the folder name is a valid project string.
-        // Only rename if the folder itself needs sanitization (e.g. contains uppercase, spaces, etc).
-        $sanitizedFolder = self::sanitizeProjectString($this->projectFolder);
-        if ($sanitizedFolder !== $this->projectFolder) {
-            $this->updatePath($sanitizedFolder);
+        if (!is_dir($this->path)) {
+            throw new \RuntimeException("Project path is not a directory: $this->path");
         }
 
-        // Always store the sanitized project name for Docker Compose -p flag,
-        // even if the folder rename didn't happen (running containers, permissions, etc).
+        // projectFolder is the directory name as-is; projectName is the sanitized
+        // version used for the Docker Compose -p flag. We never rename the folder.
         $this->projectName = self::sanitizeProjectString($this->projectFolder);
 
         // Resolve display name from metadata (or default to folder name).
@@ -1585,49 +1582,6 @@ class StackInfo
     {
         $this->path = $this->composeRoot . '/' . $this->projectFolder;
     }
-
-    /**
-     * Update the project name and path, used when sanitization changes the project name.
-     *
-     * @param string $newProject The new project name to set
-     * @return void
-     */
-    private function updatePath(string $newProject): void
-    {
-        if ($newProject !== self::sanitizeProjectString($newProject)) {
-            clientDebug("Attempted to update project name to '$newProject' which is not a valid sanitized project string.", ['attemptedName' => $newProject], 'daemon', 'error');
-            return;
-        }
-        if (self::hasRunningContainers($this->projectFolder) || self::hasRunningContainers($newProject)) {
-            clientDebug("Cannot rename project folder from '$this->projectFolder' to '$newProject' because containers are currently running.", ['old' => $this->projectFolder, 'new' => $newProject], 'daemon', 'warning');
-            return;
-        }
-        $oldProject = $this->projectFolder;
-        $oldPath = $this->path;
-        $this->projectFolder = $newProject;
-        $this->setPath();
-        if ($oldPath === $this->path) {
-            return;
-        }
-        // Attempt to rename the directory to match the new project name
-        if (is_dir($oldPath)) {
-            if (!is_dir($this->path)) {
-                if (@rename($oldPath, $this->path)) {
-                    clientDebug("Renamed project directory from '$oldPath' to '$this->path' to match sanitized project name '$newProject'.", ['from' => $oldPath, 'to' => $this->path], 'daemon', 'info');
-                    return;
-                }
-                clientDebug("Failed to rename project directory from '$oldPath' to '$this->path'. Keeping original path.", ['oldPath' => $oldPath, 'newPath' => $this->path], 'daemon', 'warning');
-            } else {
-                clientDebug("Did not rename project directory from '$oldPath' to '$this->path' because the new path already exists.", ['oldPath' => $oldPath, 'newPath' => $this->path], 'daemon', 'warning');
-            }
-        } else {
-            clientDebug("Did not rename project directory from '$oldPath' to '$this->path' because the old path does not exist.", ['oldPath' => $oldPath, 'newPath' => $this->path], 'daemon', 'warning');
-        }
-        // Revert to original path if rename didn't succeed, so the stack can still load
-        $this->projectFolder = $oldProject;
-        $this->setPath();
-    }
-
 
     // ---------------------------------------------------------------
     // Static factory: create a new stack on disk

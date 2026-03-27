@@ -54,9 +54,10 @@ class StackInfoTest extends TestCase
         file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
-        // Canonical project identity: lowercased, special chars replaced, underscores collapsed.
-        $this->assertSame('my_stack_v2', $info->projectFolder);
-        $this->assertSame('my_stack_v2', $info->projectName);
+    // projectFolder preserves the raw directory name; projectName is the sanitized version
+    // (lowercased, special chars replaced with underscore, consecutive underscores collapsed).
+    $this->assertSame('My Stack (v2)', $info->projectFolder);
+    $this->assertSame('my_stack_v2', $info->projectName);
     }
 
     public function testProjectNameAlwaysLowercaseEvenWhenFolderUnrenamed(): void
