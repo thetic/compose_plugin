@@ -1514,25 +1514,6 @@ class StackInfo
     // ---------------------------------------------------------------
     // Internal helpers
     // ---------------------------------------------------------------
-
-    /**
-     * Check whether any containers are currently running for the given compose project name.
-     *
-     * Used before renaming a project folder to avoid breaking a running stack.
-     * Returns false in test environments where docker is not available.
-     *
-     * @param string $projectName The compose project name (folder basename)
-     * @return bool True if at least one container is running under this project
-     */
-    private static function hasRunningContainers(string $projectName): bool
-    {
-        if (defined('PHPUNIT_COMPOSER_INSTALL') || defined('__PHPUNIT_PHAR__')) {
-            return false;
-        }
-        $output = shell_exec('docker ps -q --filter ' . escapeshellarg('label=com.docker.compose.project=' . $projectName) . ' 2>/dev/null');
-        return !empty(trim($output ?? ''));
-    }
-
     /**
      * Read a metadata file from the stack directory (lazy, cached).
      *
