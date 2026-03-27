@@ -189,3 +189,80 @@ test_setup() {
     ! echo "file not found" | grep -qiE "$retry_pattern" || true
     ! echo "permission denied" | grep -qiE "$retry_pattern" || true
 }
+
+# ============================================================
+# Project Name Sanitizer Tests
+# ============================================================
+
+sanitize_project_name() {
+    local value="$1"
+    echo "$value" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/_/g; s/__*/_/g; s/^[_-]*//; s/[_-]*$//'
+}
+
+assert_sanitize_case() {
+    local input="$1"
+    local expected="$2"
+    local result
+
+    result=$(sanitize_project_name "$input")
+    if [ "$result" != "$expected" ]; then
+        echo "sanitize failed for input '$input': expected '$expected', got '$result'"
+        return 1
+    fi
+}
+
+@test "project name sanitizer basic identity and casing cases" {
+    while IFS='|' read -r input expected; do
+        assert_sanitize_case "$input" "$expected" || return 1
+    done <<'EOF'
+mystack|mystack
+MyStack|mystack
+Stack2026v1|stack2026v1
+my_stack-v2|my_stack-v2
+EOF
+}
+
+@test "project name sanitizer separator normalization cases" {
+    while IFS='|' read -r input expected; do
+        assert_sanitize_case "$input" "$expected" || return 1
+    done <<'EOF'
+My Stack.v2|my_stack_v2
+my___stack|my_stack
+-_My Stack_-|my_stack
+.My Stack.|my_stack
+---___...|
+EOF
+}
+
+@test "project name sanitizer special character conversion cases" {
+    while IFS='|' read -r input expected; do
+        assert_sanitize_case "$input" "$expected" || return 1
+    done <<'EOF'
+Stack+Name@Home|stack_name_home
+Stack#Prod!Beta|stack_prod_beta
+name(2026)[prod]{x}|name_2026_prod_x
+app,backup;v2=final|app_backup_v2_final
+foo$bar^baz&qux|foo_bar_baz_qux
+rock'n'roll|rock_n_roll
+EOF
+}
+
+@test "project name sanitizer real world compose stack names" {
+    while IFS='|' read -r input expected; do
+        assert_sanitize_case "$input" "$expected" || return 1
+    done <<'EOF'
+Immich|immich
+Keycloak|keycloak
+Meshcentral|meshcentral
+Nginx_Proxy_Manager|nginx_proxy_manager
+PrintMaster|printmaster
+Servarr|servarr
+SnipeIT|snipeit
+Unifi_Network_Application|unifi_network_application
+Vaultwarden|vaultwarden
+WordPress|wordpress
+audplexus|audplexus
+netdata|netdata
+Audible_Plex Downloader|audible_plex_downloader
+EOF
+}
