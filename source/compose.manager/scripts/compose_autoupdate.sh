@@ -7,6 +7,7 @@ PROJECT_NAME="$2"
 NOTIFY="/usr/local/emhttp/webGui/scripts/notify"
 LOCK_DIR="/var/run/compose.manager"
 LOCK_TIMEOUT=${COMPOSE_LOCK_TIMEOUT:-30}
+COMMAND_TIMEOUT=${COMPOSE_COMMAND_TIMEOUT:-1800}
 
 if [ -z "$COMPOSE_FILE" ] || [ -z "$PROJECT_NAME" ]; then
   echo "Usage: $0 <compose_yml_path> <project_name>"
@@ -57,8 +58,8 @@ get_image_digests() {
 
 OLD_DIGESTS=$(get_image_digests || true)
 
-# Run pull and capture output
-docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull > "$OUT" 2>&1 || RC=$?
+# Run pull and capture output (timeout prevents indefinite hangs on unresponsive registries)
+timeout "$COMMAND_TIMEOUT" docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull > "$OUT" 2>&1 || RC=$?
 
 if [ "$RC" -ne 0 ]; then
   ERRMSG="Auto-update pull failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
@@ -76,7 +77,7 @@ NEW_DIGESTS=$(get_image_digests || true)
 # Compare digests to determine if any images were updated
 if [ "$OLD_DIGESTS" != "$NEW_DIGESTS" ]; then
   # Images changed - run recreate/up
-  docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d >> "$OUT" 2>&1 || RC=$?
+  timeout "$COMMAND_TIMEOUT" docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d >> "$OUT" 2>&1 || RC=$?
   
   if [ "$RC" -ne 0 ]; then
     ERRMSG="Auto-update up failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
