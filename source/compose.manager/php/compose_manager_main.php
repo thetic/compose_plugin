@@ -1848,12 +1848,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                                 var message = "";
                                 var type = "error";
                                 if (data) {
-                                    var response = JSON.parse(data);
-                                    if (response.result == "success") {
-                                        title = "Success";
+                                    try {
+                                        var response = JSON.parse(data);
+                                        if (response.result == "success") {
+                                            title = "Success";
+                                        }
+                                        message = response.message;
+                                        type = response.result;
+                                    } catch (e) {
+                                        message = "Invalid server response.";
                                     }
-                                    message = response.message;
-                                    type = response.result;
                                 }
                                 swal({
                                     title: title,
@@ -3355,10 +3359,15 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             script: project
         }).then(function(data) {
             if (data) {
-                var response = JSON.parse(data);
-                var desc = (response.content || '').replace(/<br>/g, '\n');
-                $('#settings-description').val(desc);
-                editorModal.originalSettings['description'] = desc;
+                try {
+                    var response = JSON.parse(data);
+                    var desc = (response.content || '').replace(/<br>/g, '\n');
+                    $('#settings-description').val(desc);
+                    editorModal.originalSettings['description'] = desc;
+                } catch (e) {
+                    $('#settings-description').val('');
+                    editorModal.originalSettings['description'] = '';
+                }
             }
         }).fail(function() {
             $('#settings-description').val('');
@@ -3371,7 +3380,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             script: project
         }).then(function(data) {
             if (data) {
+                try {
                 var response = JSON.parse(data);
+                } catch (e) { return; }
                 if (response.result === 'success') {
                     // Icon URL
                     var iconUrl = response.iconUrl || '';
@@ -3909,7 +3920,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     externalComposePath: externalComposePath
                 }).then(function(data) {
                     if (data) {
-                        var response = JSON.parse(data);
+                        try {
+                            var response = JSON.parse(data);
+                        } catch (e) {
+                            if (saveErrors) saveErrors.push('Invalid server response when saving settings.');
+                            return false;
+                        }
                         if (response.result === 'success') {
                             editorModal.originalSettings['icon-url'] = iconUrl;
                             editorModal.originalSettings['webui-url'] = webuiUrl;
@@ -4858,7 +4874,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             containerAction: action
         }, function(data) {
             if (data) {
-                var response = JSON.parse(data);
+                try {
+                    var response = JSON.parse(data);
+                } catch (e) { return; }
                 if (response.result === 'success') {
                     // Refresh the container details
                     // Also mark the parent stack for a compose-list reload so the stack-level
