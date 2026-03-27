@@ -4423,16 +4423,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             html += '<td class="cm-advanced ct-col-tag-cell"><span class="ct-tag" title="' + composeEscapeAttr(imageTag) + '">' + composeEscapeHtml(imageTag) + '</span></td>';
 
             // Network
-            html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + networkNames.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + networkNames.map(composeEscapeHtml).join('<br>') + '</span></td>';
 
             // Container IP
-            html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(composeEscapeHtml).join('<br>') + '</span></td>';
 
             // Container Port
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.map(composeEscapeHtml).join('<br>') + '</span></td>';
 
             // LAN IP:Port
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + lanPorts.map(escapeHtml).join('<br>') + '</span></td>';
+            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + lanPorts.map(composeEscapeHtml).join('<br>') + '</span></td>';
 
             html += '</tr>';
         });
