@@ -34,6 +34,10 @@
 .PARAMETER AceVersion
 	Ace Editor version to pass through to build.ps1.
 
+.PARAMETER Quick
+	Skip package build/install and deploy tracked staged+unstaged file changes
+	from source/compose.manager directly to the remote live emhttp plugin folder.
+
 .EXAMPLE
 	./deploy.ps1 -Version "2026.03.07-dev" -RemoteHost "saturn"
 
@@ -45,6 +49,9 @@
 
 .EXAMPLE
 	./deploy.ps1 -PackagePath ".\archive\compose.manager-package-2026.03.07-dev.1234.txz" -RemoteHost "saturn"
+
+.EXAMPLE
+	./deploy.ps1 -Quick -RemoteHost "saturn"
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
@@ -57,7 +64,8 @@ param(
 	[string]$PackagePath,
 	[switch]$SkipBuild,
 	[string]$ComposeVersion = "5.0.2",
-	[string]$AceVersion = "1.43.5"
+	[string]$AceVersion = "1.43.5",
+	[switch]$Quick
 )
 
 $ErrorActionPreference = "Stop"
@@ -65,6 +73,116 @@ Set-StrictMode -Version Latest
 
 $scriptDir = $PSScriptRoot
 $archiveDir = Join-Path $scriptDir "archive"
+
+if ($Quick) {
+	if ([string]::IsNullOrWhiteSpace($RemoteHost)) {
+		throw "RemoteHost is required when using -Quick"
+	}
+
+	if ($Version -or $Dev -or $PackagePath -or $SkipBuild) {
+		Write-Host "Quick mode ignores -Version, -Dev, -PackagePath, and -SkipBuild." -ForegroundColor DarkYellow
+	}
+
+	$remoteTarget = "$User@$RemoteHost"
+	$quickPrefix = "source/compose.manager/"
+	$quickRemoteRoot = "/usr/local/emhttp/plugins/compose.manager"
+
+	$repoRoot = (& git -C $scriptDir rev-parse --show-toplevel 2>$null)
+	if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($repoRoot)) {
+		throw "Unable to resolve git repository root from $scriptDir"
+	}
+	$repoRoot = $repoRoot.Trim()
+
+	Write-Host "Quick deploy mode (tracked staged+unstaged files):" -ForegroundColor Green
+	Write-Host "  Repo root     : $repoRoot" -ForegroundColor Gray
+	Write-Host "  Source scope  : source/compose.manager" -ForegroundColor Gray
+	Write-Host "  Remote root   : $quickRemoteRoot" -ForegroundColor Gray
+	Write-Host "  Remote target : $remoteTarget" -ForegroundColor Gray
+
+	$statUnstaged = (& git -C $repoRoot diff --stat -- source/compose.manager)
+	$statStaged = (& git -C $repoRoot diff --cached --stat -- source/compose.manager)
+	if ($statUnstaged) {
+		Write-Host "Unstaged tracked diff:" -ForegroundColor Cyan
+		$statUnstaged | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+	}
+	if ($statStaged) {
+		Write-Host "Staged tracked diff:" -ForegroundColor Cyan
+		$statStaged | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+	}
+
+	$unstagedTracked = @(& git -C $repoRoot diff --name-only --diff-filter=ACMR -- source/compose.manager)
+	$stagedTracked = @(& git -C $repoRoot diff --cached --name-only --diff-filter=ACMR -- source/compose.manager)
+
+	$changedFiles = @($unstagedTracked + $stagedTracked |
+		Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+		Sort-Object -Unique)
+
+	if (-not $changedFiles -or $changedFiles.Count -eq 0) {
+		Write-Host "No tracked staged/unstaged file changes found under source/compose.manager." -ForegroundColor Yellow
+		return @{
+			Host = $RemoteHost
+			User = $User
+			Quick = $true
+			FileCount = 0
+			Files = @()
+			WhatIf = [bool]$WhatIfPreference
+		}
+	}
+
+	Write-Host "Files queued for quick sync ($($changedFiles.Count)):" -ForegroundColor Green
+	$changedFiles | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+
+	$syncedFiles = @()
+	foreach ($relativePath in $changedFiles) {
+		if (-not $relativePath.StartsWith($quickPrefix, [System.StringComparison]::Ordinal)) {
+			continue
+		}
+
+		$subPath = $relativePath.Substring($quickPrefix.Length)
+		if ([string]::IsNullOrWhiteSpace($subPath)) {
+			continue
+		}
+
+		$localPath = Join-Path $repoRoot ($relativePath -replace '/', [IO.Path]::DirectorySeparatorChar)
+		if (-not (Test-Path -Path $localPath -PathType Leaf)) {
+			Write-Host "Skipping missing local file: $relativePath" -ForegroundColor DarkYellow
+			continue
+		}
+
+		$remoteFile = "$quickRemoteRoot/$subPath"
+		$remoteParent = ($remoteFile -replace '/[^/]+$','')
+
+		$syncAction = "Upload changed file via SCP"
+		if ($PSCmdlet.ShouldProcess("$remoteTarget`:$remoteFile", $syncAction)) {
+			ssh -- "$remoteTarget" "mkdir -p '$remoteParent'"
+			if ($LASTEXITCODE -ne 0) {
+				throw "Failed to create remote directory $remoteParent (exit code $LASTEXITCODE)"
+			}
+
+			scp -- "$localPath" "$remoteTarget`:$remoteFile"
+			if ($LASTEXITCODE -ne 0) {
+				throw "Failed to upload $relativePath to $remoteFile (exit code $LASTEXITCODE)"
+			}
+		}
+
+		$syncedFiles += $relativePath
+	}
+
+	if ($WhatIfPreference) {
+		Write-Host "WhatIf simulation complete (quick mode)." -ForegroundColor Green
+	} else {
+		Write-Host "Quick deployment complete." -ForegroundColor Green
+	}
+
+	return @{
+		Host = $RemoteHost
+		User = $User
+		Quick = $true
+		FileCount = $syncedFiles.Count
+		Files = $syncedFiles
+		WhatIf = [bool]$WhatIfPreference
+	}
+}
 
 # Generate dev version with timestamp if -Dev flag is used
 if ($Dev) {
