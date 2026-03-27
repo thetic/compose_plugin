@@ -36,7 +36,12 @@ switch ($_POST['action']) {
         // Validate indirect path (HTTP-boundary security check)
         $indirect = isset($_POST['stackPath']) ? trim($_POST['stackPath']) : '';
         if ($indirect !== '') {
-            $realIndirect = realpath(dirname($indirect)) ?: $indirect;
+            $realIndirect = realpath(dirname($indirect));
+            if ($realIndirect === false) {
+                clientDebug("[stack] Failed to create stack: Could not resolve indirect path: $indirect", null, 'daemon', 'error');
+                echo json_encode(['result' => 'error', 'message' => 'Stack path is invalid or does not exist.']);
+                break;
+            }
             if (strpos($realIndirect, '/mnt/') !== 0 && strpos($realIndirect, '/boot/config/') !== 0) {
                 clientDebug("[stack] Failed to create stack: Invalid indirect path: $indirect", null, 'daemon', 'error');
                 echo json_encode(['result' => 'error', 'message' => 'Stack path must be under /mnt/ or /boot/config/.']);
