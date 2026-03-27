@@ -8,8 +8,22 @@ require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
 $autofile = getAutoUpdateConfigFilePath();
 if (!is_file($autofile)) exit(0);
 
-$data = json_decode(file_get_contents($autofile), true);
-if (!is_array($data)) exit(0);
+// Acquire exclusive lock on the config file to prevent concurrent runner instances
+// from reading/writing simultaneously (cron can overlap if updates take > 15 min)
+$lockHandle = fopen($autofile, 'c+');
+if (!$lockHandle || !flock($lockHandle, LOCK_EX | LOCK_NB)) {
+    // Another runner instance is active — skip this cycle
+    if ($lockHandle) fclose($lockHandle);
+    exit(0);
+}
+
+$raw = stream_get_contents($lockHandle);
+$data = json_decode($raw, true);
+if (!is_array($data)) {
+    flock($lockHandle, LOCK_UN);
+    fclose($lockHandle);
+    exit(0);
+}
 
 // Set timezone from /etc/timezone if available, otherwise use system default
 $timezoneFile = '/etc/timezone';
@@ -107,5 +121,11 @@ foreach ($data as $path => $entry) {
 
 // Save updated last_run timestamps if any were modified
 if ($dataModified) {
-    file_put_contents($autofile, json_encode($data, JSON_PRETTY_PRINT));
+    ftruncate($lockHandle, 0);
+    rewind($lockHandle);
+    fwrite($lockHandle, json_encode($data, JSON_PRETTY_PRINT));
+    fflush($lockHandle);
 }
+
+flock($lockHandle, LOCK_UN);
+fclose($lockHandle);
