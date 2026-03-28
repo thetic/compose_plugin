@@ -618,6 +618,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 wrap: true
             });
 
+            // Disable workers to avoid loading worker-yaml.js / worker-sh.js —
+            // we already validate YAML client-side via js-yaml
+            editor.getSession().setUseWorker(false);
+
             // Set mode based on type
             if (type === 'env') {
                 editor.getSession().setMode('ace/mode/sh');
