@@ -2,7 +2,7 @@
 # Automatic release tagging on merge to main or dev
 #
 # When code is pushed to main or dev (typically via a merged PR), this workflow:
-# 1. Generates a date-based version tag (vYYYY.MM.DD for stable, vYYYY.MM.DD-dev.HHMM for beta)
+# 1. Generates a date-based version tag (vYYYY.MM.DD for stable, vYYYY.MM.DD.HHMM for beta)
 # 2. Updates the PLG changelog with categorized commit notes
 # 3. Pushes the tag, then calls build.yml via workflow_call to build and release
 #
@@ -86,16 +86,16 @@ jobs:
           DATE_VERSION=$(date +%Y.%m.%d)
 
           if [[ "$BRANCH" == "dev" ]]; then
-            # Beta: v2026.03.15-dev.HHMM (America/Detroit) — always unique
+            # Beta: v2026.03.15.HHMM (America/Detroit) — always unique
             TIME_STAMP=$(date +%H%M)
-            NEW_TAG="v${DATE_VERSION}-dev.${TIME_STAMP}"
+            NEW_TAG="v${DATE_VERSION}.${TIME_STAMP}"
             echo "is_beta=true" >> $GITHUB_OUTPUT
           else
             # Stable: v2026.03.15, then v2026.03.15a, v2026.03.15b, ...
             BASE_TAG="v${DATE_VERSION}"
 
-            # Find existing stable tags for today (exclude -dev)
-            EXISTING=$(git tag -l "${BASE_TAG}*" | grep -v '\-dev' | sort || true)
+            # Find existing stable tags for today (exclude beta HHMM tags)
+            EXISTING=$(git tag -l "${BASE_TAG}*" | grep -vP '^v\d{4}\.\d{2}\.\d{2}\.\d{4}' | sort || true)
 
             if [[ -z "$EXISTING" ]]; then
               NEW_TAG="$BASE_TAG"
@@ -135,7 +135,7 @@ jobs:
           if [[ "$IS_BETA" == "true" ]]; then
             LAST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
           else
-            LAST_TAG=$(git tag -l 'v*' | grep -v '\-dev' | sort -V | tail -1)
+            LAST_TAG=$(git tag -l 'v*' | grep -vP '^v\d{4}\.\d{2}\.\d{2}\.\d{4}' | sort -V | tail -1)
           fi
 
           if [[ -n "$LAST_TAG" ]]; then
@@ -219,7 +219,7 @@ jobs:
             if [[ -n "$PR_NUMBER" ]]; then
               NOTES+="- [PR #${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER})"$'\n'
             fi
-            LATEST_STABLE=$(git tag -l 'v*' | grep -v '\-dev' | sort -V | tail -1)
+            LATEST_STABLE=$(git tag -l 'v*' | grep -vP '^v\d{4}\.\d{2}\.\d{2}\.\d{4}' | sort -V | tail -1)
             if [[ -n "$LATEST_STABLE" ]]; then
               NOTES+="- [beta release diff](https://github.com/${{ github.repository }}/compare/${LATEST_STABLE}...${NEW_TAG})"$'\n'
             fi

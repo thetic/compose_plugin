@@ -14,7 +14,7 @@
 #
 # Tag format:
 # - Stable: vYYYY.MM.DD or vYYYY.MM.DDa
-# - Beta:   vYYYY.MM.DD-dev.HHMM
+# - Beta:   vYYYY.MM.DD.HHMM
 
 name: Build & Release Plugin
 
@@ -25,13 +25,13 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: "The full tag name (e.g., v2026.03.15-dev.1234)"
+        description: "The full tag name (e.g., v2026.03.15.1234)"
         required: true
         type: string
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (e.g., 2026.02.01 or 2026.02.01-dev) - leave empty for test build"
+        description: "Version to build (e.g., 2026.02.01 or 2026.02.01.1430) - leave empty for test build"
         required: false
         default: ""
 
@@ -39,7 +39,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: build-${{ inputs.tag && (contains(inputs.tag, '-dev') && 'dev' || 'main') || github.ref_name }}
+  group: build-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -82,7 +82,7 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
           else
             # Test build - use date + git SHA
-            VERSION="$(date +%Y.%m.%d)-dev.$(git rev-parse --short HEAD)"
+            VERSION="$(date +%Y.%m.%d).$(git rev-parse --short HEAD)"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building version: ${VERSION}"
@@ -148,7 +148,9 @@ jobs:
         id: release_type
         run: |
           VERSION="${{ needs.build.outputs.version }}"
-          if [[ "$VERSION" == *"-dev"* ]]; then
+          # Beta versions have 4 dot-segments: YYYY.MM.DD.HHMM
+          # Stable versions have 3: YYYY.MM.DD (optionally with letter suffix)
+          if [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+ ]]; then
             echo "is_beta=true" >> $GITHUB_OUTPUT
             echo "target_branch=dev" >> $GITHUB_OUTPUT
             echo "prerelease=true" >> $GITHUB_OUTPUT
@@ -195,7 +197,7 @@ jobs:
             INSTALL_NOTE="**Beta Release** - Install from the beta channel for testing."
 
             PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --head dev --base main --state open --json number --jq '.[0].number // empty')
-            LATEST_STABLE=$(git tag -l 'v*' | grep -v '\-dev' | sort -V | tail -1)
+            LATEST_STABLE=$(git tag -l 'v*' | grep -vP '^v\d{4}\.\d{2}\.\d{2}\.\d{4}' | sort -V | tail -1)
 
             if [[ -n "$PR_NUMBER" || -n "$LATEST_STABLE" ]]; then
               PR_SECTION=$'\n### Links\n'
