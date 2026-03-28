@@ -28,9 +28,10 @@
 >
 
 <CHANGES>
-###2026.03.27b
-- Bug Fixes (ci): scope pluginURL sed to pluginURL line only to avoid corrupting packageURL
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.27a...v2026.03.27b)
+###2026.03.27c
+- Bug Fixes (readme): updated migration section
+- Bug Fixes (plg): restore packageURL to /releases/download/ [skip ci]
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.27b...v2026.03.27c)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
