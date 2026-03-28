@@ -9,8 +9,23 @@ env:
 on:
   push:
     branches: [main, dev]
+    paths:
+      - 'source/compose.manager/**'
+      - 'tests/**'
+      - 'versions.env'
+      - 'phpunit.xml'
+      - 'phpstan.neon'
+      - 'composer.json'
   pull_request:
     branches: [main, dev]
+    paths:
+      - 'source/compose.manager/**'
+      - 'tests/**'
+      - 'versions.env'
+      - 'phpunit.xml'
+      - 'phpstan.neon'
+      - 'composer.json'
+  workflow_dispatch:
 
 jobs:
   php-tests:

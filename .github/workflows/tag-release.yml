@@ -16,6 +16,10 @@ name: Tag Release
 on:
   push:
     branches: [main, dev]
+    paths:
+      - 'source/compose.manager/**'
+      - 'versions.env'
+  workflow_dispatch:
 
 permissions:
   contents: write
