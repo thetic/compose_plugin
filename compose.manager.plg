@@ -29,26 +29,10 @@
 >
 
 <CHANGES>
-###2026.03.28-dev.0905
-- Bug Fixes (build): update versioning format and package naming to prevent (un)install issues
-- Bug Fixes (CSS): update column widths and classes for improved layout in compose stacks and add cols for arrow and icon to separate from name and keep consistent
-- Bug Fixes (StackInfo): implement non-destructive handling for invalid indirect paths
-- Bug Fixes (plg): revert dev plg to point to last beta
-- Bug Fixes (workflow): change trigger to pr close for sync-plugin-url to tighen usage
-- Bug Fixes (workflow): tighted workflow rules to prevent repackaging when we dont need to
-- Bug Fixes (plg): update changelog for v2026.03.27b
-- Bug Fixes (readme): updated migration section
-- Bug Fixes (plg): restore packageURL to /releases/download/ [skip ci]
-- Bug Fixes (ci): scope pluginURL sed to pluginURL line only to avoid corrupting packageURL
-- Bug Fixes (ci): use separate concurrency group for build to avoid workflow_call deadlock
-- Bug Fixes (workflows): fix release push race with concurrency groups and pull-rebase
-- Chores: update changelog for v2026.03.27c [skip ci]
-- Chores: update changelog for v2026.03.27b [skip ci]
-- Chores: update changelog for v2026.03.27a [skip ci]
-- Chores: update changelog for v2026.03.27 [skip ci]
-- Chores: sync pluginURL+README for main branch [skip ci]
+###2026.03.28-dev.0915
+- Minor updates and improvements
 - [PR #67](https://github.com/mstrhakr/compose_plugin/pull/67)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.27c...v2026.03.28-dev.0905)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.27c...v2026.03.28-dev.0915)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
