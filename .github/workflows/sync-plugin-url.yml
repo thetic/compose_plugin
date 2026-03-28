@@ -4,15 +4,15 @@
 # This prevents issues when merging between dev and main where the
 # pluginURL would reference the wrong branch for update checks.
 #
-# Triggers after pushes to main or dev (but not from other workflows)
+# Triggers only on PR merges to main or dev (the only time the
+# pluginURL branch reference can be wrong is after a cross-branch merge)
 
 name: Sync Plugin URL
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [main, dev]
-    paths:
-      - 'compose.manager.plg'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -26,10 +26,8 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
-    # Skip if this is already a bot commit (prevents infinite loops)
-    if: >-
-      !contains(github.event.head_commit.message, '[skip ci]')
-      && !startsWith(github.event.head_commit.message, 'Release v')
+    # Only run if the PR was actually merged (not just closed)
+    if: github.event.pull_request.merged == true
     
     steps:
       - name: Checkout repository
