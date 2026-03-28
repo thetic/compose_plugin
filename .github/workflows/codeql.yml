@@ -1,0 +1,59 @@
+# .github/workflows/codeql.yml
+# CodeQL security analysis
+#
+# Replaces GitHub's default CodeQL setup with a custom workflow that
+# respects [skip ci] commits (e.g., changelog updates, version bumps).
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: '25 14 * * 1' # Weekly Monday scan
+
+permissions:
+  security-events: write
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'schedule'
+      || github.event_name == 'pull_request'
+      || (
+        github.event_name == 'push'
+        && !contains(github.event.head_commit.message, '[skip ci]')
+        && !startsWith(github.event.head_commit.message, 'Release v')
+        && github.event.head_commit.author.name != 'github-actions[bot]'
+      )
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+        # CodeQL doesn't support PHP — static analysis for PHP is handled by PHPStan in tests.yml
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'
