@@ -110,11 +110,13 @@ Beta Release:
 https://raw.githubusercontent.com/mstrhakr/compose_plugin/dev/compose.manager.plg
 ```
 
-### Migration from dcflachs Compose Manager (Depreciated)
+### Migration from dcflachs Docker Compose Manager (Depreciated)
 
 When migrating from the original Compose Manager plugin, you can simply press reinstall on Compose Manager Plus to remove the old plugin and install the new one. The plugins both have the same name internally and cannot be installed at the same time. Compose Manager Plus also uses the exact same project folder structure so it will detect all your existing stacks automatically.
 
-Best safe method for migration:
+#### Safe migration path
+
+This is usually overkill, but better safe than sorry.
 
 - Compose down for all stacks
 - Backup project directory
@@ -122,21 +124,36 @@ Best safe method for migration:
 - Install new plugin
 - Start up stacks
 
-> NOTE: I have tested upgrading in place by clicking "reinstall" in the CA app store without stopping the stacks and have has no issues personally. The only time this should be an issue is if your project is running with a project name that is different from the sanitized version of your folder name. Thats why it is safest to stop/down all stacks before migration.
+#### Standard migration path
 
-### Remove Compose Manager Plus and Re-Install dcflachs Compose Manager
+The standard way in upgrade.
 
-With dcflachs Compose Manager being depreciated, if you want to go back to it you will need to do the following:
+- Go to App Tab (Community Applications/CA)
+- Search for 'Compose Manager Plus'
+- Press (re)install in Community Applications.
 
-- Uninstall Compose Manager Plus
-- Get the plugin url from dcflachs GitHub
+> NOTE: I have tested upgrading in place by clicking "reinstall" in the CA app store without stopping the stacks and have has no issues personally. The only time this could be an issue is if your project is running with a project name that is different from the sanitized version of your folder name. Thats why it is safest to stop/down all stacks before migration.
 
-```url
-https://raw.githubusercontent.com/dcflachs/compose_plugin/main/compose.manager.plg
-```
+### Remove Compose Manager Plus and Re-Install dcflachs Docker Compose Manager
 
-- Paste this url into the box in 'Install Plugin's page
-- Press install.
+With dcflachs Docker Compose Manager being depreciated, if you want to go back to it you will need to do the following:
+
+#### Disable 'Hide Depreciated Applications' in CA
+
+- Go to `Apps` tab (Community Applications/CA)
+- Go to `Settings` in the bottom of the left sidebar
+- Set `Hide Deprecated Applications` to `No`.
+
+![Screenshot of Hide Depreciated Applications setting set to no](docs/images/reinstall-setting.png)
+
+#### Remove 'Compose Manager Plus' and reinstall 'Docker Compose Manager'
+
+- Go to `Apps` tab (Community Applications/CA)
+- Search for `Compose Manager` at the top.
+- Find currently installed version and press `Actions`->`Uninstall` to uninstall.
+- Find `Docker Compose Manager` and press `Actions`->`(Re)Install` to install.
+
+![Screenshot of Actions Menu for dcflachs Compose Manager plugin with depreciated status flag](docs/images/reinstall-actions.png)
 
 ## Requirements
 
