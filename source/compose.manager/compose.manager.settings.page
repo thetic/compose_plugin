@@ -16,6 +16,10 @@ $ui_patch_help_class = $option_patch_ui ? "hidden" : "inline_help"; // hide help
 
 
 $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc -l")) != 0;
+
+$acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js')
+    ? '/webGui/javascript/ace'
+    : '/plugins/compose.manager/javascript/ace';
 ?>
 <link type="text/css" rel="stylesheet" href="<? autov('/webGui/styles/jquery.switchbutton.css') ?>">
 <link type="text/css" rel="stylesheet" href="<? autov('/webGui/styles/jquery.filetree.css') ?>">
@@ -2533,7 +2537,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
             } catch (e) {}
 
             // Fallback: fetch ace.js from wherever it lives (Dynamix on 7.0.0+, plugin-local on older)
-            var aceJsPath = (typeof aceBasePath !== 'undefined' ? aceBasePath : '/webGui/javascript/ace') + '/ace.js';
+            var aceJsPath = <?php echo json_encode($acePath); ?> + '/ace.js';
             $.get(aceJsPath, function(data) {
                 var m = null;
                 // common patterns: ace.version = '1.4.12' or "version: '1.4.12'" or ace-builds-1.4.12
