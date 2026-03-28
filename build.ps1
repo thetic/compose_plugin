@@ -18,7 +18,7 @@
     Skip running tests before building. Not recommended.
 
 .PARAMETER ComposeVersion
-    Docker Compose version to include. Default: 2.40.3
+    Docker Compose version to include. Default: 5.0.2
 
 .EXAMPLE
     ./build.ps1
