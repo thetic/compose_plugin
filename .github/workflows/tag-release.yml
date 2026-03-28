@@ -94,8 +94,8 @@ jobs:
             # Stable: v2026.03.15, then v2026.03.15a, v2026.03.15b, ...
             BASE_TAG="v${DATE_VERSION}"
 
-            # Find existing stable tags for today (exclude beta HHMM tags)
-            EXISTING=$(git tag -l "${BASE_TAG}*" | grep -vP '^v\d{4}\.\d{2}\.\d{2}\.\d{4}' | sort || true)
+            # Find existing stable tags for today (keep only vYYYY.MM.DD[a-z] format)
+            EXISTING=$(git tag -l "${BASE_TAG}*" | grep -P '^v\d{4}\.\d{2}\.\d{2}[a-z]?$' | sort || true)
 
             if [[ -z "$EXISTING" ]]; then
               NEW_TAG="$BASE_TAG"
@@ -135,7 +135,7 @@ jobs:
           if [[ "$IS_BETA" == "true" ]]; then
             LAST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
           else
-            LAST_TAG=$(git tag -l 'v*' | grep -vP '^v\d{4}\.\d{2}\.\d{2}\.\d{4}' | sort -V | tail -1)
+            LAST_TAG=$(git tag -l 'v*' | grep -P '^v\d{4}\.\d{2}\.\d{2}[a-z]?$' | sort -V | tail -1)
           fi
 
           if [[ -n "$LAST_TAG" ]]; then
@@ -219,7 +219,7 @@ jobs:
             if [[ -n "$PR_NUMBER" ]]; then
               NOTES+="- [PR #${PR_NUMBER}](https://github.com/${{ github.repository }}/pull/${PR_NUMBER})"$'\n'
             fi
-            LATEST_STABLE=$(git tag -l 'v*' | grep -vP '^v\d{4}\.\d{2}\.\d{2}\.\d{4}' | sort -V | tail -1)
+            LATEST_STABLE=$(git tag -l 'v*' | grep -P '^v\d{4}\.\d{2}\.\d{2}[a-z]?$' | sort -V | tail -1)
             if [[ -n "$LATEST_STABLE" ]]; then
               NOTES+="- [beta release diff](https://github.com/${{ github.repository }}/compare/${LATEST_STABLE}...${NEW_TAG})"$'\n'
             fi
