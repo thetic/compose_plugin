@@ -119,6 +119,9 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $descriptionHtml = $description; // Already contains <br> tags from earlier processing
     $pathHtml = htmlspecialchars($stackInfo->path, ENT_QUOTES, 'UTF-8');
     $projectIconUrl = htmlspecialchars($stackInfo->getIconUrl() ?? '', ENT_QUOTES, 'UTF-8');
+    $invalidIndirectPath = $stackInfo->invalidIndirectPath;
+    $hasInvalidIndirect = ($invalidIndirectPath !== null && trim($invalidIndirectPath) !== '');
+    $invalidIndirectPathHtml = htmlspecialchars($invalidIndirectPath ?? '', ENT_QUOTES, 'UTF-8');
 
     // Status like Docker tab (started/stopped with icon)
     $status = $isrunning ? ($runningCount == $containerCount ? 'started' : 'partial') : 'stopped';
@@ -183,33 +186,38 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $hasBuild = $stackInfo->hasBuildConfig() ? '1' : '0';
 
     // Main row - Docker tab structure with expand arrow on left
-    $o .= "<tr class='compose-sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson' data-webui='$webuiUrlHtml' data-containers='$containerNamesAttr' data-hasbuild='$hasBuild'>";
+    $o .= "<tr class='compose-sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson' data-webui='$webuiUrlHtml' data-containers='$containerNamesAttr' data-hasbuild='$hasBuild' data-invalid-indirect='" . ($hasInvalidIndirect ? '1' : '0') . "' data-invalid-indirect-path='$invalidIndirectPathHtml'>";
 
-    // Name column: expand arrow, then icon with context menu, then name
-    $o .= "<td class='ct-name' style='padding:8px 8px 8px 20px'>";
-    // Expand arrow on the left (separate from the outer/inner structure)
-    $o .= "<span style='display:inline-block;width:14px;text-align:left;vertical-align:middle;margin-right:8px;'>";
+// Arrow column
+    $o .= "<td class='col-arrow'>";
     $o .= "<i class='fa fa-chevron-right expand-icon' id='expand-icon-$id' onclick='toggleStackDetails(\"$id\");event.stopPropagation();' style='cursor:pointer;'></i>";
-    $o .= "</span>";
-    // Icon and name using Docker's outer/inner structure
+    $o .= "</td>";
+
+    // Icon column
+    $imgSrc = $projectIconUrl ?: '/plugins/dynamix.docker.manager/images/question.png';
+    $o .= "<td class='col-icon'>";
     $o .= "<span class='outer $outerClass'>";
     $o .= "<span id='stack-$id' class='hand' data-stackid='$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-isup='$isup' data-running='" . ($isrunning ? '1' : '0') . "'>";
-    // Use actual image - either custom icon URL or default question.png like Docker tab
-    $imgSrc = $projectIconUrl ?: '/plugins/dynamix.docker.manager/images/question.png';
-    $o .= "<img src='$imgSrc' class='img' onerror=\"this.src='/plugins/dynamix.docker.manager/images/question.png';\">";
+    $o .= "<img src='$imgSrc' class='img' onerror=\"this.src='/plugins/dynamix.docker.manager/images/question.png';\">"; 
     $o .= "</span>";
+    $o .= "</span>";
+    $o .= "</td>";
+
+    // Name column
+    $o .= "<td class='col-name'>";
     $o .= "<span class='inner'><span class='appname'>$projectNameHtml</span><br>";
-    // Add data-status attribute to the icon to aid debugging of initial render state
     $o .= "<i class='fa fa-$shape $status $color compose-status-icon' data-status='$status'></i><span class='state'>$statusLabel</span>";
-    // Advanced: show project folder
+    if ($hasInvalidIndirect) {
+        $o .= " <i class='fa fa-warning orange-text' title='External compose path is invalid or unavailable: $invalidIndirectPathHtml'></i>";
+    }
     $o .= "<div class='cm-advanced compose-text-muted' style='margin-top:4px;font-size:0.85em;'>";
     $o .= "Project: $projectHtml";
     $o .= "</div>";
-    $o .= "</span></span>";
+    $o .= "</span>";
     $o .= "</td>";
 
     // Update column (like Docker tab) - default to "not checked" until update check runs
-    $o .= "<td class='compose-updatecolumn'>";
+    $o .= "<td class='col-update compose-updatecolumn'>";
     if ($isrunning) {
         $o .= "<span class='grey-text' style='white-space:nowrap;cursor:default;' title='Click Check for Updates to check'><i class='fa fa-question-circle fa-fw'></i> not checked</span>";
     } else {
@@ -220,21 +228,25 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     // Containers column (shows running/total)
     $containersDisplay = $isrunning ? "$runningCount / $containerCount" : "0 / $containerCount";
     $containersClass = ($runningCount == $containerCount && $runningCount > 0) ? 'green-text' : ($runningCount > 0 ? 'orange-text' : 'grey-text');
-    $o .= "<td><span class='$containersClass'>$containersDisplay</span></td>";
+    $o .= "<td class='col-containers'><span class='$containersClass'>$containersDisplay</span></td>";
 
     // Uptime column (both basic and advanced views)
     $uptimeDisplay = $stackUptime;
     $uptimeClass = $isrunning ? 'green-text' : 'grey-text';
-    $o .= "<td><span class='$uptimeClass'>$uptimeDisplay</span></td>";
+    $o .= "<td class='col-uptime'><span class='$uptimeClass'>$uptimeDisplay</span></td>";
 
     // Description column (advanced only)
-    $o .= "<td class='cm-advanced' style='overflow-wrap:break-word;word-wrap:break-word;'><span class='docker_readmore'>$descriptionHtml</span></td>";
+    $o .= "<td class='cm-advanced col-description' style='overflow-wrap:break-word;word-wrap:break-word;'>";
+    if ($hasInvalidIndirect) {
+        $o .= "<div class='orange-text' style='margin-bottom:4px;font-size:0.85em;'><i class='fa fa-warning'></i> External compose path unavailable, using local stack path.</div>";
+    }
+    $o .= "<span class='docker_readmore'>$descriptionHtml</span></td>";
 
     // Path column (advanced only)
-    $o .= "<td class='cm-advanced compose-text-muted' style='font-size:12px;'>$pathHtml</td>";
+    $o .= "<td class='cm-advanced col-path compose-text-muted' style='font-size:12px;'>$pathHtml</td>";
 
     // Auto Start toggle
-    $o .= "<td class='nine'>";
+    $o .= "<td class='nine col-autostart'>";
     $o .= "<input type='checkbox' class='auto_start' data-scriptName='$projectHtml' id='autostart-$id' $autostart>";
     $o .= "</td>";
 
@@ -252,7 +264,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 
 // If no stacks found, show a message
 if ($stackCount === 0) {
-    $o = "<tr><td colspan='7' style='text-align:center;padding:20px;color:var(--alt-text-color);'>No Docker Compose stacks found. Click 'Add New Stack' to create one.</td></tr>";
+    $o = "<tr><td colspan='9' style='text-align:center;padding:20px;color:var(--alt-text-color);'>No Docker Compose stacks found. Click 'Add New Stack' to create one.</td></tr>";
 }
 
 // Output the HTML
