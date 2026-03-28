@@ -96,6 +96,7 @@ jobs:
           chmod +x ./source/pkg_build.sh
 
           # Build using the Slackware Docker container
+          # PKG_BUILD must match the pkgBUILD entity in the PLG (default: 1)
           docker run --rm --tmpfs /tmp \
             -v $PWD/archive:/mnt/output:rw \
             -v $PWD/source:/mnt/source:ro \
@@ -105,18 +106,19 @@ jobs:
             -e ACE_VERSION="$ACE_VERSION" \
             -e OUTPUT_FOLDER="/mnt/output" \
             -e PKG_VERSION="${VERSION}" \
+            -e PKG_BUILD="1" \
             -e CA_CERT="/etc/ssl/certs/ca-certificates.crt" \
             vbatts/slackware:latest /mnt/source/pkg_build.sh
 
-          # Verify package was created (BUILD segment is generated inside Docker)
+          # Verify package was created
           ls -la ./archive/
-          PACKAGE=$(ls ./archive/${{ env.PLUGIN_NAME }}-${VERSION}-noarch-*.txz 2>/dev/null | head -1)
-          if [[ -z "$PACKAGE" ]]; then
+          PACKAGE_NAME="${{ env.PLUGIN_NAME }}-${VERSION}-noarch-1.txz"
+          if [[ ! -f "./archive/${PACKAGE_NAME}" ]]; then
             echo "ERROR: Package not found!"
             exit 1
           fi
-          echo "PACKAGE_PATH=${PACKAGE}" >> $GITHUB_ENV
-          echo "Built package: ${PACKAGE}"
+          echo "PACKAGE_PATH=./archive/${PACKAGE_NAME}" >> $GITHUB_ENV
+          echo "Built package: ${PACKAGE_NAME}"
 
       - name: Calculate hash
         id: hash
