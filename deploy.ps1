@@ -11,7 +11,7 @@
 	Package version to build. If omitted, build.ps1 resolves from compose.manager.plg.
 
 .PARAMETER Dev
-	Generate a development build with timestamp: YYYY.MM.DD-dev-HHMM
+	Generate a development build with timestamp: YYYY.MM.DD.HHmm
 
 .PARAMETER RemoteHost
 	Remote hostname or IP.
@@ -39,7 +39,7 @@
 	from source/compose.manager directly to the remote live emhttp plugin folder.
 
 .EXAMPLE
-	./deploy.ps1 -Version "2026.03.07-dev" -RemoteHost "saturn"
+	./deploy.ps1 -Version "2026.03.07" -RemoteHost "saturn"
 
 .EXAMPLE
 	./deploy.ps1 -Dev -RemoteHost "saturn"
@@ -48,7 +48,7 @@
 	./deploy.ps1 -SkipBuild -RemoteHost "saturn"
 
 .EXAMPLE
-	./deploy.ps1 -PackagePath ".\archive\compose.manager-package-2026.03.07-dev.1234.txz" -RemoteHost "saturn"
+	./deploy.ps1 -PackagePath ".\archive\compose.manager-2026.03.07-noarch-1234.txz" -RemoteHost "saturn"
 
 .EXAMPLE
 	./deploy.ps1 -Quick -RemoteHost "saturn"
@@ -187,14 +187,14 @@ if ($Quick) {
 # Generate dev version with timestamp if -Dev flag is used
 if ($Dev) {
 	$now = Get-Date
-	$Version = $now.ToString("yyyy.MM.dd") + "-dev-" + $now.ToString("HHmm")
+	$Version = $now.ToString("yyyy.MM.dd.HHmm")
 	Write-Host "Generated dev version: $Version" -ForegroundColor Cyan
 }
 
 function Get-LatestPackagePath {
 	param([string]$Path)
 
-	$latest = Get-ChildItem -Path $Path -Filter 'compose.manager-package-*.txz' -File |
+	$latest = Get-ChildItem -Path $Path -Filter 'compose.manager-*-noarch-*.txz' -File |
 		Sort-Object LastWriteTime -Descending |
 		Select-Object -First 1
 
@@ -232,7 +232,7 @@ if (-not $PackagePath) {
 		} else {
 			if ($Dev) {
 				$now = Get-Date
-				$simulatedVersion = $now.ToString("yyyy.MM.dd") + "-dev-" + $now.ToString("HHmm")
+				$simulatedVersion = $now.ToString("yyyy.MM.dd.HHmm")
 			} elseif ($Version) {
 				$simulatedVersion = $Version
 			} else {

@@ -12,7 +12,7 @@
     The version string for the package (e.g., "0.1.0"). Defaults to version in .plg file.
 
 .PARAMETER Dev
-    Generate a development build with timestamp: YYYY.MM.DD-dev-HHMM
+    Generate a development build with timestamp: YYYY.MM.DD.HHmm
 
 .PARAMETER SkipTests
     Skip running tests before building. Not recommended.
@@ -69,7 +69,7 @@ if (-not $AceVersion) { $AceVersion = "1.43.5" }
 # Generate dev version with timestamp if -Dev flag is used
 if ($Dev) {
     $now = Get-Date
-    $Version = $now.ToString("yyyy.MM.dd") + "-dev." + $now.ToString("HHmm")
+    $Version = $now.ToString("yyyy.MM.dd.HHmm")
     Write-Host "Generated dev version: $Version" -ForegroundColor Cyan
 }
 
@@ -84,7 +84,13 @@ if (-not $Version) {
     }
 }
 
-$PackageName = "compose.manager-package-$Version.txz"
+# Extract HHmm from version for dev builds (YYYY.MM.DD.HHmm), otherwise generate fresh
+if ($Version -match '\d{4}\.\d{2}\.\d{2}\.(\d{4})$') {
+    $BuildNum = $Matches[1]
+} else {
+    $BuildNum = (Get-Date).ToString("HHmm")
+}
+$PackageName = "compose.manager-$Version-noarch-$BuildNum.txz"
 $OutputPath = "$ScriptDir\archive"
 
 # Ensure output directory exists
@@ -98,7 +104,7 @@ if (-not (Test-Path $plgSourcePath -PathType Leaf)) {
     throw "Plugin manifest not found: $plgSourcePath"
 }
 
-$PackageBaseName = "compose.manager-package-$Version"
+$PackageBaseName = "compose.manager-$Version-noarch-$BuildNum"
 $PackageFileName = "$PackageBaseName.txz"
 $PackageURL = 'file:///tmp/' + $PackageFileName
 $TempPluginPath = Join-Path $OutputPath "compose.manager.plg"
@@ -107,6 +113,7 @@ $plgLines = Get-Content $plgSourcePath
 $plgLines = $plgLines | ForEach-Object {
     if ($_ -match '^\s*<!ENTITY version "') { "<!ENTITY version `"$Version`">" }
     elseif ($_ -match '^\s*<!ENTITY packageVER "') { "<!ENTITY packageVER `"$Version`">" }
+    elseif ($_ -match '^\s*<!ENTITY pkgBUILD "') { "<!ENTITY pkgBUILD `"$BuildNum`">" }
     elseif ($_ -match '^\s*<!ENTITY packageName "') { "<!ENTITY packageName `"$PackageBaseName`">" }
     elseif ($_ -match '^\s*<!ENTITY packagefile "') { "<!ENTITY packagefile `"$PackageFileName`">" }
     elseif ($_ -match '^\s*<!ENTITY packageURL "') { "<!ENTITY packageURL `"$PackageURL`">" }
@@ -117,7 +124,7 @@ $plgLines = $plgLines | ForEach-Object {
 Set-Content -Path $TempPluginPath -Value $plgLines -Encoding UTF8
 Write-Host "Generated temporary plugin manifest for build: $TempPluginPath" -ForegroundColor Cyan
 
-Write-Host "Building compose.manager package v$Version" -ForegroundColor Green
+Write-Host "Building compose.manager package v$Version (build $BuildNum)" -ForegroundColor Green
 Write-Host "  Docker Compose: v$ComposeVersion" -ForegroundColor Gray
 Write-Host "  Ace Editor: v$AceVersion" -ForegroundColor Gray
 Write-Host ""
@@ -157,6 +164,7 @@ $dockerArgs = @(
     "-e", "ACE_VERSION=$AceVersion"
     "-e", "OUTPUT_FOLDER=/mnt/output"
     "-e", "PKG_VERSION=$Version"
+    "-e", "PKG_BUILD=$BuildNum"
     "-e", "CA_CERT=${ContainerCACert}"
     "vbatts/slackware:latest"
     "/mnt/source/pkg_build.sh"

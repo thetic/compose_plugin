@@ -6,7 +6,8 @@
 <!ENTITY launch "Settings/&name;.settings">
 <!ENTITY packageVER "&version;">
 <!ENTITY packageMD5  "b40d5f3d805bf9a75a86e83c0542846c">
-<!ENTITY packageName "compose.manager-package-&packageVER;">
+<!ENTITY pkgBUILD    "1">
+<!ENTITY packageName "&name;-&packageVER;-noarch-&pkgBUILD;">
 <!ENTITY packagefile "&packageName;.txz">
 <!ENTITY github "mstrhakr/compose_plugin">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
@@ -39,6 +40,12 @@
 <INLINE>
 # Remove old 'source' files
 rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
+
+# Clean up legacy package entries (compose.manager-package-*) left by older builds
+# that used non-standard Slackware naming and weren't removed by upgradepkg
+for pkg in /var/log/packages/&name;-package-*; do
+    [ -e "$pkg" ] &amp;&amp; removepkg "$(basename "$pkg")" 2>/dev/null || true
+done
 
 #Create projects folder if it doesnt exist
 mkdir -p &pluginLOC;/projects
@@ -147,15 +154,15 @@ if [ -f "$patch_script" ]; then
     fi
 fi
 
-# Remove by plugin name (does latest version), fallback to explicit package name.
-removepkg &name; || removepkg &packageName; || false
+# Remove all Slackware package entries for this plugin.
+# Handles both new naming (compose.manager-VERSION-noarch-1) and
+# legacy naming (compose.manager-package-VERSION) left by older builds.
+for pkg in /var/log/packages/&name;-*; do
+    [ -e "$pkg" ] &amp;&amp; removepkg "$(basename "$pkg")" 2>/dev/null || true
+done
 
-# Remove plugin related files
+# Remove old package files from flash
 rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
-if [ -d "/usr/local/emhttp/plugins/&name;" ]; then
-    echo "Removing plugin directory: /usr/local/emhttp/plugins/&name;"
-    rm -rf /usr/local/emhttp/plugins/&name;
-fi
 </INLINE>
 </FILE>
 

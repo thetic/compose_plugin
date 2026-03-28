@@ -3,8 +3,10 @@
 [ -z "$COMPOSE_VERSION" ] && echo "Compose Version not set" && exit 2
 [ -z "$ACE_VERSION" ] && echo "ACE Version not set" && exit 4
 [ -z "$PKG_VERSION" ] && echo "Package Version not set" && exit 5
+[ -z "$PKG_BUILD" ] && PKG_BUILD=$(date +%H%M)
 tmpdir=/tmp/tmp.$((RANDOM * 19318203981230 + 40))
 version=$PKG_VERSION
+build=$PKG_BUILD
 
 shopt -s extglob
 set -euo pipefail
@@ -130,8 +132,8 @@ compose.manager:
 compose.manager: https://github.com/mstrhakr/compose_plugin
 EOF
 
-# Build the package
-run_quiet makepkg -l y -c y "$OUTPUT_FOLDER/compose.manager-package-${version}.txz"
+# Build the package (Slackware convention: NAME-VERSION-ARCH-BUILD)
+run_quiet makepkg -l y -c y "$OUTPUT_FOLDER/compose.manager-${version}-noarch-${build}.txz"
 
 # Copy build log into output folder for debugging archives
 if [ -d "$OUTPUT_FOLDER" ]; then
@@ -142,7 +144,7 @@ fi
 cd /
 
 # Calculate the MD5 checksum of the package
-MD5=$(md5sum "$OUTPUT_FOLDER/compose.manager-package-${version}.txz")
+MD5=$(md5sum "$OUTPUT_FOLDER/compose.manager-${version}-noarch-${build}.txz")
 
 # Write release info to a file in the output folder
 {
