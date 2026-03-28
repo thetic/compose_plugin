@@ -91,15 +91,25 @@ else
         WGET_CERT_OPTS="--no-check-certificate"
     fi
     if wget $WGET_CERT_OPTS -q -O "$TMPDIR_ACE/ace.zip" "&aceURL;"; then
-        unzip -q "$TMPDIR_ACE/ace.zip" \
+        if unzip -q "$TMPDIR_ACE/ace.zip" \
             "ace-builds-&aceVER;/src-min-noconflict/ace.js" \
             "ace-builds-&aceVER;/src-min-noconflict/mode-yaml.js" \
             "ace-builds-&aceVER;/src-min-noconflict/mode-sh.js" \
             "ace-builds-&aceVER;/src-min-noconflict/theme-tomorrow.js" \
             "ace-builds-&aceVER;/src-min-noconflict/theme-tomorrow_night.js" \
-            -d "$TMPDIR_ACE/extracted"
-        cp "$TMPDIR_ACE/extracted/ace-builds-&aceVER;/src-min-noconflict/"*.js "$ACE_PLUGIN_DIR/"
-        echo "Ace editor v&aceVER; installed to $ACE_PLUGIN_DIR"
+            -d "$TMPDIR_ACE/extracted"; then
+            if cp "$TMPDIR_ACE/extracted/ace-builds-&aceVER;/src-min-noconflict/"*.js "$ACE_PLUGIN_DIR/"; then
+                if [ -f "$ACE_PLUGIN_DIR/ace.js" ]; then
+                    echo "Ace editor v&aceVER; installed to $ACE_PLUGIN_DIR"
+                else
+                    echo "WARNING: Ace editor files not found in $ACE_PLUGIN_DIR after install. Editor will lack syntax highlighting."
+                fi
+            else
+                echo "WARNING: Failed to copy Ace editor files. Editor will lack syntax highlighting."
+            fi
+        else
+            echo "WARNING: Failed to extract Ace editor archive. Editor will lack syntax highlighting."
+        fi
     else
         echo "WARNING: Failed to download Ace editor. The YAML/env editor will not have syntax highlighting."
     fi
