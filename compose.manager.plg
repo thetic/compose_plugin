@@ -85,7 +85,12 @@ else
     mkdir -p "$ACE_PLUGIN_DIR"
     TMPDIR_ACE="/tmp/ace-install-$$"
     mkdir -p "$TMPDIR_ACE"
-    if wget --no-check-certificate -q -O "$TMPDIR_ACE/ace.zip" "&aceURL;"; then
+    WGET_CERT_OPTS=""
+    if [ ! -f /etc/ssl/certs/ca-certificates.crt ] &amp;&amp; [ ! -d /etc/ssl/certs ]; then
+        echo "WARNING: No system CA bundle found; downloading Ace with TLS verification disabled."
+        WGET_CERT_OPTS="--no-check-certificate"
+    fi
+    if wget $WGET_CERT_OPTS -q -O "$TMPDIR_ACE/ace.zip" "&aceURL;"; then
         unzip -q "$TMPDIR_ACE/ace.zip" \
             "ace-builds-&aceVER;/src-min-noconflict/ace.js" \
             "ace-builds-&aceVER;/src-min-noconflict/mode-yaml.js" \
