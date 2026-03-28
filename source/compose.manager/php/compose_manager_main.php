@@ -3314,6 +3314,15 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     }
 
     function openEditorModalByProject(project, projectName, initialTab) {
+        if (typeof ace === 'undefined') {
+            swal({
+                title: 'Editor Unavailable',
+                text: 'The Ace editor library could not be loaded. Please reload the page or verify the plugin installation.',
+                type: 'error'
+            });
+            return;
+        }
+
         editorModal.currentProject = project;
         editorModal.modifiedTabs = new Set();
         editorModal.modifiedSettings = new Set();
