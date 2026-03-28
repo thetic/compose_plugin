@@ -29,10 +29,10 @@
 >
 
 <CHANGES>
-###2026.03.28.0943
-- Minor updates and improvements
+###2026.03.28.0952
+- Bug Fixes (exec): improve handling of indirect file paths and preserve invalid paths
 - [PR #67](https://github.com/mstrhakr/compose_plugin/pull/67)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28-dev.0922...v2026.03.28.0943)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28-dev.0922...v2026.03.28.0952)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
