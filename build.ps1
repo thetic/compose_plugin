@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     This script runs a Slackware Docker container to build the .txz package.
-    It downloads Docker Compose, Compose Switch, and Ace Editor, then packages
+    It downloads Docker Compose and Compose Switch, then packages
     everything together.
 
 .PARAMETER Version
@@ -20,9 +20,6 @@
 .PARAMETER ComposeVersion
     Docker Compose version to include. Default: 2.40.3
 
-.PARAMETER AceVersion
-    Ace Editor version to include. Default: 1.4.14
-
 .EXAMPLE
     ./build.ps1
     ./build.ps1 -Version "0.2.0"
@@ -34,8 +31,7 @@ param(
     [string]$Version,
     [switch]$Dev,
     [switch]$SkipTests,
-    [string]$ComposeVersion,
-    [string]$AceVersion
+    [string]$ComposeVersion
 )
 
 $ErrorActionPreference = "Stop"
@@ -124,7 +120,6 @@ Write-Host "Generated temporary plugin manifest for build: $TempPluginPath" -For
 
 Write-Host "Building compose.manager package v$Version (build $BuildNum)" -ForegroundColor Green
 Write-Host "  Docker Compose: v$ComposeVersion" -ForegroundColor Gray
-Write-Host "  Ace Editor: v$AceVersion" -ForegroundColor Gray
 Write-Host ""
 
 # Convert Windows paths to Docker-compatible paths
