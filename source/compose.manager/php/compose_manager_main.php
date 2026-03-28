@@ -3360,12 +3360,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 if (data) {
                     var response = jQuery.parseJSON(data);
                     editorModal.originalContent['compose'] = response.content || '';
-                    editorModal.editors['compose'].setValue(response.content || '', -1);
+                    if (editorModal.editors['compose']) editorModal.editors['compose'].setValue(response.content || '', -1);
                 }
             }).fail(function() {
                 var errorContent = '# Error loading file';
                 editorModal.originalContent['compose'] = errorContent;
-                editorModal.editors['compose'].setValue(errorContent, -1);
+                if (editorModal.editors['compose']) editorModal.editors['compose'].setValue(errorContent, -1);
             })
         );
 
@@ -3378,19 +3378,20 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 if (data) {
                     var response = jQuery.parseJSON(data);
                     editorModal.originalContent['env'] = response.content || '';
-                    editorModal.editors['env'].setValue(response.content || '', -1);
+                    if (editorModal.editors['env']) editorModal.editors['env'].setValue(response.content || '', -1);
                 }
             }).fail(function() {
                 var errorContent = '# Error loading file';
                 editorModal.originalContent['env'] = errorContent;
-                editorModal.editors['env'].setValue(errorContent, -1);
+                if (editorModal.editors['env']) editorModal.editors['env'].setValue(errorContent, -1);
             })
         );
 
         // When all files are loaded
         $.when.apply($, loadPromises).then(function() {
             // Run validation on compose file
-            validateYaml('compose', editorModal.editors['compose'].getValue());
+            var composeContent = editorModal.editors['compose'] ? editorModal.editors['compose'].getValue() : (editorModal.originalContent['compose'] || '');
+            validateYaml('compose', composeContent);
         }).fail(function() {
             $('#editor-validation-compose').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Error loading some files').removeClass('valid').addClass('error');
         });
@@ -3783,7 +3784,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 // Brief feedback in validation panel
                 $('#editor-validation-' + currentTab).html('<i class="fa fa-check editor-validation-icon"></i> Saved!').removeClass('error warning').addClass('valid');
                 setTimeout(function() {
-                    validateYaml(currentTab, editorModal.editors[currentTab].getValue());
+                    if (editorModal.editors[currentTab]) validateYaml(currentTab, editorModal.editors[currentTab].getValue());
                 }, 1500);
             } else {
                 $('#editor-validation-' + currentTab).html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Save failed').removeClass('valid warning').addClass('error');
@@ -3794,6 +3795,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     }
 
     function saveTab(tabName, saveErrors) {
+        if (!editorModal.editors[tabName]) return Promise.reject('Editor not available');
         var content = editorModal.editors[tabName].getValue();
         var project = editorModal.currentProject;
         var actionStr = null;
