@@ -1,18 +1,18 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
-<!ENTITY name        "compose.manager">
-<!ENTITY author      "mstrhakr">
-<!ENTITY version     "2026.03.27c">
-<!ENTITY launch      "Settings/&name;.settings">
-<!ENTITY packageVER  "&version;">
-<!ENTITY packageMD5  "9e5661980b2d501427d73cf1ad86f8cf">
+<!ENTITY name "compose.manager">
+<!ENTITY author "mstrhakr">
+<!ENTITY version     "2026.03.27-dev.1632">
+<!ENTITY launch "Settings/&name;.settings">
+<!ENTITY packageVER "&version;">
+<!ENTITY packageMD5  "b40d5f3d805bf9a75a86e83c0542846c">
 <!ENTITY packageName "compose.manager-package-&packageVER;">
 <!ENTITY packagefile "&packageName;.txz">
-<!ENTITY github      "mstrhakr/compose_plugin">
-<!ENTITY pluginURL   "https://raw.githubusercontent.com/&github;/main/&name;.plg">
-<!ENTITY packageURL  "https://github.com/&github;/releases/download/v&version;/&packagefile;">
-<!ENTITY pluginLOC   "/boot/config/plugins/&name;">
-<!ENTITY emhttpLOC    "/usr/local/emhttp/plugins/&name;">
+<!ENTITY github "mstrhakr/compose_plugin">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
+<!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
+<!ENTITY pluginLOC "/boot/config/plugins/&name;">
+<!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
 ]>
 
 <PLUGIN  name="&name;"
@@ -28,15 +28,10 @@
 >
 
 <CHANGES>
-###2026.03.27b
-- Features: add full auto-update system for Compose stacks (scheduler, Run Now, per-stack toggles, digest-aware checks)
-- Features: add background compose actions with async logging, status history, and browser notifications
-- Refactor: migrate stack/container handling to standard classes (ContainerInfo and StackInfo) with cache support
-- Enhancements: improve override management and preserve service metadata across renames
-- Fixes: resolve start/stop all stacks, compose down sanitization, tabbed mode display, and FolderView Plus conflict
-- Security/Hardening: strengthen path validation and sanitize auto-update log/path handling
+###2026.03.27-dev.1632
+- Bug Fixes (docs): correct image path separator in README for CA App Store screenshot
 - [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.27c)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.27-dev.1632)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
