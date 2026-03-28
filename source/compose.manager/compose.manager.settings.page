@@ -2496,7 +2496,7 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
         <h3>Build &amp; Packaging</h3>
         <ul>
             <li>`pkg_build.sh` — packaging helper used when assembling plugin releases.</li>
-            <li><a href="https://github.com/ajaxorg/ace-builds" target="_blank" rel="noopener noreferrer">ace-builds</a> — source for the bundled Ace editor files.</li>
+            <li><a href="https://github.com/ajaxorg/ace-builds" target="_blank" rel="noopener noreferrer">ace-builds</a> — Ace editor (provided by Unraid 7.0.0+ via Dynamix; downloaded during install on older versions).</li>
         </ul>
         <p>If you maintain packaging scripts or upstream libraries we reference and would like a more explicit mention, let me know and I'll add it.</p>
     </div>
@@ -2532,8 +2532,9 @@ $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc 
                 }
             } catch (e) {}
 
-            // Fallback: fetch the bundled ace.js and attempt to extract a version string
-            $.get('/plugins/compose.manager/javascript/ace/ace.js', function(data) {
+            // Fallback: fetch ace.js from wherever it lives (Dynamix on 7.0.0+, plugin-local on older)
+            var aceJsPath = (typeof aceBasePath !== 'undefined' ? aceBasePath : '/webGui/javascript/ace') + '/ace.js';
+            $.get(aceJsPath, function(data) {
                 var m = null;
                 // common patterns: ace.version = '1.4.12' or "version: '1.4.12'" or ace-builds-1.4.12
                 m = data.match(/ace\.version\s*=\s*['\"]([\w\.\-]+)['\"]/i) || data.match(/version\s*[:=]\s*['\"]([\w\.\-]+)['\"]/i) || data.match(/ace-builds[-_]?([\d\.\-]+)/i);

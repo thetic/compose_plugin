@@ -178,7 +178,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
 </style>
 
-<script src="/plugins/compose.manager/javascript/ace/ace.js" type="text/javascript"></script>
+<?php
+// Use Dynamix's bundled Ace if available (Unraid 7.0.0+), else fall back to our plugin-local copy
+// (downloaded during install for pre-7.0.0 Unraid via the PLG post-install script)
+$acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js')
+    ? '/webGui/javascript/ace'
+    : '/plugins/compose.manager/javascript/ace';
+?>
+<script src="<?php echo $acePath; ?>/ace.js" type="text/javascript"></script>
 <script src="/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js" type="text/javascript"></script>
 <script src="/plugins/compose.manager/javascript/common.js" type="text/javascript"></script>
 <script>
@@ -186,7 +193,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     var caURL = "/plugins/compose.manager/php/exec.php";
     var compURL = "/plugins/compose.manager/php/compose_util.php";
     var aceTheme = <?php echo (in_array($theme, ['black', 'gray']) ? json_encode('ace/theme/tomorrow_night') : json_encode('ace/theme/tomorrow')); ?>;
+    var aceBasePath = <?php echo json_encode($acePath); ?>;
     const icon_label = <?php echo json_encode($docker_label_icon); ?>;
+
+    // Configure Ace base path explicitly so it finds mode/theme files
+    // regardless of how the script URL was resolved
+    if (typeof ace !== 'undefined') {
+        ace.config.set('basePath', aceBasePath);
+    }
     const webui_label = <?php echo json_encode($docker_label_webui); ?>;
     const shell_label = <?php echo json_encode($docker_label_shell); ?>;
 
@@ -588,6 +602,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Initialize editor modal
     function initEditorModal() {
+        if (typeof ace === 'undefined') {
+            console.warn('Compose Manager: Ace editor not available. Editor will open without syntax highlighting.');
+            return;
+        }
         // Initialize Ace editors for compose and env tabs only
         ['compose', 'env'].forEach(function(type) {
             var editor = ace.edit('editor-' + type);

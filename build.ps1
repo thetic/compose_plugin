@@ -60,11 +60,9 @@ $versionsFile = Join-Path $ScriptDir "versions.env"
 if (Test-Path $versionsFile) {
     Get-Content $versionsFile | ForEach-Object {
         if ($_ -match '^COMPOSE_VERSION=(.+)$' -and -not $ComposeVersion) { $ComposeVersion = $Matches[1].Trim() }
-        if ($_ -match '^ACE_VERSION=(.+)$' -and -not $AceVersion) { $AceVersion = $Matches[1].Trim() }
     }
 }
 if (-not $ComposeVersion) { $ComposeVersion = "5.0.2" }
-if (-not $AceVersion) { $AceVersion = "1.43.5" }
 
 # Generate dev version with timestamp if -Dev flag is used
 if ($Dev) {
@@ -161,7 +159,6 @@ $dockerArgs = @(
     "-v", "${HostCACert}:${ContainerCACert}:ro"
     "-e", "TZ=America/New_York"
     "-e", "COMPOSE_VERSION=$ComposeVersion"
-    "-e", "ACE_VERSION=$AceVersion"
     "-e", "OUTPUT_FOLDER=/mnt/output"
     "-e", "PKG_VERSION=$Version"
     "-e", "PKG_BUILD=$BuildNum"
