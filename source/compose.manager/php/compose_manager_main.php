@@ -53,36 +53,54 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         text-overflow: ellipsis
     }
 
-    /* Basic-view column widths (5 visible columns → 100%)
-   Middle 3 columns equal width; Stack + Autostart bookend. */
-    #compose_stacks thead th.col-stack {
-        width: 33%
+    /* Basic-view column widths (7 visible columns)
+   Arrow + Icon are fixed px (small fixed content); rest are % of table. */
+    #compose_stacks thead th.col-arrow {
+        width: 1%;
+        padding: 0;
+    }
+
+    #compose_stacks thead th.col-icon {
+        width: 2%;
+        padding: 0;
+    }
+
+    #compose_stacks thead th.col-name {
+        width: 12%;
     }
 
     #compose_stacks thead th.col-update {
-        width: 18%
+        width: 25%;
     }
 
     #compose_stacks thead th.col-containers {
-        width: 18%
+        width: 25%;
     }
 
     #compose_stacks thead th.col-uptime {
-        width: 18%
+        width: 25%;
     }
 
     #compose_stacks thead th.col-autostart {
-        width: 13%
+        width: 15%;
     }
 
-    /* Advanced-view column widths (8 visible columns → 100%)
-   Description + Path get the most space; compact everything else. */
-    #compose_stacks.cm-advanced-view thead th.col-stack {
-        width: 14%
+    /* Advanced-view column widths (9 visible columns)
+   Arrow + Icon stay fixed px; Description + Path get the most %. */
+    #compose_stacks.cm-advanced-view thead th.col-arrow {
+        width: 1%;
+    }
+
+    #compose_stacks.cm-advanced-view thead th.col-icon {
+        width: 2%;
+    }
+
+    #compose_stacks.cm-advanced-view thead th.col-name {
+        width: 12%;
     }
 
     #compose_stacks.cm-advanced-view thead th.col-update {
-        width: 9%
+        width: 10%
     }
 
     #compose_stacks.cm-advanced-view thead th.col-containers {
@@ -90,31 +108,40 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     #compose_stacks.cm-advanced-view thead th.col-uptime {
-        width: 8%
+        width: 6%
     }
 
     #compose_stacks.cm-advanced-view thead th.col-description {
-        width: 26%
+        width: 28%
     }
 
     #compose_stacks.cm-advanced-view thead th.col-path {
-        width: 32%
+        width: 28%
     }
 
     #compose_stacks.cm-advanced-view thead th.col-autostart {
-        width: 6%
+        width: 8%
     }
 
     /* Center the Containers column */
     #compose_stacks thead th.col-containers,
-    #compose_stacks tbody td:nth-child(3) {
+    #compose_stacks td.col-containers {
         text-align: center
     }
 
     /* Autostart column: right-align content to push toggles to edge */
     #compose_stacks thead th.col-autostart,
-    #compose_stacks>tbody>tr>td:last-child {
+    #compose_stacks td.col-autostart {
         text-align: right
+    }
+
+    /* Arrow and icon columns: no overflow clipping, no padding bloat */
+    #compose_stacks td.col-arrow,
+    #compose_stacks td.col-icon {
+        overflow: visible;
+        padding: 8px 0;
+        text-align: center;
+        vertical-align: middle
     }
 
     /* Advanced/basic visibility — CSS-only so no flash of hidden content */
@@ -412,7 +439,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }, 'daemon', 'error');
                 clearTimeout(composeTimers.load);
                 hideComposeSpinner();
-                $('#compose_list').html('<tr><td colspan="7" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
+                $('#compose_list').html('<tr><td colspan="9" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
 
                 // Reject the promise so callers can handle the error
                 try { reject({xhr: xhr, status: status, error: error}); } catch (e) { reject(error); }
@@ -4583,9 +4610,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 $stateEl.text(newState);
             }
 
-            // Update the containers count cell (3rd column) to reflect cached values
+            // Update the containers count cell to reflect cached values
             try {
-                var $containersCell = $stackRow.find('td').eq(2);
+                var $containersCell = $stackRow.find('td.col-containers');
                 var containersClass = (runningCount == totalCount && runningCount > 0) ? 'green-text' : (runningCount > 0 ? 'orange-text' : 'grey-text');
                 $containersCell.html('<span class="' + containersClass + '">' + runningCount + ' / ' + totalCount + '</span>');
             } catch (e) {}
@@ -4629,9 +4656,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 addComposeStackContext(stackElementId);
             }
 
-            // Update the uptime column (4th td, index 3)
+            // Update the uptime column
             try {
-                var $uptimeCell = $stackRow.find('td').eq(3);
+                var $uptimeCell = $stackRow.find('td.col-uptime');
                 var uptimeText = 'stopped';
                 var uptimeClass = 'grey-text';
                 if (anyRunning) {
@@ -5292,7 +5319,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         <table id="compose_stacks" class="tablesorter shift" style="table-layout:fixed;width:100%">
             <thead>
                 <tr>
-                    <th class="col-stack">Stack</th>
+                    <th class="col-arrow"></th>
+                    <th class="col-icon"></th>
+                    <th class="col-name">Stack</th>
                     <th class="col-update">Update</th>
                     <th class="col-containers">Containers</th>
                     <th class="col-uptime">Uptime</th>
@@ -5303,7 +5332,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             </thead>
             <tbody id="compose_list">
                 <tr>
-                    <td colspan='7'></td>
+                    <td colspan='9'></td>
                 </tr>
             </tbody>
         </table>

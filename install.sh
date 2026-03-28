@@ -24,15 +24,10 @@ else
   echo "removepkg failed, plugin may not have been installed"
 fi
 
-if [ -d "/usr/local/emhttp/plugins/compose.manager" ]; then
-  echo "Removing existing plugin directory at /usr/local/emhttp/plugins/compose.manager"
-  rm -rf /usr/local/emhttp/plugins/compose.manager
-fi
-
-if compgen -G "/boot/config/plugins/compose.manager/*.txz" > /dev/null; then
-  echo "Removing existing plugin packages at /boot/config/plugins/compose.manager"
-  rm -f /boot/config/plugins/compose.manager/*.txz
-fi
+# Remove any stale legacy package entries (compose.manager-package-*)
+for pkg in /var/log/packages/compose.manager-*; do
+  [ -e "$pkg" ] && removepkg "$(basename "$pkg")" 2>/dev/null || true
+done
 
 cp -- "$PLUGIN_FILE" "/boot/config/plugins/$(basename "$PLUGIN_FILE")"
 echo "Attempting to install plugin with $PLUGIN_FILE"

@@ -1,18 +1,19 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
-<!ENTITY name        "compose.manager">
-<!ENTITY author      "mstrhakr">
-<!ENTITY version     "2026.03.27c">
-<!ENTITY launch      "Settings/&name;.settings">
-<!ENTITY packageVER  "&version;">
-<!ENTITY packageMD5  "9e5661980b2d501427d73cf1ad86f8cf">
-<!ENTITY packageName "compose.manager-package-&packageVER;">
+<!ENTITY name "compose.manager">
+<!ENTITY author "mstrhakr">
+<!ENTITY version     "2026.03.28.0952">
+<!ENTITY launch "Settings/&name;.settings">
+<!ENTITY packageVER "&version;">
+<!ENTITY packageMD5  "c502d67156751cbf367a4d7bd2906f7b">
+<!ENTITY pkgBUILD    "0952">
+<!ENTITY packageName "&name;-&packageVER;-noarch-&pkgBUILD;">
 <!ENTITY packagefile "&packageName;.txz">
-<!ENTITY github      "mstrhakr/compose_plugin">
-<!ENTITY pluginURL   "https://raw.githubusercontent.com/&github;/main/&name;.plg">
-<!ENTITY packageURL  "https://github.com/&github;/releases/download/v&version;/&packagefile;">
-<!ENTITY pluginLOC   "/boot/config/plugins/&name;">
-<!ENTITY emhttpLOC    "/usr/local/emhttp/plugins/&name;">
+<!ENTITY github "mstrhakr/compose_plugin">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
+<!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
+<!ENTITY pluginLOC "/boot/config/plugins/&name;">
+<!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
 ]>
 
 <PLUGIN  name="&name;"
@@ -28,15 +29,10 @@
 >
 
 <CHANGES>
-###2026.03.27b
-- Features: add full auto-update system for Compose stacks (scheduler, Run Now, per-stack toggles, digest-aware checks)
-- Features: add background compose actions with async logging, status history, and browser notifications
-- Refactor: migrate stack/container handling to standard classes (ContainerInfo and StackInfo) with cache support
-- Enhancements: improve override management and preserve service metadata across renames
-- Fixes: resolve start/stop all stacks, compose down sanitization, tabbed mode display, and FolderView Plus conflict
-- Security/Hardening: strengthen path validation and sanitize auto-update log/path handling
-- [PR #58](https://github.com/mstrhakr/compose_plugin/pull/58)
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.06...v2026.03.27c)
+###2026.03.28.0952
+- Bug Fixes (exec): improve handling of indirect file paths and preserve invalid paths
+- [PR #67](https://github.com/mstrhakr/compose_plugin/pull/67)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28-dev.0922...v2026.03.28.0952)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
@@ -44,6 +40,12 @@
 <INLINE>
 # Remove old 'source' files
 rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
+
+# Clean up legacy package entries (compose.manager-package-*) left by older builds
+# that used non-standard Slackware naming and weren't removed by upgradepkg
+for pkg in /var/log/packages/&name;-package-*; do
+    [ -e "$pkg" ] &amp;&amp; removepkg "$(basename "$pkg")" 2>/dev/null || true
+done
 
 #Create projects folder if it doesnt exist
 mkdir -p &pluginLOC;/projects
@@ -152,15 +154,15 @@ if [ -f "$patch_script" ]; then
     fi
 fi
 
-# Remove by plugin name (does latest version), fallback to explicit package name.
-removepkg &name; || removepkg &packageName; || false
+# Remove all Slackware package entries for this plugin.
+# Handles both new naming (compose.manager-VERSION-noarch-1) and
+# legacy naming (compose.manager-package-VERSION) left by older builds.
+for pkg in /var/log/packages/&name;-*; do
+    [ -e "$pkg" ] &amp;&amp; removepkg "$(basename "$pkg")" 2>/dev/null || true
+done
 
-# Remove plugin related files
+# Remove old package files from flash
 rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
-if [ -d "/usr/local/emhttp/plugins/&name;" ]; then
-    echo "Removing plugin directory: /usr/local/emhttp/plugins/&name;"
-    rm -rf /usr/local/emhttp/plugins/&name;
-fi
 </INLINE>
 </FILE>
 

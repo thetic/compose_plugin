@@ -4,11 +4,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 [ -f "${SCRIPT_DIR}/versions.env" ] && source "${SCRIPT_DIR}/versions.env"
 [ -z "$COMPOSE_VERSION" ] && COMPOSE_VERSION=5.0.2
 [ -z "$ACE_VERSION" ] && ACE_VERSION=1.43.5
+[ -z "$PKG_VERSION" ] && PKG_VERSION="$(date +%Y.%m.%d)"
+[ -z "$PKG_BUILD" ] && PKG_BUILD="$(date +%H%M)"
 docker run --rm --tmpfs /tmp \
     -v "$PWD/archive:/mnt/output:rw" \
     -e TZ="America/New_York" \
     -e COMPOSE_VERSION="$COMPOSE_VERSION" \
     -e ACE_VERSION="$ACE_VERSION" \
+    -e PKG_VERSION="$PKG_VERSION" \
+    -e PKG_BUILD="$PKG_BUILD" \
     -e OUTPUT_FOLDER="/mnt/output" \
     -v "$PWD/source:/mnt/source:ro" \
     vbatts/slackware:latest \

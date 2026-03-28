@@ -110,7 +110,7 @@ class StackInfoTest extends TestCase
         $this->assertSame($stackDir, $info->composeSource);
     }
 
-    public function testStructurallyInvalidIndirectRenamedToInvalid(): void
+    public function testStructurallyInvalidIndirectPreserved(): void
     {
         $stack = 'bad-indirect';
         $stackDir = $this->tempRoot . '/' . $stack;
@@ -122,14 +122,12 @@ class StackInfoTest extends TestCase
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertFalse($info->isIndirect);
-        // indirect file should be renamed, not deleted
-        $this->assertFileDoesNotExist("$stackDir/indirect");
-        $this->assertFileExists("$stackDir/indirect.invalid");
-        $this->assertSame('/mnt/user/../etc/passwd', trim(file_get_contents("$stackDir/indirect.invalid")));
+        // indirect file should be preserved (non-destructive handling)
+        $this->assertFileExists("$stackDir/indirect");
         $this->assertSame('/mnt/user/../etc/passwd', $info->invalidIndirectPath);
     }
 
-    public function testMissingDirIndirectRenamedToInvalid(): void
+    public function testMissingDirIndirectPreserved(): void
     {
         $stack = 'missing-dir-indirect';
         $stackDir = $this->tempRoot . '/' . $stack;
@@ -141,8 +139,8 @@ class StackInfoTest extends TestCase
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertFalse($info->isIndirect);
-        $this->assertFileDoesNotExist("$stackDir/indirect");
-        $this->assertFileExists("$stackDir/indirect.invalid");
+        // indirect file should be preserved (non-destructive handling)
+        $this->assertFileExists("$stackDir/indirect");
         $this->assertSame('/mnt/user/nonexistent_share', $info->invalidIndirectPath);
     }
 

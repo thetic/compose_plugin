@@ -1024,6 +1024,10 @@ class StackInfo
         $this->isIndirect = $this->isIndirect();
         $this->indirectPath = $this->readMetadata('indirect');
         $this->invalidIndirectPath = $this->readInvalidIndirect();
+        if ($this->invalidIndirectPath === null && !$this->isIndirect && $this->indirectPath !== null && $this->indirectPath !== '') {
+            // Invalid indirect path still present in ./indirect (non-destructive handling).
+            $this->invalidIndirectPath = $this->indirectPath;
+        }
         $this->composeSource = $this->isIndirect ? $this->indirectPath : $this->path;
 
         // Resolve compose file
@@ -1116,18 +1120,14 @@ class StackInfo
                 || Path::hasWindowsStylePath($indirectPath)
                 || Path::hasTraversal($indirectPath)
             ) {
-                // Path is structurally invalid — rename so the user can fix it in Settings.
-                @rename("$this->path/indirect", "$this->path/indirect.invalid");
-                unset($this->metadataCache['indirect']);
-                clientDebug("[stack] Renamed structurally invalid indirect file at $this->path to indirect.invalid", null, 'daemon', 'warning');
+                // Path is structurally invalid — ignore it and keep stack local without mutating files.
+                clientDebug("[stack] Ignoring structurally invalid indirect path at $this->path/indirect: " . sanitizeLogText($indirectPath), null, 'daemon', 'warning');
                 return false;
             }
             if (!is_dir($indirectPath)) {
                 // Directory doesn't exist — may be a temporarily unmounted share (NFS, etc.).
-                // Rename so the stack won't try to load from a missing path, but the user can fix it.
-                @rename("$this->path/indirect", "$this->path/indirect.invalid");
-                unset($this->metadataCache['indirect']);
-                clientDebug("[stack] Indirect path not found, renamed to indirect.invalid (may be temporarily unavailable): " . sanitizeLogText($indirectPath), null, 'daemon', 'warning');
+                // Ignore it and keep stack local without mutating files.
+                clientDebug("[stack] Ignoring unavailable indirect path (may be temporarily unavailable): " . sanitizeLogText($indirectPath), null, 'daemon', 'warning');
                 return false;
             }
             return true;
@@ -1138,8 +1138,9 @@ class StackInfo
     /**
      * Read the indirect.invalid file if present.
      *
-     * This file is created when isIndirect() renames a broken indirect file.
-     * The value can be shown in the Settings editor so the user can fix it.
+     * Legacy compatibility: older versions wrote this file when an indirect
+     * path was invalid. Newer versions keep ./indirect unchanged and use
+     * non-destructive warning behavior, but still read indirect.invalid.
      *
      * @return string|null The path stored in indirect.invalid, or null if not present
      */

@@ -37,8 +37,8 @@ class ComposeListHtmlTest extends TestCase
     public function testUpdateCellHasCorrectClass(): void
     {
         $source = $this->getPageSource();
-        // The update cell class must be 'compose-updatecolumn' (not 'updatecolumn')
-        $this->assertStringContainsString("class='compose-updatecolumn'", $source);
+        // The update cell class must include 'compose-updatecolumn' (not 'updatecolumn')
+        $this->assertStringContainsString('compose-updatecolumn', $source);
     }
 
     public function testUpdateCellDoesNotUseBareUpdateColumn(): void
@@ -66,8 +66,8 @@ class ComposeListHtmlTest extends TestCase
     public function testAutostartCellHasClassNine(): void
     {
         $source = $this->getPageSource();
-        // Autostart cell uses class 'nine' for CSS targeting
-        $this->assertStringContainsString("class='nine'", $source);
+        // Autostart cell includes class 'nine' for CSS targeting
+        $this->assertMatchesRegularExpression("/class='[^']*\\bnine\\b[^']*'/", $source);
     }
 
     public function testAutostartCheckboxHasDataAttribute(): void
@@ -104,8 +104,8 @@ class ComposeListHtmlTest extends TestCase
     public function testAdvancedColumnsUseCmAdvancedClass(): void
     {
         $source = $this->getPageSource();
-        // Advanced-only columns should use 'cm-advanced' (not bare 'advanced')
-        $this->assertStringContainsString("class='cm-advanced'", $source);
+        // Advanced-only columns should include 'cm-advanced' (not bare 'advanced')
+        $this->assertMatchesRegularExpression("/class='[^']*\\bcm-advanced\\b[^']*'/", $source);
     }
 
     // ===========================================

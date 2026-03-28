@@ -347,8 +347,20 @@ switch ($_POST['action']) {
         // Get external compose path (indirect)
         $indirectFile = "$compose_root/$script/indirect";
         $invalidIndirectFile = "$compose_root/$script/indirect.invalid";
-        $externalComposePath = is_file($indirectFile) ? trim(file_get_contents($indirectFile)) : "";
-        $invalidIndirectPath = is_file($invalidIndirectFile) ? trim(file_get_contents($invalidIndirectFile)) : "";
+        $externalComposePath = "";
+        $invalidIndirectPath = "";
+        if (is_file($indirectFile)) {
+            $raw = trim(file_get_contents($indirectFile));
+            if ($raw !== '' && is_dir($raw)) {
+                $externalComposePath = $raw;
+            } else {
+                // Path is invalid or directory unavailable — non-destructive handling
+                $invalidIndirectPath = $raw;
+            }
+        } elseif (is_file($invalidIndirectFile)) {
+            // Legacy fallback: older versions renamed indirect → indirect.invalid
+            $invalidIndirectPath = trim(file_get_contents($invalidIndirectFile));
+        }
 
         // Get available profiles from the profiles file
         $profilesFile = "$compose_root/$script/profiles";
