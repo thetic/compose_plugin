@@ -172,6 +172,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         padding-right: 20px
     }
 
+    .dropdown-menu {
+        z-index: 100 !important; 
+    }
+
 </style>
 
 <script src="/plugins/compose.manager/javascript/ace/ace.js" type="text/javascript"></script>
