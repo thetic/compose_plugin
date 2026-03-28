@@ -2,10 +2,10 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "compose.manager">
 <!ENTITY author "mstrhakr">
-<!ENTITY version     "2026.03.27-dev.1632">
+<!ENTITY version     "2026.03.28-dev.0915">
 <!ENTITY launch "Settings/&name;.settings">
 <!ENTITY packageVER "&version;">
-<!ENTITY packageMD5  "b40d5f3d805bf9a75a86e83c0542846c">
+<!ENTITY packageMD5  "b846e7aad6b65af5e7f64a630933b4c1">
 <!ENTITY pkgBUILD    "1">
 <!ENTITY packageName "&name;-&packageVER;-noarch-&pkgBUILD;">
 <!ENTITY packagefile "&packageName;.txz">
