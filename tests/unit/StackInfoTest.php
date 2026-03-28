@@ -110,7 +110,7 @@ class StackInfoTest extends TestCase
         $this->assertSame($stackDir, $info->composeSource);
     }
 
-    public function testStructurallyInvalidIndirectRenamedToInvalid(): void
+    public function testStructurallyInvalidIndirectPreserved(): void
     {
         $stack = 'bad-indirect';
         $stackDir = $this->tempRoot . '/' . $stack;
@@ -127,7 +127,7 @@ class StackInfoTest extends TestCase
         $this->assertSame('/mnt/user/../etc/passwd', $info->invalidIndirectPath);
     }
 
-    public function testMissingDirIndirectRenamedToInvalid(): void
+    public function testMissingDirIndirectPreserved(): void
     {
         $stack = 'missing-dir-indirect';
         $stackDir = $this->tempRoot . '/' . $stack;
