@@ -108,18 +108,20 @@ jobs:
             -e CA_CERT="/etc/ssl/certs/ca-certificates.crt" \
             vbatts/slackware:latest /mnt/source/pkg_build.sh
 
-          # Verify package was created
+          # Verify package was created (BUILD segment is generated inside Docker)
           ls -la ./archive/
-          if [[ ! -f "./archive/${{ env.PLUGIN_NAME }}-package-${VERSION}.txz" ]]; then
+          PACKAGE=$(ls ./archive/${{ env.PLUGIN_NAME }}-${VERSION}-noarch-*.txz 2>/dev/null | head -1)
+          if [[ -z "$PACKAGE" ]]; then
             echo "ERROR: Package not found!"
             exit 1
           fi
+          echo "PACKAGE_PATH=${PACKAGE}" >> $GITHUB_ENV
+          echo "Built package: ${PACKAGE}"
 
       - name: Calculate hash
         id: hash
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          PACKAGE="./archive/${{ env.PLUGIN_NAME }}-package-${VERSION}.txz"
+          PACKAGE="${{ env.PACKAGE_PATH }}"
 
           MD5=$(md5sum "$PACKAGE" | cut -d' ' -f1)
           echo "MD5=${MD5}" >> $GITHUB_OUTPUT

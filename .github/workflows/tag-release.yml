@@ -18,6 +18,7 @@ on:
     branches: [main, dev]
     paths:
       - 'source/compose.manager/**'
+      - 'source/pkg_build.sh'
       - 'versions.env'
   workflow_dispatch:
 
