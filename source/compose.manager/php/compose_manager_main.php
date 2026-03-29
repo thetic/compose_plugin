@@ -1663,13 +1663,17 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket'});
             composeDockerLoad.on('message', function(msg) {
                 var data = msg.split('\n');
-                // Build a map of shortID -> {cpu, mem} for quick lookup
-                var loadMap = {};
-                for (var i = 0, row; row = data[i]; i++) {
+                var i = 0;
+                var row = data[i];
+                while (row) {
                     var parts = row.split(';');
                     if (parts.length >= 3) {
                         var cpuRaw = parseFloat(parts[1]) || 0;
                         var cpuNorm = Math.round(Math.min(cpuRaw / composeCpuCount, 100) * 100) / 100;
+                        loadMap[parts[0]] = {cpu: cpuNorm, cpuText: cpuNorm + '%', mem: parts[2]};
+                    }
+                    i++;
+                    row = data[i];
                         loadMap[parts[0]] = {cpu: cpuNorm, cpuText: cpuNorm + '%', mem: parts[2]};
                     }
                 }
