@@ -279,10 +279,6 @@
   }
 
   /* Column width distribution (totals ~100%) */
-  .compose-ct-table .ct-col-icon {
-    width: 3%;
-  }
-
   .compose-ct-table .ct-col-name {
     width: 13%;
   }
