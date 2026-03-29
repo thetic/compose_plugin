@@ -20,7 +20,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
 // CPU count for load normalization (matches Docker manager's cpu_list approach)
 $cpus = function_exists('cpu_list') ? cpu_list() : [];
-$cpuCount = count($cpus) > 0 ? count($cpus) * count(preg_split('/[,-]/', $cpus[0])) : (int)trim(shell_exec('nproc 2>/dev/null') ?: '1');
+$cpuCount = (!empty($cpus) && isset($cpus[0]))
+    ? count($cpus) * count(preg_split('/[,-]/', $cpus[0]))
+    : (int)trim(shell_exec('nproc 2>/dev/null') ?: '1');
 
 // Note: Stack list is now loaded asynchronously via compose_list.php
 // This improves page load time by deferring expensive docker commands
