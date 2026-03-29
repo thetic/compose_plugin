@@ -244,7 +244,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $o .= "<td class='cm-advanced col-load compose-load-cell'>";
     $o .= "<span class='compose-stack-cpu-$id'>0%</span>";
     $o .= "<div class='usage-disk mm'><span id='compose-stack-cpu-$id' style='width:0'></span><span></span></div>";
-    $o .= "<br><span class='compose-stack-mem-$id compose-text-muted'>0b</span>";
+    $o .= "<br><span class='compose-stack-mem-$id compose-text-muted'>0B</span>";
     $o .= "</td>";
 
     // Description column (advanced only)
