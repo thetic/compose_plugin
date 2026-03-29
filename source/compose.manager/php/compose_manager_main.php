@@ -5311,6 +5311,24 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }
     });
 
+    // Right-click anywhere on a stack row opens the stack context menu
+    $(document).on('contextmenu', 'tr.compose-sortable[id^="stack-row-"]', function(e) {
+        var $icon = $(this).find('[data-stackid]').first();
+        if ($icon.length) {
+            e.preventDefault();
+            $icon.trigger($.Event('click', { pageX: e.pageX, pageY: e.pageY }));
+        }
+    });
+
+    // Right-click anywhere on a container detail row opens the container context menu
+    $(document).on('contextmenu', '#compose_stacks tr[data-container][data-stackid]', function(e) {
+        var $icon = $(this).find('.hand[id^="ct-"]').first();
+        if ($icon.length) {
+            e.preventDefault();
+            $icon.trigger($.Event('click', { pageX: e.pageX, pageY: e.pageY }));
+        }
+    });
+
     // Close actions menu when clicking outside
     $(document).on('click', function(e) {
         if (!$(e.target).closest('#stack-actions-modal, .stack-kebab-btn').length) {
