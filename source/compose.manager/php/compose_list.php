@@ -242,9 +242,14 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 
     // CPU & Memory column (advanced only) — populated in real-time via dockerload WebSocket
     $o .= "<td class='cm-advanced col-load compose-load-cell'>";
-    $o .= "<span class='compose-stack-cpu-$id'>0%</span>";
-    $o .= "<div class='usage-disk mm'><span id='compose-stack-cpu-$id' style='width:0'></span><span></span></div>";
-    $o .= "<br><span class='compose-stack-mem-$id compose-text-muted'>0B</span>";
+    if ($isrunning) {
+        $o .= "<span class='compose-stack-cpu-$id'>0%</span>";
+        $o .= "<div class='usage-disk mm'><span id='compose-stack-cpu-$id' style='width:0'></span><span></span></div>";
+        $o .= "<br><span class='compose-stack-mem-$id compose-text-muted'>0B</span>";
+    } else {
+        $o .= "<span class='compose-stack-cpu-$id compose-text-muted'>-</span>";
+        $o .= "<span class='compose-stack-mem-$id' style='display:none'></span>";
+    }
     $o .= "</td>";
 
     // Description column (advanced only)

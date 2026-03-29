@@ -4641,9 +4641,14 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
             // CPU & Memory load (advanced only) — populated by dockerload WebSocket
             html += '<td class="cm-advanced compose-load-cell">';
-            html += '<span class="compose-cpu-' + containerId + '">0%</span>';
-            html += '<div class="usage-disk mm"><span id="compose-cpu-' + containerId + '" style="width:0"></span><span></span></div>';
-            html += '<br><span class="compose-mem-' + containerId + ' compose-text-muted">0 / 0</span>';
+            if (state === 'running') {
+                html += '<span class="compose-cpu-' + containerId + '">0%</span>';
+                html += '<div class="usage-disk mm"><span id="compose-cpu-' + containerId + '" style="width:0"></span><span></span></div>';
+                html += '<br><span class="compose-mem-' + containerId + ' compose-text-muted">0 / 0</span>';
+            } else {
+                html += '<span class="compose-cpu-' + containerId + ' compose-text-muted">-</span>';
+                html += '<span class="compose-mem-' + containerId + '" style="display:none"></span>';
+            }
             html += '</td>';
 
             // Container Port
