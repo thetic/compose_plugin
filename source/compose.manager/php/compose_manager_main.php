@@ -1667,7 +1667,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 var row = data[i];
                 while (row) {
                     var parts = row.split(';');
-                    if (parts.length >= 3) {
+                        var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
                         var cpuRaw = parseFloat(parts[1]) || 0;
                         var cpuNorm = Math.round(Math.min(cpuRaw / composeCpuCount, 100) * 100) / 100;
                         loadMap[parts[0]] = {cpu: cpuNorm, cpuText: cpuNorm + '%', mem: parts[2]};
