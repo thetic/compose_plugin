@@ -57,11 +57,16 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 
     // Collect container names for the hide-from-docker feature (data attribute)
     $containerNamesList = [];
+    // Collect short container IDs for CPU/MEM load mapping (docker stats uses 12-char short IDs)
+    $containerIdsList = [];
     foreach ($projectContainers as $ct) {
         $n = $ct['Names'] ?? '';
         if ($n) $containerNamesList[] = $n;
+        $ctId = $ct['ID'] ?? '';
+        if ($ctId) $containerIdsList[] = substr($ctId, 0, 12);
     }
     $containerNamesAttr = htmlspecialchars(json_encode($containerNamesList), ENT_QUOTES, 'UTF-8');
+    $containerIdsAttr = htmlspecialchars(implode(',', $containerIdsList), ENT_QUOTES, 'UTF-8');
 
     // Determine states
     $isrunning = $runningCount > 0;
@@ -186,7 +191,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $hasBuild = $stackInfo->hasBuildConfig() ? '1' : '0';
 
     // Main row - Docker tab structure with expand arrow on left
-    $o .= "<tr class='compose-sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson' data-webui='$webuiUrlHtml' data-containers='$containerNamesAttr' data-hasbuild='$hasBuild' data-invalid-indirect='" . ($hasInvalidIndirect ? '1' : '0') . "' data-invalid-indirect-path='$invalidIndirectPathHtml'>";
+    $o .= "<tr class='compose-sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson' data-webui='$webuiUrlHtml' data-containers='$containerNamesAttr' data-ctids='$containerIdsAttr' data-hasbuild='$hasBuild' data-invalid-indirect='" . ($hasInvalidIndirect ? '1' : '0') . "' data-invalid-indirect-path='$invalidIndirectPathHtml'>";
 
 // Arrow column
     $o .= "<td class='col-arrow'>";
@@ -235,6 +240,13 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $uptimeClass = $isrunning ? 'green-text' : 'grey-text';
     $o .= "<td class='col-uptime'><span class='$uptimeClass'>$uptimeDisplay</span></td>";
 
+    // CPU & Memory column (advanced only) — populated in real-time via dockerload WebSocket
+    $o .= "<td class='cm-advanced col-load compose-load-cell'>";
+    $o .= "<span class='compose-stack-cpu-$id'>0%</span>";
+    $o .= "<div class='usage-disk mm'><span id='compose-stack-cpu-$id' style='width:0'></span><span></span></div>";
+    $o .= "<br><span class='compose-stack-mem-$id compose-text-muted'>0b</span>";
+    $o .= "</td>";
+
     // Description column (advanced only)
     $o .= "<td class='cm-advanced col-description' style='overflow-wrap:break-word;word-wrap:break-word;'>";
     if ($hasInvalidIndirect) {
@@ -254,7 +266,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 
     // Expandable details row
     $o .= "<tr class='stack-details-row' id='details-row-$id' style='display:none;'>";
-    $o .= "<td colspan='9' class='stack-details-cell' style='padding:0 0 0 60px;background:var(--dynamix-tablesorter-tbody-row-bg-color);'>";
+    $o .= "<td colspan='10' class='stack-details-cell' style='padding:0 0 0 60px;background:var(--dynamix-tablesorter-tbody-row-bg-color);'>";
     $o .= "<div class='stack-details-container' id='details-container-$id' style='padding:8px 16px;'>";
     $o .= "<i class='fa fa-spinner fa-spin compose-spinner'></i> Loading containers...";
     $o .= "</div>";
@@ -264,7 +276,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 
 // If no stacks found, show a message
 if ($stackCount === 0) {
-    $o = "<tr><td colspan='9' style='text-align:center;padding:20px;color:var(--alt-text-color);'>No Docker Compose stacks found. Click 'Add New Stack' to create one.</td></tr>";
+    $o = "<tr><td colspan='10' style='text-align:center;padding:20px;color:var(--alt-text-color);'>No Docker Compose stacks found. Click 'Add New Stack' to create one.</td></tr>";
 }
 
 // Output the HTML
