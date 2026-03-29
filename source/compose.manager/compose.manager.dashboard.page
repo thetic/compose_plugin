@@ -696,6 +696,26 @@ $script .= <<<'EOT'
         );
     });
 
+    // Right-click anywhere on a dashboard stack row opens the stack context menu
+    $(document).on('contextmenu', '.compose-dash-stack', function(e) {
+        var $icon = $(this).find('.compose-dash-icon').first();
+        if ($icon.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            $icon.trigger($.Event('click', { pageX: e.pageX, pageY: e.pageY }));
+        }
+    });
+
+    // Right-click anywhere on a dashboard container row opens the container context menu
+    $(document).on('contextmenu', '.compose-dash-container', function(e) {
+        var $icon = $(this).find('.compose-dash-ct-icon').first();
+        if ($icon.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            $icon.trigger($.Event('click', { pageX: e.pageX, pageY: e.pageY }));
+        }
+    });
+
     // Check if any stacks are visible (for "no stacks" message)
     function noStacks() {
         if ($('#compose_dash_content .compose-dash-stack:visible').length === 0 && $('#compose_dash_content .compose-dash-stack').length > 0) {
