@@ -1663,19 +1663,18 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket'});
             composeDockerLoad.on('message', function(msg) {
                 var data = msg.split('\n');
+                var loadMap = {};
                 var i = 0;
                 var row = data[i];
                 while (row) {
                     var parts = row.split(';');
-                        var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
+                    if (parts.length >= 3) {
                         var cpuRaw = parseFloat(parts[1]) || 0;
-                        var cpuNorm = Math.round(Math.min(cpuRaw / composeCpuCount, 100) * 100) / 100;
+                        var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
                         loadMap[parts[0]] = {cpu: cpuNorm, cpuText: cpuNorm + '%', mem: parts[2]};
                     }
                     i++;
                     row = data[i];
-                        loadMap[parts[0]] = {cpu: cpuNorm, cpuText: cpuNorm + '%', mem: parts[2]};
-                    }
                 }
 
                 // Update per-container CPU & MEM elements in expanded detail tables
