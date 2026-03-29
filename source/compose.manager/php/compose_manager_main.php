@@ -178,7 +178,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
 </style>
 
-<script src="/plugins/compose.manager/javascript/ace/ace.js" type="text/javascript"></script>
+<?php
+// Use Dynamix's bundled Ace if available (Unraid 7.0.0+), else fall back to our plugin-local copy
+// (downloaded during install for pre-7.0.0 Unraid via the PLG post-install script)
+$acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js')
+    ? '/webGui/javascript/ace'
+    : '/plugins/compose.manager/javascript/ace';
+?>
+<script src="<?php echo $acePath; ?>/ace.js" type="text/javascript"></script>
 <script src="/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js" type="text/javascript"></script>
 <script src="/plugins/compose.manager/javascript/common.js" type="text/javascript"></script>
 <script>
@@ -186,7 +193,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     var caURL = "/plugins/compose.manager/php/exec.php";
     var compURL = "/plugins/compose.manager/php/compose_util.php";
     var aceTheme = <?php echo (in_array($theme, ['black', 'gray']) ? json_encode('ace/theme/tomorrow_night') : json_encode('ace/theme/tomorrow')); ?>;
+    var aceBasePath = <?php echo json_encode($acePath); ?>;
     const icon_label = <?php echo json_encode($docker_label_icon); ?>;
+
+    // Configure Ace base path explicitly so it finds mode/theme files
+    // regardless of how the script URL was resolved
+    if (typeof ace !== 'undefined') {
+        ace.config.set('basePath', aceBasePath);
+    }
     const webui_label = <?php echo json_encode($docker_label_webui); ?>;
     const shell_label = <?php echo json_encode($docker_label_shell); ?>;
 
@@ -588,6 +602,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Initialize editor modal
     function initEditorModal() {
+        if (typeof ace === 'undefined') {
+            console.warn('Compose Manager: Ace editor not available. Editor will open without syntax highlighting.');
+            return;
+        }
         // Initialize Ace editors for compose and env tabs only
         ['compose', 'env'].forEach(function(type) {
             var editor = ace.edit('editor-' + type);
@@ -599,6 +617,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 useSoftTabs: true,
                 wrap: true
             });
+
+            // Disable workers to avoid loading worker-yaml.js / worker-sh.js —
+            // we already validate YAML client-side via js-yaml
+            editor.getSession().setUseWorker(false);
 
             // Set mode based on type
             if (type === 'env') {
@@ -3292,6 +3314,15 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     function openEditorModalByProject(project, projectName, initialTab) {
+        if (typeof ace === 'undefined') {
+            swal({
+                title: 'Editor Unavailable',
+                text: 'The Ace editor library could not be loaded. Please reload the page or verify the plugin installation.',
+                type: 'error'
+            });
+            return;
+        }
+
         editorModal.currentProject = project;
         editorModal.modifiedTabs = new Set();
         editorModal.modifiedSettings = new Set();
@@ -3342,12 +3373,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (data) {
                     var response = jQuery.parseJSON(data);
                     editorModal.originalContent['compose'] = response.content || '';
-                    editorModal.editors['compose'].setValue(response.content || '', -1);
+                    if (editorModal.editors['compose']) editorModal.editors['compose'].setValue(response.content || '', -1);
                 }
             }).fail(function() {
                 var errorContent = '# Error loading file';
                 editorModal.originalContent['compose'] = errorContent;
-                editorModal.editors['compose'].setValue(errorContent, -1);
+                if (editorModal.editors['compose']) editorModal.editors['compose'].setValue(errorContent, -1);
             })
         );
 
@@ -3360,19 +3391,20 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (data) {
                     var response = jQuery.parseJSON(data);
                     editorModal.originalContent['env'] = response.content || '';
-                    editorModal.editors['env'].setValue(response.content || '', -1);
+                    if (editorModal.editors['env']) editorModal.editors['env'].setValue(response.content || '', -1);
                 }
             }).fail(function() {
                 var errorContent = '# Error loading file';
                 editorModal.originalContent['env'] = errorContent;
-                editorModal.editors['env'].setValue(errorContent, -1);
+                if (editorModal.editors['env']) editorModal.editors['env'].setValue(errorContent, -1);
             })
         );
 
         // When all files are loaded
         $.when.apply($, loadPromises).then(function() {
             // Run validation on compose file
-            validateYaml('compose', editorModal.editors['compose'].getValue());
+            var composeContent = editorModal.editors['compose'] ? editorModal.editors['compose'].getValue() : (editorModal.originalContent['compose'] || '');
+            validateYaml('compose', composeContent);
         }).fail(function() {
             $('#editor-validation-compose').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Error loading some files').removeClass('valid').addClass('error');
         });
@@ -3765,7 +3797,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 // Brief feedback in validation panel
                 $('#editor-validation-' + currentTab).html('<i class="fa fa-check editor-validation-icon"></i> Saved!').removeClass('error warning').addClass('valid');
                 setTimeout(function() {
-                    validateYaml(currentTab, editorModal.editors[currentTab].getValue());
+                    if (editorModal.editors[currentTab]) validateYaml(currentTab, editorModal.editors[currentTab].getValue());
                 }, 1500);
             } else {
                 $('#editor-validation-' + currentTab).html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Save failed').removeClass('valid warning').addClass('error');
@@ -3776,6 +3808,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     function saveTab(tabName, saveErrors) {
+        if (!editorModal.editors[tabName]) return Promise.reject('Editor not available');
         var content = editorModal.editors[tabName].getValue();
         var project = editorModal.currentProject;
         var actionStr = null;

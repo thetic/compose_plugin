@@ -14,6 +14,8 @@
 <!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
 <!ENTITY pluginLOC "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
+<!ENTITY aceVER    "1.43.5">
+<!ENTITY aceURL    "https://github.com/ajaxorg/ace-builds/archive/refs/tags/v&aceVER;.zip">
 ]>
 
 <PLUGIN  name="&name;"
@@ -68,6 +70,52 @@ fi
 <FILE Name="&pluginLOC;/&packagefile;" Run="upgradepkg --install-new">
 <URL>&packageURL;</URL>
 <MD5>&packageMD5;</MD5>
+</FILE>
+
+<FILE Run="/bin/bash">
+<INLINE>
+# Download Ace editor if not already provided by Unraid (Unraid 7.0.0+ includes it via Dynamix)
+ACE_DYNAMIX_PATH="/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js"
+ACE_PLUGIN_DIR="&emhttpLOC;/javascript/ace"
+
+if [ -f "$ACE_DYNAMIX_PATH" ]; then
+    echo "Ace editor found at $ACE_DYNAMIX_PATH (Unraid 7.0.0+), skipping download."
+else
+    echo "Ace editor not found in Dynamix (pre-7.0.0 Unraid), downloading v&aceVER;..."
+    mkdir -p "$ACE_PLUGIN_DIR"
+    TMPDIR_ACE="/tmp/ace-install-$$"
+    mkdir -p "$TMPDIR_ACE"
+    WGET_CERT_OPTS=""
+    if [ ! -f /etc/ssl/certs/ca-certificates.crt ] &amp;&amp; [ ! -d /etc/ssl/certs ]; then
+        echo "WARNING: No system CA bundle found; downloading Ace with TLS verification disabled."
+        WGET_CERT_OPTS="--no-check-certificate"
+    fi
+    if wget $WGET_CERT_OPTS -q -O "$TMPDIR_ACE/ace.zip" "&aceURL;"; then
+        if unzip -q "$TMPDIR_ACE/ace.zip" \
+            "ace-builds-&aceVER;/src-min-noconflict/ace.js" \
+            "ace-builds-&aceVER;/src-min-noconflict/mode-yaml.js" \
+            "ace-builds-&aceVER;/src-min-noconflict/mode-sh.js" \
+            "ace-builds-&aceVER;/src-min-noconflict/theme-tomorrow.js" \
+            "ace-builds-&aceVER;/src-min-noconflict/theme-tomorrow_night.js" \
+            -d "$TMPDIR_ACE/extracted"; then
+            if cp "$TMPDIR_ACE/extracted/ace-builds-&aceVER;/src-min-noconflict/"*.js "$ACE_PLUGIN_DIR/"; then
+                if [ -f "$ACE_PLUGIN_DIR/ace.js" ]; then
+                    echo "Ace editor v&aceVER; installed to $ACE_PLUGIN_DIR"
+                else
+                    echo "WARNING: Ace editor files not found in $ACE_PLUGIN_DIR after install. Editor will lack syntax highlighting."
+                fi
+            else
+                echo "WARNING: Failed to copy Ace editor files. Editor will lack syntax highlighting."
+            fi
+        else
+            echo "WARNING: Failed to extract Ace editor archive. Editor will lack syntax highlighting."
+        fi
+    else
+        echo "WARNING: Failed to download Ace editor. The YAML/env editor will not have syntax highlighting."
+    fi
+    rm -rf "$TMPDIR_ACE"
+fi
+</INLINE>
 </FILE>
 
 <FILE Run="/bin/bash">
