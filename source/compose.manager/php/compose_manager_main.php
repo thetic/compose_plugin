@@ -1632,9 +1632,19 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // ebox observer removed; pending update checks are now processed from
         // refreshStackRow and processPendingComposeReloads directly.
 
+        // Gate dockerload socket start until the stack list DOM is ready.
+        var composeListReady = false;
+
         // Load the stack list asynchronously (like Docker tab)
         // This defers the expensive docker commands to after the page renders
         composeLoadlist().then(function() {
+            composeListReady = true;
+
+            // Start the dockerload socket now that the DOM has rows with data-ctids.
+            if (typeof window.composeDockerLoadToggle === 'function') {
+                window.composeDockerLoadToggle(isComposeAdvancedMode());
+            }
+
             getConfig().then(function(config) {
                 if (config['STACKS_DEFAULT_EXPANDED'] == 'true') {
                     // Expand all stacks if the default is set to expanded
@@ -1917,8 +1927,34 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     renderStackAggregates();
                 }
             }, 3000);
-            // Start immediately if already in advanced view
-            if (isComposeAdvancedMode()) {
+
+            // When the browser tab becomes visible again, invalidate the
+            // stack index so the next WebSocket message rebuilds it from
+            // the current DOM.  This prevents permanently stale data when
+            // the page loaded or sat in a background tab.
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible' && composeDockerLoadRunning) {
+                    composeStackIndex = null;
+                }
+            });
+
+            // In tabbed mode, also invalidate the cache when the compose
+            // panel becomes visible (user switches tabs) so stale entries
+            // don't linger from when the panel was hidden.
+            var $loadTable = $('#compose_stacks');
+            var $loadTabPanel = $loadTable.length ? $loadTable.closest('[role="tabpanel"]') : $();
+            if ($loadTabPanel.length) {
+                new MutationObserver(function() {
+                    if ($loadTabPanel[0].style.display !== 'none' && composeDockerLoadRunning) {
+                        composeStackIndex = null;
+                    }
+                }).observe($loadTabPanel[0], { attributes: true, attributeFilter: ['style'] });
+            }
+
+            // Only auto-start the socket if the stack list is already
+            // loaded (composeListReady is true).  Otherwise the
+            // composeLoadlist().then() callback will start it.
+            if (composeListReady && isComposeAdvancedMode()) {
                 composeDockerLoad.start();
                 composeDockerLoadRunning = true;
             }
