@@ -56,7 +56,8 @@ class ComposeManagerMainSourceTest extends TestCase
         $source = $this->getPageSource();
         $this->assertStringContainsString('var totalMemLimitBytes = 0;', $source);
         $this->assertStringContainsString('totalMemLimitBytes += composeLoadById[ctId].memLimitBytes || 0;', $source);
-        $this->assertStringContainsString('var stackMemTotal = totalMemLimitBytes > 0', $source);
+        $this->assertStringContainsString('var stackMemTotalBytes = 0;', $source);
+        $this->assertStringContainsString('stackMemTotalBytes = Math.min(totalMemLimitBytes, composeSystemMemBytes);', $source);
     }
 
     public function testDockerLoadMapStoresParsedLimitBytes(): void
