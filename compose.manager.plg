@@ -2,15 +2,15 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "compose.manager">
 <!ENTITY author "mstrhakr">
-<!ENTITY version     "2026.03.28.0952">
+<!ENTITY version     "2026.03.28">
 <!ENTITY launch "Settings/&name;.settings">
 <!ENTITY packageVER "&version;">
-<!ENTITY packageMD5  "c502d67156751cbf367a4d7bd2906f7b">
-<!ENTITY pkgBUILD    "0952">
+<!ENTITY packageMD5  "fe3db14218121bb9d35f4b8e6076995d">
+<!ENTITY pkgBUILD    "1015">
 <!ENTITY packageName "&name;-&packageVER;-noarch-&pkgBUILD;">
 <!ENTITY packagefile "&packageName;.txz">
 <!ENTITY github "mstrhakr/compose_plugin">
-<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
 <!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
 <!ENTITY pluginLOC "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC "/usr/local/emhttp/plugins/&name;">
@@ -31,10 +31,28 @@
 >
 
 <CHANGES>
-###2026.03.28.0952
+###2026.03.28
 - Bug Fixes (exec): improve handling of indirect file paths and preserve invalid paths
-- [PR #67](https://github.com/mstrhakr/compose_plugin/pull/67)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28-dev.0922...v2026.03.28.0952)
+- Bug Fixes (build): add build timestamp to package naming and update PLG with build number
+- Bug Fixes (workflow): update versioning format for beta tags and improve tag generation logic
+- Bug Fixes (build): update package verification logic and ensure correct package naming in build workflow
+- Bug Fixes (workflow): update build and tag-release workflows to improve package verification and trigger conditions
+- Bug Fixes (build): update versioning format and package naming to prevent (un)install issues
+- Bug Fixes (CSS): update column widths and classes for improved layout in compose stacks and add cols for arrow and icon to separate from name and keep consistent
+- Bug Fixes (StackInfo): implement non-destructive handling for invalid indirect paths
+- Bug Fixes (plg): revert dev plg to point to last beta
+- Bug Fixes (workflow): change trigger to pr close for sync-plugin-url to tighen usage
+- Bug Fixes (workflow): tighted workflow rules to prevent repackaging when we dont need to
+- Bug Fixes (plg): update changelog for v2026.03.27b
+- CI/CD (tag-release): use positive grep for stable tags to exclude legacy -dev tags [skip ci]
+- Chores: update changelog for v2026.03.28.0952 [skip ci]
+- Chores: update changelog for v2026.03.28.0943 [skip ci]
+- Chores: update changelog for v2026.03.28.0936 [skip ci]
+- Chores: update changelog for v2026.03.28.0930 [skip ci]
+- Chores: update changelog for v2026.03.28-dev.0922 [skip ci]
+- Chores: update changelog for v2026.03.28-dev.0915 [skip ci]
+- Chores: update changelog for v2026.03.28-dev.0905 [skip ci]
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.27c...v2026.03.28)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
