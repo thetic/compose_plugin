@@ -31,49 +31,19 @@
 >
 
 <CHANGES>
-###2026.03.29.2151
-- Features (load): implement CPU and memory load display for containers in advanced view
-- Features (dashboard): add context menu on right-click for stacks and containers
-- Features (compose): add context menu on right-click for stacks and containers
-- Features (codeql): add custom CodeQL workflow for security analysis to enable skipping [skip ci] commits
-- Features (codeql): add custom CodeQL workflow for security analysis to enable skipping [skip ci] commits
-- Bug Fixes (compose-load): normalize cpu count and stack mem limits
-- Bug Fixes (compose-ui): align CPU &amp; Memory load labels
-- Bug Fixes (compose-load): update CSS classes for CPU and memory usage display
-- Bug Fixes (nchan): reuse docker manager docker_load worker
-- Bug Fixes (compose-load): start docker_load and use system memory total
-- Bug Fixes (cpu-mem): use dockerload avail text for stack aggregate denominator
-- Bug Fixes (cpu-mem): retry dockerload subscriber init for standalone compose tab
-- Bug Fixes (cpu-mem): show aggregate memory as used/avail with robust unit parsing
-- Bug Fixes (load): correct CPU normalization calculation in load map
-- Bug Fixes (load): optimize load map construction for container metrics
-- Bug Fixes (ui): correct memory display unit from '0b' to '0B' in advanced view
-- Bug Fixes (cpu): improve CPU count calculation for load normalization
-- Bug Fixes (styles): enhance dropdown menu z-index for improved visibility
-- Performance (cpu-mem): add stale timeout fallback and visibility-aware processing
-- Refactoring: remove ACE_VERSION references and streamline Ace editor handling
-- Tests (compose-load): cover load column and cpu/mem source logic
-- CI/CD (tag-release): use positive grep for stable tags to exclude legacy -dev tags [skip ci]
-- CI/CD (tag-release): use positive grep for stable tags to exclude legacy -dev tags [skip ci]
-- Chores (codeql): update CodeQL action versions
-- Chores: update changelog for v2026.03.28 [skip ci]
-- compose_manager_main.php(dockerload): cache stackId-&gt;containerIds index to avoid per-tick DOM traversal
-- compose_manager_main.php(dockerload): gate WebSocket subscription on advanced view mode
-- compose_manager_main.php(cpu-count): expand thread_siblings_list ranges for accurate CPU count
-- deploy.ps1(multi-host): fix RemoteHost help text to show PowerShell array syntax
-- compose_list+main(ux): show dash for stopped stack/container load
-- comboButton.css(cleanup): remove dead ct-col-icon rule
-- compose_manager_main(nchan): fix garbled load map construction loop
-- compose_manager_main(editor): block editor modal when Ace is missing
-- build.ps1: fix ComposeVersion default in help text
-- compose.manager.plg: add error checking for Ace extract and copy
-- compose.manager.plg: prefer TLS verification for Ace download
-- compose_manager_main(editor): disable Ace workers to prevent 404s
-- settings.page: use PHP acePath for version detection fallback
-- build.ps1: remove leftover Ace Editor references
-- compose_manager_main(editor): guard editorModal.editors accesses when Ace is missing
+###2026.03.30.1251
+- Bug Fixes (cpu-mem): pin values to two decimal places
+- Bug Fixes (compose-manager): improve memory limit handling for stack resources
+- Bug Fixes (compose-load): improve WebSocket subscriber management and error handling
+- Bug Fixes (compose-load): enhance debugging for dockerload socket initialization and visibility handling
+- Bug Fixes (compose-load): defer dockerload socket start until stack list is ready
+- Refactoring (override-resolution): enhance legacy handling in override resolution logic
+- Refactoring (compose-load): remove outdated project upgrade logic from plugin
+- Documentation: update file management references to include all standard Compose file names
+- Tests: update memory limit assertions in ComposeManagerMainSourceTest
+- Tests: enhance override path tests and add compose file resolution tests
 - [PR #74](https://github.com/mstrhakr/compose_plugin/pull/74)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28...v2026.03.29.2151)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28...v2026.03.30.1251)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
