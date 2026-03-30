@@ -4684,7 +4684,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         html += '<th class="cm-advanced ct-col-tag">Tag</th>';
         html += '<th class="cm-advanced ct-col-net">Network</th>';
         html += '<th class="cm-advanced ct-col-ip">Container IP</th>';
-        html += '<th class="cm-advanced ct-col-load">CPU &amp; Memory</th>';
+        html += '<th class="cm-advanced ct-col-load">CPU &amp; Memory load</th>';
         html += '<th class="ct-col-cport">Container Port</th>';
         html += '<th class="ct-col-lport">LAN IP:Port</th>';
         html += '</tr></thead>';
@@ -5724,7 +5724,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     <th class="col-update">Update</th>
                     <th class="col-containers">Containers</th>
                     <th class="col-uptime">Uptime</th>
-                    <th class="cm-advanced col-load">CPU &amp; Memory</th>
+                    <th class="cm-advanced col-load">CPU &amp; Memory load</th>
                     <th class="cm-advanced col-description">Description</th>
                     <th class="cm-advanced col-path">Path</th>
                     <th class="nine col-autostart">Autostart</th>
