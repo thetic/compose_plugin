@@ -326,13 +326,23 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         return parseMemUsagePair(memStr).used;
     }
 
-    // Format bytes to human-readable string
+    // Format bytes to human-readable string with fixed 2 decimals.
     function formatBytes(bytes) {
-        if (bytes <= 0) return '0B';
-        if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + 'GiB';
-        if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + 'MiB';
-        if (bytes >= 1024) return (bytes / 1024).toFixed(1) + 'KiB';
-        return bytes + 'B';
+        var val = Number(bytes) || 0;
+        if (val < 0) val = 0;
+        if (val >= 1073741824) return (val / 1073741824).toFixed(2) + 'GiB';
+        if (val >= 1048576) return (val / 1048576).toFixed(2) + 'MiB';
+        if (val >= 1024) return (val / 1024).toFixed(2) + 'KiB';
+        return val.toFixed(2) + 'B';
+    }
+
+    function formatCpuPercent(value) {
+        var num = Number(value) || 0;
+        return num.toFixed(2) + '%';
+    }
+
+    function formatMemUsageText(usedBytes, limitBytes) {
+        return formatBytes(usedBytes) + ' / ' + formatBytes(limitBytes);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1889,7 +1899,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     });
 
                     if (matched > 0) {
-                        var aggCpu = Math.round(totalCpu * 100) / 100 + '%';
+                        var aggCpu = formatCpuPercent(totalCpu);
                         var stackMemTotalBytes = 0;
                         if (totalMemLimitBytes > 0 && composeSystemMemBytes > 0) {
                             stackMemTotalBytes = Math.min(totalMemLimitBytes, composeSystemMemBytes);
@@ -1898,8 +1908,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         } else if (composeSystemMemBytes > 0) {
                             stackMemTotalBytes = composeSystemMemBytes;
                         }
-                        var stackMemTotal = formatBytes(stackMemTotalBytes);
-                        var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + stackMemTotal;
+                        var aggMem = formatMemUsageText(totalMemUsedBytes, stackMemTotalBytes);
                         $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
                         $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
                         $('.compose-stack-mem-' + entry.stackId).show().text(aggMem);
@@ -1929,8 +1938,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         var memPair = parseMemUsagePair(parts[2]);
                         composeLoadById[parts[0]] = {
                             cpu: cpuNorm,
-                            cpuText: cpuNorm + '%',
-                            mem: parts[2],
+                            cpuText: formatCpuPercent(cpuNorm),
+                            mem: formatMemUsageText(memPair.used, memPair.limit),
                             memUsedBytes: memPair.used,
                             memLimitBytes: memPair.limit,
                             ts: now
