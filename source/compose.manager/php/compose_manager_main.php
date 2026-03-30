@@ -1890,9 +1890,15 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                     if (matched > 0) {
                         var aggCpu = Math.round(totalCpu * 100) / 100 + '%';
-                        var stackMemTotal = totalMemLimitBytes > 0
-                            ? formatBytes(totalMemLimitBytes)
-                            : (composeSystemMemBytes > 0 ? formatBytes(composeSystemMemBytes) : '0B');
+                        var stackMemTotalBytes = 0;
+                        if (totalMemLimitBytes > 0 && composeSystemMemBytes > 0) {
+                            stackMemTotalBytes = Math.min(totalMemLimitBytes, composeSystemMemBytes);
+                        } else if (totalMemLimitBytes > 0) {
+                            stackMemTotalBytes = totalMemLimitBytes;
+                        } else if (composeSystemMemBytes > 0) {
+                            stackMemTotalBytes = composeSystemMemBytes;
+                        }
+                        var stackMemTotal = formatBytes(stackMemTotalBytes);
                         var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + stackMemTotal;
                         $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
                         $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
