@@ -1751,13 +1751,29 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 composeClientDebug('[dockerload] NchanSubscriber not available yet', null, 'daemon', 'debug');
                 return false;
             }
-            if (window.composeDockerLoadInitialized) {
-                return true;
+
+            // Tear down previous subscriber if page was re-navigated (Unraid
+            // AJAX navigation preserves window globals but old closures/sockets
+            // become stale).  Always create a fresh subscriber.
+            if (window._composeDockerLoad) {
+                composeClientDebug('[dockerload] tearing down previous subscriber', null, 'daemon', 'info');
+                try { window._composeDockerLoad.stop(); } catch (e) {}
             }
-            window.composeDockerLoadInitialized = true;
+            if (window._composeDockerLoadStaleTimer) {
+                clearInterval(window._composeDockerLoadStaleTimer);
+            }
+            if (window._composeDockerLoadVisHandler) {
+                document.removeEventListener('visibilitychange', window._composeDockerLoadVisHandler);
+            }
+            if (window._composeDockerLoadPanelObserver) {
+                window._composeDockerLoadPanelObserver.disconnect();
+            }
+            $(document).off('composeListRefreshed.dockerload');
+
             composeClientDebug('[dockerload] initializing subscriber, composeListReady=' + composeListReady, null, 'daemon', 'info');
 
-            var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket'});
+            var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket', reconnectTimeout: 5000});
+            window._composeDockerLoad = composeDockerLoad;
             var composeDockerLoadRunning = false;
 
             // Cache of { stackId, containerIds[] } built from the DOM once after
@@ -1799,7 +1815,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
             // Invalidate the cache when the list refreshes so that added/removed
             // stacks are picked up on the next stats tick.
-            $(document).on('composeListRefreshed', function() {
+            $(document).on('composeListRefreshed.dockerload', function() {
                 composeClientDebug('[dockerload] composeListRefreshed — invalidating stack index and load cache', null, 'daemon', 'debug');
                 composeStackIndex = null;
                 composeLoadById = {};
@@ -1931,9 +1947,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 renderStackAggregates();
             });
 
+            composeDockerLoad.on('error', function(code, desc) {
+                composeClientDebug('[dockerload] WebSocket error', { code: code, desc: desc }, 'daemon', 'warn');
+            });
+
             // If dockerload pauses/stalls, drop stale values on a timer so the UI
             // falls back to placeholders instead of showing frozen metrics forever.
-            setInterval(function() {
+            window._composeDockerLoadStaleTimer = setInterval(function() {
                 if (!isComposeLoadVisible()) {
                     return;
                 }
@@ -1946,12 +1966,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // stack index so the next WebSocket message rebuilds it from
             // the current DOM.  This prevents permanently stale data when
             // the page loaded or sat in a background tab.
-            document.addEventListener('visibilitychange', function() {
+            window._composeDockerLoadVisHandler = function() {
                 if (document.visibilityState === 'visible' && composeDockerLoadRunning) {
                     composeClientDebug('[dockerload] browser tab became visible — invalidating stack index', null, 'daemon', 'debug');
                     composeStackIndex = null;
                 }
-            });
+            };
+            document.addEventListener('visibilitychange', window._composeDockerLoadVisHandler);
 
             // In tabbed mode, also invalidate the cache when the compose
             // panel becomes visible (user switches tabs) so stale entries
@@ -1960,12 +1981,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var $loadTabPanel = $loadTable.length ? $loadTable.closest('[role="tabpanel"]') : $();
             if ($loadTabPanel.length) {
                 composeClientDebug('[dockerload] tabbed mode detected — observing panel visibility', null, 'daemon', 'debug');
-                new MutationObserver(function() {
+                window._composeDockerLoadPanelObserver = new MutationObserver(function() {
                     if ($loadTabPanel[0].style.display !== 'none' && composeDockerLoadRunning) {
                         composeClientDebug('[dockerload] compose tab became visible — invalidating stack index', null, 'daemon', 'debug');
                         composeStackIndex = null;
                     }
-                }).observe($loadTabPanel[0], { attributes: true, attributeFilter: ['style'] });
+                });
+                window._composeDockerLoadPanelObserver.observe($loadTabPanel[0], { attributes: true, attributeFilter: ['style'] });
             }
 
             // Only auto-start the socket if the stack list is already
