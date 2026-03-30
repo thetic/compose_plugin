@@ -2,7 +2,7 @@ Author="dcflachs"
 Title="Compose"
 Type="php"
 Menu="Docker:2"
-Nchan="docker_load"
+Nchan="../../dynamix.docker.manager/nchan/docker_load"
 Cond="$var['fsState'] == 'Started' && exec('/etc/rc.d/rc.docker status | grep -v \"not\"') && (!file_exists('/boot/config/plugins/compose.manager/compose.manager.cfg') ? true : exec(\"grep '^SHOW_COMPOSE_IN_HEADER_MENU=' /boot/config/plugins/compose.manager/compose.manager.cfg 2>/dev/null | grep -v 'true'\"))"
 ---
 <?php
