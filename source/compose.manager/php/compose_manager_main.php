@@ -432,6 +432,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 // Insert the loaded content
                 $('#compose_list').html(data);
 
+                // Signal load subscribers (e.g. dockerload cache) that the list changed
+                $(document).trigger('composeListRefreshed');
+
                 // Initialize UI components for the newly loaded content
                 initStackListUI();
 
@@ -1688,6 +1691,30 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket'});
             var composeDockerLoadRunning = false;
 
+            // Cache of { stackId, containerIds[] } built from the DOM once after
+            // composeLoadlist() and reused until the row count changes.
+            // Avoids O(stacks) DOM traversal + string splits on every stats tick.
+            var composeStackIndex = null;
+
+            function buildComposeStackIndex() {
+                composeStackIndex = [];
+                $('#compose_stacks tr.compose-sortable').each(function() {
+                    var stackId = ($(this).attr('id') || '').replace('stack-row-', '');
+                    if (!stackId) return;
+                    var ctidsAttr = $(this).attr('data-ctids') || '';
+                    composeStackIndex.push({
+                        stackId: stackId,
+                        containerIds: ctidsAttr ? ctidsAttr.split(',') : []
+                    });
+                });
+            }
+
+            // Invalidate the cache when the list refreshes so that added/removed
+            // stacks are picked up on the next stats tick.
+            $(document).on('composeListRefreshed', function() {
+                composeStackIndex = null;
+            });
+
             window.composeDockerLoadToggle = function(enable) {
                 if (enable && !composeDockerLoadRunning) {
                     composeDockerLoad.start();
@@ -1723,20 +1750,20 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 }
 
                 // Aggregate per-stack totals and update stack-level cells.
-                // Use data-ctids embedded at render time so aggregation works
-                // even before the stack details have been expanded.
-                $('#compose_stacks tr.compose-sortable').each(function() {
-                    var stackId = ($(this).attr('id') || '').replace('stack-row-', '');
-                    if (!stackId) return;
+                // Build (or reuse) the stack→container index.
+                var currentRowCount = $('#compose_stacks tr.compose-sortable').length;
+                if (!composeStackIndex || composeStackIndex.length !== currentRowCount) {
+                    buildComposeStackIndex();
+                }
 
+                composeStackIndex.forEach(function(entry) {
                     // Primary: short IDs baked into the row by compose_list.php
-                    var ctidsAttr = $(this).attr('data-ctids') || '';
-                    var idList = ctidsAttr ? ctidsAttr.split(',') : [];
+                    var idList = entry.containerIds.slice();
 
-                    // Fallback: if detail panel was expanded, stackContainersCache
-                    // may have more/different IDs (e.g. after a compose up added a service)
+                    // Fallback: if the detail panel was expanded, stackContainersCache
+                    // may have fresher IDs (e.g. after a compose up added a service)
                     if (idList.length === 0) {
-                        var containers = stackContainersCache[stackId];
+                        var containers = stackContainersCache[entry.stackId];
                         if (containers && containers.length > 0) {
                             containers.forEach(function(ct) {
                                 var ctId = String(ct.id || '').substring(0, 12);
@@ -1760,9 +1787,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     if (matched > 0) {
                         var aggCpu = Math.round(totalCpu * 100) / 100 + '%';
                         var aggMem = formatBytes(totalMemBytes);
-                        $('.compose-stack-cpu-' + stackId).text(aggCpu);
-                        $('#compose-stack-cpu-' + stackId).css('width', aggCpu);
-                        $('.compose-stack-mem-' + stackId).text(aggMem);
+                        $('.compose-stack-cpu-' + entry.stackId).text(aggCpu);
+                        $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
+                        $('.compose-stack-mem-' + entry.stackId).text(aggMem);
                     }
                 });
             });
