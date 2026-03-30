@@ -1816,20 +1816,22 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                     var totalCpu = 0;
                     var totalMemUsedBytes = 0;
-                    var totalMemLimitBytes = 0;
+                    var aggregateMemAvailText = '';
                     var matched = 0;
                     idList.forEach(function(ctId) {
                         if (ctId && composeLoadById[ctId]) {
                             totalCpu += composeLoadById[ctId].cpu;
                             totalMemUsedBytes += composeLoadById[ctId].memUsedBytes || 0;
-                            totalMemLimitBytes += composeLoadById[ctId].memLimitBytes || 0;
+                            if (!aggregateMemAvailText && composeLoadById[ctId].memAvailText) {
+                                aggregateMemAvailText = composeLoadById[ctId].memAvailText;
+                            }
                             matched++;
                         }
                     });
 
                     if (matched > 0) {
                         var aggCpu = Math.round(totalCpu * 100) / 100 + '%';
-                        var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + formatBytes(totalMemLimitBytes);
+                        var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + (aggregateMemAvailText || '0B');
                         $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
                         $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
                         $('.compose-stack-mem-' + entry.stackId).show().text(aggMem);
@@ -1856,12 +1858,14 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         var cpuRaw = parseFloat(parts[1]) || 0;
                         var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
                         var memPair = parseMemUsagePair(parts[2]);
+                        var memParts = String(parts[2] || '').split('/');
+                        var memAvailText = (memParts[1] || '').trim();
                         composeLoadById[parts[0]] = {
                             cpu: cpuNorm,
                             cpuText: cpuNorm + '%',
                             mem: parts[2],
                             memUsedBytes: memPair.used,
-                            memLimitBytes: memPair.limit,
+                            memAvailText: memAvailText,
                             ts: now
                         };
                     }
