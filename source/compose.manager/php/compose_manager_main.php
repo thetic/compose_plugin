@@ -47,9 +47,16 @@ function compose_manager_cpu_spec_count($cpuSpec)
     return $count;
 }
 $cpus = function_exists('cpu_list') ? cpu_list() : [];
-$cpuCount = (!empty($cpus) && isset($cpus[0]))
-    ? count($cpus) * compose_manager_cpu_spec_count($cpus[0])
-    : (int)trim(shell_exec('nproc 2>/dev/null') ?: '1');
+$cpuCount = 0;
+foreach ($cpus as $cpuSpec) {
+    $cpuCount += compose_manager_cpu_spec_count($cpuSpec);
+}
+if ($cpuCount <= 0) {
+    $cpuCount = (int)trim(shell_exec('nproc 2>/dev/null') ?: '1');
+}
+if ($cpuCount <= 0) {
+    $cpuCount = 1;
+}
 
 // Note: Stack list is now loaded asynchronously via compose_list.php
 // This improves page load time by deferring expensive docker commands
@@ -1831,18 +1838,22 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                     var totalCpu = 0;
                     var totalMemUsedBytes = 0;
+                    var totalMemLimitBytes = 0;
                     var matched = 0;
                     idList.forEach(function(ctId) {
                         if (ctId && composeLoadById[ctId]) {
                             totalCpu += composeLoadById[ctId].cpu;
                             totalMemUsedBytes += composeLoadById[ctId].memUsedBytes || 0;
+                            totalMemLimitBytes += composeLoadById[ctId].memLimitBytes || 0;
                             matched++;
                         }
                     });
 
                     if (matched > 0) {
                         var aggCpu = Math.round(totalCpu * 100) / 100 + '%';
-                        var stackMemTotal = composeSystemMemBytes > 0 ? formatBytes(composeSystemMemBytes) : '0B';
+                        var stackMemTotal = totalMemLimitBytes > 0
+                            ? formatBytes(totalMemLimitBytes)
+                            : (composeSystemMemBytes > 0 ? formatBytes(composeSystemMemBytes) : '0B');
                         var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + stackMemTotal;
                         $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
                         $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
@@ -1870,14 +1881,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         var cpuRaw = parseFloat(parts[1]) || 0;
                         var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
                         var memPair = parseMemUsagePair(parts[2]);
-                        var memParts = String(parts[2] || '').split('/');
-                        var memAvailText = (memParts[1] || '').trim();
                         composeLoadById[parts[0]] = {
                             cpu: cpuNorm,
                             cpuText: cpuNorm + '%',
                             mem: parts[2],
                             memUsedBytes: memPair.used,
-                            memAvailText: memAvailText,
+                            memLimitBytes: memPair.limit,
                             ts: now
                         };
                     }
