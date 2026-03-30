@@ -264,21 +264,44 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     var composeCliVersion = <?php echo json_encode($composeVersion); ?>;
     var composeCpuCount = <?php echo json_encode($cpuCount); ?>;
 
-    // Parse docker stats memory string "123.4MiB / 2GiB" to bytes (first value only)
-    function parseMemToBytes(memStr) {
-        if (!memStr) return 0;
-        var parts = memStr.split('/');
-        var val = (parts[0] || '').trim();
-        var match = val.match(/([\d.]+)\s*(KiB|MiB|GiB|TiB|B)/i);
+    // Parse a single memory value (for example "123.4MiB" or "512MB") to bytes.
+    // Supports both IEC (KiB, MiB, GiB, TiB) and SI (kB, MB, GB, TB) suffixes.
+    function parseMemValueToBytes(memVal) {
+        if (!memVal) return 0;
+        var cleaned = String(memVal).trim();
+        if (!cleaned) return 0;
+        var match = cleaned.match(/([\d.]+)\s*([kmgt]?i?b)?/i);
         if (!match) return 0;
+
         var num = parseFloat(match[1]);
-        switch (match[2].toLowerCase()) {
+        if (!isFinite(num)) return 0;
+        var unit = (match[2] || 'b').toLowerCase();
+
+        switch (unit) {
+            case 'tb':  return num * 1000000000000;
             case 'tib': return num * 1099511627776;
+            case 'gb':  return num * 1000000000;
             case 'gib': return num * 1073741824;
+            case 'mb':  return num * 1000000;
             case 'mib': return num * 1048576;
+            case 'kb':  return num * 1000;
             case 'kib': return num * 1024;
-            default: return num;
+            default:    return num;
         }
+    }
+
+    // Parse docker stats memory string "used / limit" into bytes.
+    function parseMemUsagePair(memStr) {
+        if (!memStr) return {used: 0, limit: 0};
+        var parts = String(memStr).split('/');
+        var used = parseMemValueToBytes(parts[0] || '');
+        var limit = parseMemValueToBytes(parts[1] || '');
+        return {used: used, limit: limit};
+    }
+
+    // Backward-compatible helper used by existing code paths.
+    function parseMemToBytes(memStr) {
+        return parseMemUsagePair(memStr).used;
     }
 
     // Format bytes to human-readable string
@@ -1735,7 +1758,14 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     if (parts.length >= 3) {
                         var cpuRaw = parseFloat(parts[1]) || 0;
                         var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
-                        loadMap[parts[0]] = {cpu: cpuNorm, cpuText: cpuNorm + '%', mem: parts[2]};
+                        var memPair = parseMemUsagePair(parts[2]);
+                        loadMap[parts[0]] = {
+                            cpu: cpuNorm,
+                            cpuText: cpuNorm + '%',
+                            mem: parts[2],
+                            memUsedBytes: memPair.used,
+                            memLimitBytes: memPair.limit
+                        };
                     }
                     i++;
                     row = data[i];
@@ -1774,19 +1804,21 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     if (idList.length === 0) return;
 
                     var totalCpu = 0;
-                    var totalMemBytes = 0;
+                    var totalMemUsedBytes = 0;
+                    var totalMemLimitBytes = 0;
                     var matched = 0;
                     idList.forEach(function(ctId) {
                         if (ctId && loadMap[ctId]) {
                             totalCpu += loadMap[ctId].cpu;
-                            totalMemBytes += parseMemToBytes(loadMap[ctId].mem);
+                            totalMemUsedBytes += loadMap[ctId].memUsedBytes || 0;
+                            totalMemLimitBytes += loadMap[ctId].memLimitBytes || 0;
                             matched++;
                         }
                     });
 
                     if (matched > 0) {
                         var aggCpu = Math.round(totalCpu * 100) / 100 + '%';
-                        var aggMem = formatBytes(totalMemBytes);
+                        var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + formatBytes(totalMemLimitBytes);
                         $('.compose-stack-cpu-' + entry.stackId).text(aggCpu);
                         $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
                         $('.compose-stack-mem-' + entry.stackId).text(aggMem);
@@ -4712,7 +4744,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             if (state === 'running') {
                 html += '<span class="compose-cpu-' + containerId + '">0%</span>';
                 html += '<div class="usage-disk mm"><span id="compose-cpu-' + containerId + '" style="width:0"></span><span></span></div>';
-                html += '<br><span class="compose-mem-' + containerId + ' compose-text-muted">0 / 0</span>';
+                html += '<br><span class="compose-mem-' + containerId + ' compose-text-muted">0B / 0B</span>';
             } else {
                 html += '<span class="compose-cpu-' + containerId + ' compose-text-muted">-</span>';
                 html += '<span class="compose-mem-' + containerId + '" style="display:none"></span>';

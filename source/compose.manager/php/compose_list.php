@@ -245,7 +245,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     if ($isrunning) {
         $o .= "<span class='compose-stack-cpu-$id'>0%</span>";
         $o .= "<div class='usage-disk mm'><span id='compose-stack-cpu-$id' style='width:0'></span><span></span></div>";
-        $o .= "<br><span class='compose-stack-mem-$id compose-text-muted'>0B</span>";
+        $o .= "<br><span class='compose-stack-mem-$id compose-text-muted'>0B / 0B</span>";
     } else {
         $o .= "<span class='compose-stack-cpu-$id compose-text-muted'>-</span>";
         $o .= "<span class='compose-stack-mem-$id' style='display:none'></span>";
