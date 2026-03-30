@@ -18,6 +18,13 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 // Get Docker Compose CLI version
 $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') ?? '');
 
+// Host total memory in bytes for stack-level memory denominator.
+$composeSystemMemBytes = 0;
+$memKbRaw = trim(shell_exec("awk '/^MemTotal:/ {print \$2}' /proc/meminfo 2>/dev/null") ?? '');
+if (is_numeric($memKbRaw)) {
+    $composeSystemMemBytes = (int)$memKbRaw * 1024;
+}
+
 // CPU count for load normalization (matches Docker manager's cpu_list approach).
 // cpu_list() returns thread_siblings_list entries (e.g. "0-3,8-11").
 // We expand each range segment so "0-3" counts as 4, not 2 endpoints.
@@ -262,6 +269,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     var showComposeOnTop = <?php echo json_encode($showComposeOnTop); ?>;
     var hideComposeFromDocker = <?php echo json_encode($hideComposeFromDocker); ?>;
     var composeCliVersion = <?php echo json_encode($composeVersion); ?>;
+    var composeSystemMemBytes = <?php echo json_encode($composeSystemMemBytes); ?>;
     var composeCpuCount = <?php echo json_encode($cpuCount); ?>;
 
     // Parse a single memory value (for example "123.4MiB" or "512MB") to bytes.
@@ -1816,22 +1824,19 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                     var totalCpu = 0;
                     var totalMemUsedBytes = 0;
-                    var aggregateMemAvailText = '';
                     var matched = 0;
                     idList.forEach(function(ctId) {
                         if (ctId && composeLoadById[ctId]) {
                             totalCpu += composeLoadById[ctId].cpu;
                             totalMemUsedBytes += composeLoadById[ctId].memUsedBytes || 0;
-                            if (!aggregateMemAvailText && composeLoadById[ctId].memAvailText) {
-                                aggregateMemAvailText = composeLoadById[ctId].memAvailText;
-                            }
                             matched++;
                         }
                     });
 
                     if (matched > 0) {
                         var aggCpu = Math.round(totalCpu * 100) / 100 + '%';
-                        var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + (aggregateMemAvailText || '0B');
+                        var stackMemTotal = composeSystemMemBytes > 0 ? formatBytes(composeSystemMemBytes) : '0B';
+                        var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + stackMemTotal;
                         $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
                         $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
                         $('.compose-stack-mem-' + entry.stackId).show().text(aggMem);
