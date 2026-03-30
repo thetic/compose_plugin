@@ -1710,7 +1710,15 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // Only runs in advanced view (load column is hidden in basic view).
         // composeDockerLoadToggle(true/false) is called from applyListView()
         // so the socket starts/stops whenever the user switches view modes.
-        if (typeof NchanSubscriber === 'function') {
+        function initComposeDockerLoadSubscriber() {
+            if (typeof NchanSubscriber !== 'function') {
+                return false;
+            }
+            if (window.composeDockerLoadInitialized) {
+                return true;
+            }
+            window.composeDockerLoadInitialized = true;
+
             var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket'});
             var composeDockerLoadRunning = false;
 
@@ -1830,6 +1838,19 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 composeDockerLoad.start();
                 composeDockerLoadRunning = true;
             }
+            return true;
+        }
+
+        // Standalone compose mode can race script load order; retry briefly
+        // so delayed NchanSubscriber availability still initializes dockerload.
+        if (!initComposeDockerLoadSubscriber()) {
+            var composeDockerLoadInitAttempts = 0;
+            var composeDockerLoadInitTimer = setInterval(function() {
+                composeDockerLoadInitAttempts++;
+                if (initComposeDockerLoadSubscriber() || composeDockerLoadInitAttempts >= 40) {
+                    clearInterval(composeDockerLoadInitTimer);
+                }
+            }, 250);
         }
     });
 
