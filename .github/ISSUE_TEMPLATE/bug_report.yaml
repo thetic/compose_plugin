@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a bug! Please fill out the form below to help us investigate.
+        Thanks for taking the time to report a bug! Please fill out the form below to help us investigate. Be sure to do a hard refresh in your browser before reporting a bug with [CTRL]+[SHIFT]+[R].
 
   - type: input
     id: version
