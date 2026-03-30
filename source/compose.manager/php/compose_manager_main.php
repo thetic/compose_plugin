@@ -1444,6 +1444,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     // When animate=true (user clicked toggle), run a simple symmetric transition.
     // When false (page load), instant class toggle.
     function applyListView(animate) {
+        // Sync the dockerload WebSocket with the view mode.
+        if (typeof window.composeDockerLoadToggle === 'function') {
+            window.composeDockerLoadToggle(isComposeAdvancedMode());
+        }
         var advanced = isComposeAdvancedMode();
         var $table = $('#compose_stacks');
         var $advanced = $table.find('.cm-advanced');
@@ -1677,10 +1681,23 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         })();
 
         // ── CPU & Memory load via dockerload Nchan channel ─────────────
-        // Subscribe to the same dockerload WebSocket that the Docker tab uses.
-        // Data format per line: "shortID;CPU%;MemUsage"
+        // Only runs in advanced view (load column is hidden in basic view).
+        // composeDockerLoadToggle(true/false) is called from applyListView()
+        // so the socket starts/stops whenever the user switches view modes.
         if (typeof NchanSubscriber === 'function') {
             var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket'});
+            var composeDockerLoadRunning = false;
+
+            window.composeDockerLoadToggle = function(enable) {
+                if (enable && !composeDockerLoadRunning) {
+                    composeDockerLoad.start();
+                    composeDockerLoadRunning = true;
+                } else if (!enable && composeDockerLoadRunning) {
+                    composeDockerLoad.stop();
+                    composeDockerLoadRunning = false;
+                }
+            };
+
             composeDockerLoad.on('message', function(msg) {
                 var data = msg.split('\n');
                 var loadMap = {};
@@ -1749,7 +1766,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     }
                 });
             });
-            composeDockerLoad.start();
+            // Start immediately if already in advanced view
+            if (isComposeAdvancedMode()) {
+                composeDockerLoad.start();
+                composeDockerLoadRunning = true;
+            }
         }
     });
 
