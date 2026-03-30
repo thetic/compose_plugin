@@ -18,6 +18,46 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 // Get Docker Compose CLI version
 $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') ?? '');
 
+// Host total memory in bytes for stack-level memory denominator.
+$composeSystemMemBytes = 0;
+$memKbRaw = trim(shell_exec("awk '/^MemTotal:/ {print \$2}' /proc/meminfo 2>/dev/null") ?? '');
+if (is_numeric($memKbRaw)) {
+    $composeSystemMemBytes = (int)$memKbRaw * 1024;
+}
+
+// CPU count for load normalization (matches Docker manager's cpu_list approach).
+// cpu_list() returns thread_siblings_list entries (e.g. "0-3,8-11").
+// We expand each range segment so "0-3" counts as 4, not 2 endpoints.
+function compose_manager_cpu_spec_count($cpuSpec)
+{
+    $count = 0;
+    foreach (explode(',', trim((string)$cpuSpec)) as $segment) {
+        $segment = trim($segment);
+        if ($segment === '') continue;
+        if (strpos($segment, '-') !== false) {
+            [$start, $end] = explode('-', $segment, 2);
+            $start = (int)$start;
+            $end   = (int)$end;
+            if ($end < $start) [$start, $end] = [$end, $start];
+            $count += max(0, $end - $start + 1);
+        } else {
+            $count += 1;
+        }
+    }
+    return $count;
+}
+$cpus = function_exists('cpu_list') ? cpu_list() : [];
+$cpuCount = 0;
+foreach ($cpus as $cpuSpec) {
+    $cpuCount += compose_manager_cpu_spec_count($cpuSpec);
+}
+if ($cpuCount <= 0) {
+    $cpuCount = (int)trim(shell_exec('nproc 2>/dev/null') ?: '1');
+}
+if ($cpuCount <= 0) {
+    $cpuCount = 1;
+}
+
 // Note: Stack list is now loaded asynchronously via compose_list.php
 // This improves page load time by deferring expensive docker commands
 ?>
@@ -85,7 +125,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         width: 15%;
     }
 
-    /* Advanced-view column widths (9 visible columns)
+    /* Advanced-view column widths (10 visible columns)
    Arrow + Icon stay fixed px; Description + Path get the most %. */
     #compose_stacks.cm-advanced-view thead th.col-arrow {
         width: 1%;
@@ -111,12 +151,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         width: 6%
     }
 
+    #compose_stacks.cm-advanced-view thead th.col-load {
+        width: 12%
+    }
+
     #compose_stacks.cm-advanced-view thead th.col-description {
-        width: 28%
+        width: 22%
     }
 
     #compose_stacks.cm-advanced-view thead th.col-path {
-        width: 28%
+        width: 22%
     }
 
     #compose_stacks.cm-advanced-view thead th.col-autostart {
@@ -176,6 +220,35 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         z-index: 100 !important; 
     }
 
+    /* CPU & Memory load display (matches Docker manager usage-disk style) */
+    .compose-load-cell {
+        white-space: nowrap;
+        font-size: 0.9em;
+    }
+    .compose-load-cell .compose-load-cpu,
+    .compose-load-cell .compose-load-mem {
+        display: block;
+    }
+    .compose-load-cell .compose-load-mem {
+        margin-top: 2px;
+    }
+    .compose-load-cell .usage-disk.mm {
+        height: 3px;
+        margin: 3px 20px 0 0;
+        position: relative;
+        background-color: var(--usage-disk-background-color, #e0e0e0);
+    }
+    .compose-load-cell .usage-disk.mm > span:first-child {
+        position: absolute;
+        left: 0;
+        height: 3px;
+        background-color: var(--gray-400, #888);
+    }
+    .compose-load-cell .usage-disk.mm > span:last-child {
+        position: relative;
+        z-index: 1;
+    }
+
 </style>
 
 <?php
@@ -210,6 +283,57 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     var showComposeOnTop = <?php echo json_encode($showComposeOnTop); ?>;
     var hideComposeFromDocker = <?php echo json_encode($hideComposeFromDocker); ?>;
     var composeCliVersion = <?php echo json_encode($composeVersion); ?>;
+    var composeSystemMemBytes = <?php echo json_encode($composeSystemMemBytes); ?>;
+    var composeCpuCount = <?php echo json_encode($cpuCount); ?>;
+
+    // Parse a single memory value (for example "123.4MiB" or "512MB") to bytes.
+    // Supports both IEC (KiB, MiB, GiB, TiB) and SI (kB, MB, GB, TB) suffixes.
+    function parseMemValueToBytes(memVal) {
+        if (!memVal) return 0;
+        var cleaned = String(memVal).trim();
+        if (!cleaned) return 0;
+        var match = cleaned.match(/([\d.]+)\s*([kmgt]?i?b)?/i);
+        if (!match) return 0;
+
+        var num = parseFloat(match[1]);
+        if (!isFinite(num)) return 0;
+        var unit = (match[2] || 'b').toLowerCase();
+
+        switch (unit) {
+            case 'tb':  return num * 1000000000000;
+            case 'tib': return num * 1099511627776;
+            case 'gb':  return num * 1000000000;
+            case 'gib': return num * 1073741824;
+            case 'mb':  return num * 1000000;
+            case 'mib': return num * 1048576;
+            case 'kb':  return num * 1000;
+            case 'kib': return num * 1024;
+            default:    return num;
+        }
+    }
+
+    // Parse docker stats memory string "used / limit" into bytes.
+    function parseMemUsagePair(memStr) {
+        if (!memStr) return {used: 0, limit: 0};
+        var parts = String(memStr).split('/');
+        var used = parseMemValueToBytes(parts[0] || '');
+        var limit = parseMemValueToBytes(parts[1] || '');
+        return {used: used, limit: limit};
+    }
+
+    // Backward-compatible helper used by existing code paths.
+    function parseMemToBytes(memStr) {
+        return parseMemUsagePair(memStr).used;
+    }
+
+    // Format bytes to human-readable string
+    function formatBytes(bytes) {
+        if (bytes <= 0) return '0B';
+        if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + 'GiB';
+        if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + 'MiB';
+        if (bytes >= 1024) return (bytes / 1024).toFixed(1) + 'KiB';
+        return bytes + 'B';
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     // Standard factory functions for container and stack identity objects
@@ -353,6 +477,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 // Insert the loaded content
                 $('#compose_list').html(data);
 
+                // Signal load subscribers (e.g. dockerload cache) that the list changed
+                $(document).trigger('composeListRefreshed');
+
                 // Initialize UI components for the newly loaded content
                 initStackListUI();
 
@@ -457,7 +584,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 }, 'daemon', 'error');
                 clearTimeout(composeTimers.load);
                 hideComposeSpinner();
-                $('#compose_list').html('<tr><td colspan="9" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
+                $('#compose_list').html('<tr><td colspan="10" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
 
                 // Reject the promise so callers can handle the error
                 try { reject({xhr: xhr, status: status, error: error}); } catch (e) { reject(error); }
@@ -1365,6 +1492,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     // When animate=true (user clicked toggle), run a simple symmetric transition.
     // When false (page load), instant class toggle.
     function applyListView(animate) {
+        // Sync the dockerload WebSocket with the view mode.
+        if (typeof window.composeDockerLoadToggle === 'function') {
+            window.composeDockerLoadToggle(isComposeAdvancedMode());
+        }
         var advanced = isComposeAdvancedMode();
         var $table = $('#compose_stacks');
         var $advanced = $table.find('.cm-advanced');
@@ -1596,6 +1727,215 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 });
             }
         })();
+
+        // ── CPU & Memory load via dockerload Nchan channel ─────────────
+        // Only runs in advanced view (load column is hidden in basic view).
+        // composeDockerLoadToggle(true/false) is called from applyListView()
+        // so the socket starts/stops whenever the user switches view modes.
+        function initComposeDockerLoadSubscriber() {
+            if (typeof NchanSubscriber !== 'function') {
+                return false;
+            }
+            if (window.composeDockerLoadInitialized) {
+                return true;
+            }
+            window.composeDockerLoadInitialized = true;
+
+            var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket'});
+            var composeDockerLoadRunning = false;
+
+            // Cache of { stackId, containerIds[] } built from the DOM once after
+            // composeLoadlist() and reused until the row count changes.
+            // Avoids O(stacks) DOM traversal + string splits on every stats tick.
+            var composeStackIndex = null;
+            var composeLoadById = {};
+            var composeLoadStaleMs = 15000;
+
+            function isComposeLoadVisible() {
+                if (!isComposeAdvancedMode()) return false;
+                if (document.visibilityState === 'hidden') return false;
+                var $table = $('#compose_stacks');
+                if (!$table.length) return false;
+                var $tabPanel = $table.closest('[role="tabpanel"]');
+                if ($tabPanel.length && $tabPanel[0].style.display === 'none') return false;
+                return true;
+            }
+
+            function clearContainerLoad(shortId) {
+                $('.compose-cpu-' + shortId).addClass('compose-text-muted').text('-');
+                $('#compose-cpu-' + shortId).css('width', '0');
+                $('.compose-mem-' + shortId).hide();
+            }
+
+            function buildComposeStackIndex() {
+                composeStackIndex = [];
+                $('#compose_stacks tr.compose-sortable').each(function() {
+                    var stackId = ($(this).attr('id') || '').replace('stack-row-', '');
+                    if (!stackId) return;
+                    var ctidsAttr = $(this).attr('data-ctids') || '';
+                    composeStackIndex.push({
+                        stackId: stackId,
+                        containerIds: ctidsAttr ? ctidsAttr.split(',') : []
+                    });
+                });
+            }
+
+            // Invalidate the cache when the list refreshes so that added/removed
+            // stacks are picked up on the next stats tick.
+            $(document).on('composeListRefreshed', function() {
+                composeStackIndex = null;
+                composeLoadById = {};
+            });
+
+            window.composeDockerLoadToggle = function(enable) {
+                if (enable && !composeDockerLoadRunning) {
+                    composeDockerLoad.start();
+                    composeDockerLoadRunning = true;
+                } else if (!enable && composeDockerLoadRunning) {
+                    composeDockerLoad.stop();
+                    composeDockerLoadRunning = false;
+                }
+            };
+
+            function pruneStaleLoadEntries(now) {
+                var staleIds = [];
+                for (var knownId in composeLoadById) {
+                    if ((now - composeLoadById[knownId].ts) > composeLoadStaleMs) {
+                        staleIds.push(knownId);
+                    }
+                }
+                staleIds.forEach(function(staleId) {
+                    delete composeLoadById[staleId];
+                    clearContainerLoad(staleId);
+                });
+                return staleIds.length > 0;
+            }
+
+            function renderStackAggregates() {
+                // Aggregate per-stack totals and update stack-level cells.
+                // Build (or reuse) the stack→container index.
+                var currentRowCount = $('#compose_stacks tr.compose-sortable').length;
+                if (!composeStackIndex || composeStackIndex.length !== currentRowCount) {
+                    buildComposeStackIndex();
+                }
+
+                composeStackIndex.forEach(function(entry) {
+                    // Primary: short IDs baked into the row by compose_list.php
+                    var idList = entry.containerIds.slice();
+
+                    // Fallback: if the detail panel was expanded, stackContainersCache
+                    // may have fresher IDs (e.g. after a compose up added a service)
+                    if (idList.length === 0) {
+                        var containers = stackContainersCache[entry.stackId];
+                        if (containers && containers.length > 0) {
+                            containers.forEach(function(ct) {
+                                var ctId = String(ct.id || '').substring(0, 12);
+                                if (ctId) idList.push(ctId);
+                            });
+                        }
+                    }
+                    if (idList.length === 0) return;
+
+                    var totalCpu = 0;
+                    var totalMemUsedBytes = 0;
+                    var totalMemLimitBytes = 0;
+                    var matched = 0;
+                    idList.forEach(function(ctId) {
+                        if (ctId && composeLoadById[ctId]) {
+                            totalCpu += composeLoadById[ctId].cpu;
+                            totalMemUsedBytes += composeLoadById[ctId].memUsedBytes || 0;
+                            totalMemLimitBytes += composeLoadById[ctId].memLimitBytes || 0;
+                            matched++;
+                        }
+                    });
+
+                    if (matched > 0) {
+                        var aggCpu = Math.round(totalCpu * 100) / 100 + '%';
+                        var stackMemTotal = totalMemLimitBytes > 0
+                            ? formatBytes(totalMemLimitBytes)
+                            : (composeSystemMemBytes > 0 ? formatBytes(composeSystemMemBytes) : '0B');
+                        var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + stackMemTotal;
+                        $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
+                        $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
+                        $('.compose-stack-mem-' + entry.stackId).show().text(aggMem);
+                    } else {
+                        $('.compose-stack-cpu-' + entry.stackId).addClass('compose-text-muted').text('-');
+                        $('#compose-stack-cpu-' + entry.stackId).css('width', '0');
+                        $('.compose-stack-mem-' + entry.stackId).hide();
+                    }
+                });
+            }
+
+            composeDockerLoad.on('message', function(msg) {
+                if (!isComposeLoadVisible()) {
+                    return;
+                }
+
+                var now = Date.now();
+                var data = msg.split('\n');
+                var i = 0;
+                var row = data[i];
+                while (row) {
+                    var parts = row.split(';');
+                    if (parts.length >= 3) {
+                        var cpuRaw = parseFloat(parts[1]) || 0;
+                        var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
+                        var memPair = parseMemUsagePair(parts[2]);
+                        composeLoadById[parts[0]] = {
+                            cpu: cpuNorm,
+                            cpuText: cpuNorm + '%',
+                            mem: parts[2],
+                            memUsedBytes: memPair.used,
+                            memLimitBytes: memPair.limit,
+                            ts: now
+                        };
+                    }
+                    i++;
+                    row = data[i];
+                }
+
+                pruneStaleLoadEntries(now);
+
+                // Update per-container CPU & MEM elements in expanded detail tables
+                for (var shortId in composeLoadById) {
+                    var info = composeLoadById[shortId];
+                    $('.compose-cpu-' + shortId).removeClass('compose-text-muted').text(info.cpuText);
+                    $('.compose-mem-' + shortId).show().text(info.mem);
+                    $('#compose-cpu-' + shortId).css('width', info.cpuText);
+                }
+
+                renderStackAggregates();
+            });
+
+            // If dockerload pauses/stalls, drop stale values on a timer so the UI
+            // falls back to placeholders instead of showing frozen metrics forever.
+            setInterval(function() {
+                if (!isComposeLoadVisible()) {
+                    return;
+                }
+                if (pruneStaleLoadEntries(Date.now())) {
+                    renderStackAggregates();
+                }
+            }, 3000);
+            // Start immediately if already in advanced view
+            if (isComposeAdvancedMode()) {
+                composeDockerLoad.start();
+                composeDockerLoadRunning = true;
+            }
+            return true;
+        }
+
+        // Standalone compose mode can race script load order; retry briefly
+        // so delayed NchanSubscriber availability still initializes dockerload.
+        if (!initComposeDockerLoadSubscriber()) {
+            var composeDockerLoadInitAttempts = 0;
+            var composeDockerLoadInitTimer = setInterval(function() {
+                composeDockerLoadInitAttempts++;
+                if (initComposeDockerLoadSubscriber() || composeDockerLoadInitAttempts >= 40) {
+                    clearInterval(composeDockerLoadInitTimer);
+                }
+            }, 250);
+        }
     });
 
     function addStack() {
@@ -4353,6 +4693,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         html += '<th class="cm-advanced ct-col-tag">Tag</th>';
         html += '<th class="cm-advanced ct-col-net">Network</th>';
         html += '<th class="cm-advanced ct-col-ip">Container IP</th>';
+        html += '<th class="cm-advanced ct-col-load">CPU &amp; Memory load</th>';
         html += '<th class="ct-col-cport">Container Port</th>';
         html += '<th class="ct-col-lport">LAN IP:Port</th>';
         html += '</tr></thead>';
@@ -4502,6 +4843,18 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
             // Container IP
             html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(composeEscapeHtml).join('<br>') + '</span></td>';
+
+            // CPU & Memory load (advanced only) — populated by dockerload WebSocket
+            html += '<td class="cm-advanced compose-load-cell">';
+            if (state === 'running') {
+                html += '<span class="compose-cpu-' + containerId + '">0%</span>';
+                html += '<div class="usage-disk mm"><span id="compose-cpu-' + containerId + '" style="width:0"></span><span></span></div>';
+                html += '<br><span class="compose-mem-' + containerId + ' compose-text-muted">0B / 0B</span>';
+            } else {
+                html += '<span class="compose-cpu-' + containerId + ' compose-text-muted">-</span>';
+                html += '<span class="compose-mem-' + containerId + '" style="display:none"></span>';
+            }
+            html += '</td>';
 
             // Container Port
             html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.map(composeEscapeHtml).join('<br>') + '</span></td>';
@@ -5380,6 +5733,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     <th class="col-update">Update</th>
                     <th class="col-containers">Containers</th>
                     <th class="col-uptime">Uptime</th>
+                    <th class="cm-advanced col-load">CPU &amp; Memory load</th>
                     <th class="cm-advanced col-description">Description</th>
                     <th class="cm-advanced col-path">Path</th>
                     <th class="nine col-autostart">Autostart</th>
@@ -5387,7 +5741,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             </thead>
             <tbody id="compose_list">
                 <tr>
-                    <td colspan='9'></td>
+                    <td colspan='10'></td>
                 </tr>
             </tbody>
         </table>

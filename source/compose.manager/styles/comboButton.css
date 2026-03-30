@@ -280,27 +280,31 @@
 
   /* Column width distribution (totals ~100%) */
   .compose-ct-table .ct-col-name {
-    width: 18%;
-  }
-
-  .compose-ct-table .ct-col-update {
     width: 13%;
   }
 
-  .compose-ct-table .ct-col-source {
-    width: 17%;
-  }
-
-  .compose-ct-table .ct-col-tag {
+  .compose-ct-table .ct-col-update {
     width: 12%;
   }
 
-  .compose-ct-table .ct-col-net {
+  .compose-ct-table .ct-col-source {
+    width: 14%;
+  }
+
+  .compose-ct-table .ct-col-tag {
     width: 10%;
   }
 
+  .compose-ct-table .ct-col-net {
+    width: 8%;
+  }
+
   .compose-ct-table .ct-col-ip {
-    width: 10%;
+    width: 8%;
+  }
+
+  .compose-ct-table .ct-col-load {
+    width: 12%;
   }
 
   .compose-ct-table .ct-col-cport {

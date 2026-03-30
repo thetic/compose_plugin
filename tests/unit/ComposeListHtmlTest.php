@@ -95,6 +95,7 @@ class ComposeListHtmlTest extends TestCase
         $this->assertStringContainsString("data-project=", $source);
         $this->assertStringContainsString("data-projectname=", $source);
         $this->assertStringContainsString("data-isup=", $source);
+        $this->assertStringContainsString("data-ctids=", $source);
     }
 
     // ===========================================
@@ -106,6 +107,14 @@ class ComposeListHtmlTest extends TestCase
         $source = $this->getPageSource();
         // Advanced-only columns should include 'cm-advanced' (not bare 'advanced')
         $this->assertMatchesRegularExpression("/class='[^']*\\bcm-advanced\\b[^']*'/", $source);
+    }
+
+    public function testAdvancedLoadColumnMarkupExists(): void
+    {
+        $source = $this->getPageSource();
+        $this->assertStringContainsString("col-load compose-load-cell", $source);
+        $this->assertStringContainsString("compose-stack-cpu-", $source);
+        $this->assertStringContainsString("compose-stack-mem-", $source);
     }
 
     // ===========================================
@@ -129,6 +138,7 @@ class ComposeListHtmlTest extends TestCase
         $source = $this->getPageSource();
         $this->assertStringContainsString('No Docker Compose stacks found', $source);
         $this->assertStringContainsString('Add New Stack', $source);
+        $this->assertStringContainsString("colspan='10'", $source);
     }
 
     // ===========================================

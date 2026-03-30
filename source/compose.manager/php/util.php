@@ -1747,9 +1747,12 @@ class StackInfo
      * silently skipping folders with no compose file or invalid structure.
      *
      * @param string $composeRoot Compose projects root directory
+     * @param bool   $skipDocker  If true, skip the batch docker ps preload
+     *                            (returns stacks with empty container lists
+     *                            for fast skeleton rendering).
      * @return self[]
      */
-    public static function allFromRoot(string $composeRoot): array
+    public static function allFromRoot(string $composeRoot, bool $skipDocker = false): array
     {
         $stacks = [];
         foreach (self::listProjectFolders($composeRoot) as $project) {
@@ -1759,6 +1762,15 @@ class StackInfo
                 // skip non-stack directories (no compose file, invalid structure, etc.)
                 clientDebug("[allFromRoot] Skipped project '$project': " . $e->getMessage(), null, 'daemon', 'debug');
             }
+        }
+
+        if ($skipDocker) {
+            // Set empty container lists so getContainerList() won't trigger
+            // per-stack docker calls.
+            foreach ($stacks as $stack) {
+                $stack->setContainerList([]);
+            }
+            return $stacks;
         }
 
         // Batch-preload container data with a single docker ps call to avoid

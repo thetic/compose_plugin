@@ -14,7 +14,7 @@
 	Generate a development build with timestamp: YYYY.MM.DD.HHmm
 
 .PARAMETER RemoteHost
-	Remote hostname(s) or IP(s). Accepts a single value or a comma-separated list.
+	Remote hostname(s) or IP(s). Accepts a single value or multiple values using PowerShell array syntax (e.g. "saturn","jupiter").
 
 .PARAMETER User
 	SSH username.
