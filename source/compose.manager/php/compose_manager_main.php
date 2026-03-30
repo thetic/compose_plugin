@@ -18,10 +18,30 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 // Get Docker Compose CLI version
 $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') ?? '');
 
-// CPU count for load normalization (matches Docker manager's cpu_list approach)
+// CPU count for load normalization (matches Docker manager's cpu_list approach).
+// cpu_list() returns thread_siblings_list entries (e.g. "0-3,8-11").
+// We expand each range segment so "0-3" counts as 4, not 2 endpoints.
+function compose_manager_cpu_spec_count($cpuSpec)
+{
+    $count = 0;
+    foreach (explode(',', trim((string)$cpuSpec)) as $segment) {
+        $segment = trim($segment);
+        if ($segment === '') continue;
+        if (strpos($segment, '-') !== false) {
+            [$start, $end] = explode('-', $segment, 2);
+            $start = (int)$start;
+            $end   = (int)$end;
+            if ($end < $start) [$start, $end] = [$end, $start];
+            $count += max(0, $end - $start + 1);
+        } else {
+            $count += 1;
+        }
+    }
+    return $count;
+}
 $cpus = function_exists('cpu_list') ? cpu_list() : [];
 $cpuCount = (!empty($cpus) && isset($cpus[0]))
-    ? count($cpus) * count(preg_split('/[,-]/', $cpus[0]))
+    ? count($cpus) * compose_manager_cpu_spec_count($cpus[0])
     : (int)trim(shell_exec('nproc 2>/dev/null') ?: '1');
 
 // Note: Stack list is now loaded asynchronously via compose_list.php
