@@ -218,6 +218,13 @@ $cpuCount = (!empty($cpus) && isset($cpus[0]))
         white-space: nowrap;
         font-size: 0.9em;
     }
+    .compose-load-cell .compose-load-cpu,
+    .compose-load-cell .compose-load-mem {
+        display: block;
+    }
+    .compose-load-cell .compose-load-mem {
+        margin-top: 2px;
+    }
     .compose-load-cell .usage-disk.mm {
         height: 3px;
         margin: 3px 20px 0 0;
