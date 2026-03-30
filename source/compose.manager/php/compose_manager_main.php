@@ -1726,6 +1726,24 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // composeLoadlist() and reused until the row count changes.
             // Avoids O(stacks) DOM traversal + string splits on every stats tick.
             var composeStackIndex = null;
+            var composeLoadById = {};
+            var composeLoadStaleMs = 15000;
+
+            function isComposeLoadVisible() {
+                if (!isComposeAdvancedMode()) return false;
+                if (document.visibilityState === 'hidden') return false;
+                var $table = $('#compose_stacks');
+                if (!$table.length) return false;
+                var $tabPanel = $table.closest('[role="tabpanel"]');
+                if ($tabPanel.length && $tabPanel[0].style.display === 'none') return false;
+                return true;
+            }
+
+            function clearContainerLoad(shortId) {
+                $('.compose-cpu-' + shortId).addClass('compose-text-muted').text('-');
+                $('#compose-cpu-' + shortId).css('width', '0');
+                $('.compose-mem-' + shortId).hide();
+            }
 
             function buildComposeStackIndex() {
                 composeStackIndex = [];
@@ -1744,6 +1762,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // stacks are picked up on the next stats tick.
             $(document).on('composeListRefreshed', function() {
                 composeStackIndex = null;
+                composeLoadById = {};
             });
 
             window.composeDockerLoadToggle = function(enable) {
@@ -1756,37 +1775,21 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 }
             };
 
-            composeDockerLoad.on('message', function(msg) {
-                var data = msg.split('\n');
-                var loadMap = {};
-                var i = 0;
-                var row = data[i];
-                while (row) {
-                    var parts = row.split(';');
-                    if (parts.length >= 3) {
-                        var cpuRaw = parseFloat(parts[1]) || 0;
-                        var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
-                        var memPair = parseMemUsagePair(parts[2]);
-                        loadMap[parts[0]] = {
-                            cpu: cpuNorm,
-                            cpuText: cpuNorm + '%',
-                            mem: parts[2],
-                            memUsedBytes: memPair.used,
-                            memLimitBytes: memPair.limit
-                        };
+            function pruneStaleLoadEntries(now) {
+                var staleIds = [];
+                for (var knownId in composeLoadById) {
+                    if ((now - composeLoadById[knownId].ts) > composeLoadStaleMs) {
+                        staleIds.push(knownId);
                     }
-                    i++;
-                    row = data[i];
                 }
+                staleIds.forEach(function(staleId) {
+                    delete composeLoadById[staleId];
+                    clearContainerLoad(staleId);
+                });
+                return staleIds.length > 0;
+            }
 
-                // Update per-container CPU & MEM elements in expanded detail tables
-                for (var shortId in loadMap) {
-                    var info = loadMap[shortId];
-                    $('.compose-cpu-' + shortId).text(info.cpuText);
-                    $('.compose-mem-' + shortId).text(info.mem);
-                    $('#compose-cpu-' + shortId).css('width', info.cpuText);
-                }
-
+            function renderStackAggregates() {
                 // Aggregate per-stack totals and update stack-level cells.
                 // Build (or reuse) the stack→container index.
                 var currentRowCount = $('#compose_stacks tr.compose-sortable').length;
@@ -1816,10 +1819,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     var totalMemLimitBytes = 0;
                     var matched = 0;
                     idList.forEach(function(ctId) {
-                        if (ctId && loadMap[ctId]) {
-                            totalCpu += loadMap[ctId].cpu;
-                            totalMemUsedBytes += loadMap[ctId].memUsedBytes || 0;
-                            totalMemLimitBytes += loadMap[ctId].memLimitBytes || 0;
+                        if (ctId && composeLoadById[ctId]) {
+                            totalCpu += composeLoadById[ctId].cpu;
+                            totalMemUsedBytes += composeLoadById[ctId].memUsedBytes || 0;
+                            totalMemLimitBytes += composeLoadById[ctId].memLimitBytes || 0;
                             matched++;
                         }
                     });
@@ -1827,12 +1830,68 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     if (matched > 0) {
                         var aggCpu = Math.round(totalCpu * 100) / 100 + '%';
                         var aggMem = formatBytes(totalMemUsedBytes) + ' / ' + formatBytes(totalMemLimitBytes);
-                        $('.compose-stack-cpu-' + entry.stackId).text(aggCpu);
+                        $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
                         $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
-                        $('.compose-stack-mem-' + entry.stackId).text(aggMem);
+                        $('.compose-stack-mem-' + entry.stackId).show().text(aggMem);
+                    } else {
+                        $('.compose-stack-cpu-' + entry.stackId).addClass('compose-text-muted').text('-');
+                        $('#compose-stack-cpu-' + entry.stackId).css('width', '0');
+                        $('.compose-stack-mem-' + entry.stackId).hide();
                     }
                 });
+            }
+
+            composeDockerLoad.on('message', function(msg) {
+                if (!isComposeLoadVisible()) {
+                    return;
+                }
+
+                var now = Date.now();
+                var data = msg.split('\n');
+                var i = 0;
+                var row = data[i];
+                while (row) {
+                    var parts = row.split(';');
+                    if (parts.length >= 3) {
+                        var cpuRaw = parseFloat(parts[1]) || 0;
+                        var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
+                        var memPair = parseMemUsagePair(parts[2]);
+                        composeLoadById[parts[0]] = {
+                            cpu: cpuNorm,
+                            cpuText: cpuNorm + '%',
+                            mem: parts[2],
+                            memUsedBytes: memPair.used,
+                            memLimitBytes: memPair.limit,
+                            ts: now
+                        };
+                    }
+                    i++;
+                    row = data[i];
+                }
+
+                pruneStaleLoadEntries(now);
+
+                // Update per-container CPU & MEM elements in expanded detail tables
+                for (var shortId in composeLoadById) {
+                    var info = composeLoadById[shortId];
+                    $('.compose-cpu-' + shortId).removeClass('compose-text-muted').text(info.cpuText);
+                    $('.compose-mem-' + shortId).show().text(info.mem);
+                    $('#compose-cpu-' + shortId).css('width', info.cpuText);
+                }
+
+                renderStackAggregates();
             });
+
+            // If dockerload pauses/stalls, drop stale values on a timer so the UI
+            // falls back to placeholders instead of showing frozen metrics forever.
+            setInterval(function() {
+                if (!isComposeLoadVisible()) {
+                    return;
+                }
+                if (pruneStaleLoadEntries(Date.now())) {
+                    renderStackAggregates();
+                }
+            }, 3000);
             // Start immediately if already in advanced view
             if (isComposeAdvancedMode()) {
                 composeDockerLoad.start();
