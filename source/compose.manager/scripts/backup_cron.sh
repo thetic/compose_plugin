@@ -17,31 +17,16 @@ result=$(php -r "
 ")
 
 # Parse result fields individually to avoid eval
-status=$(echo "$result" | php <<'PHP'
-$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
-echo $j['result'] ?? 'error';
-PHP
-)
-message=$(echo "$result" | php <<'PHP'
-$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
-echo $j['message'] ?? 'Unknown error';
-PHP
-)
-archive=$(echo "$result" | php <<'PHP'
-$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
-echo $j['archive'] ?? '';
-PHP
-)
-size=$(echo "$result" | php <<'PHP'
-$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
-echo $j['size'] ?? '';
-PHP
-)
-stacks=$(echo "$result" | php <<'PHP'
-$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
-echo $j['stacks'] ?? '0';
-PHP
-)
+# shellcheck disable=SC2016
+status=$(printf '%s' "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["result"] ?? "error";')
+# shellcheck disable=SC2016
+message=$(printf '%s' "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["message"] ?? "Unknown error";')
+# shellcheck disable=SC2016
+archive=$(printf '%s' "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["archive"] ?? "";')
+# shellcheck disable=SC2016
+size=$(printf '%s' "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["size"] ?? "";')
+# shellcheck disable=SC2016
+stacks=$(printf '%s' "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["stacks"] ?? "0";')
 
 if [ "$status" = "success" ]; then
     logger -t "$LOG_TAG" "[backup] Scheduled backup completed: $archive ($size, $stacks stacks)"
