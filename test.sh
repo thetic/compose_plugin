@@ -32,7 +32,8 @@ done
 
 if [[ "$RUN_PHPUNIT" == true ]]; then
   echo "Running PHPUnit tests..."
-  php vendor/bin/phpunit --configuration phpunit.xml
+  export XDEBUG_MODE=coverage
+  php -d xdebug.mode=coverage vendor/bin/phpunit --configuration phpunit.xml
   echo "PHPUnit tests passed."
 fi
 

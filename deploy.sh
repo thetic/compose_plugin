@@ -16,6 +16,17 @@ QUICK=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
 
+in_container=false
+if [[ -f "/.dockerenv" ]] || grep -qE '/docker|/lxc|/kubepods' /proc/1/cgroup 2>/dev/null; then
+  in_container=true
+fi
+
+# Prefer the workspace archive in /code when running in a container.
+ARCHIVE_DIR="$SCRIPT_DIR/archive"
+if [[ "$in_container" == true && -d "/code" ]]; then
+  ARCHIVE_DIR="$SCRIPT_DIR/archive"
+fi
+
 usage() {
   cat <<EOF
 Usage: $0 [options]
@@ -120,7 +131,13 @@ if [[ -n "$PACKAGE_PATH" ]]; then
   PACKAGE_PATH=$(realpath "$PACKAGE_PATH")
 else
   if [[ "$SKIP_BUILD" == true ]]; then
-    PACKAGE_PATH=$(find "$ARCHIVE_DIR" -maxdepth 1 -name 'compose.manager-*-noarch-*.txz' -type f -print0 | xargs -0 ls -t 2>/dev/null | head -n1 || true)
+    shopt -s nullglob
+    files=("$ARCHIVE_DIR"/compose.manager-*-noarch-*.txz)
+    shopt -u nullglob
+    if [[ ${#files[@]} -eq 0 ]]; then
+      echo "No package found in archive"; exit 1
+    fi
+    PACKAGE_PATH=$(printf '%s\n' "${files[@]}" | sort -r | head -n1)
     if [[ -z "$PACKAGE_PATH" ]]; then
       echo "No package found in archive"; exit 1
     fi
@@ -133,9 +150,25 @@ else
     echo "Building package via build.sh..."
     bash "$SCRIPT_DIR/build.sh" "${build_args[@]}"
 
-    PACKAGE_PATH=$(find "$ARCHIVE_DIR" -maxdepth 1 -name 'compose.manager-*-noarch-*.txz' -type f -print0 | xargs -0 ls -t 2>/dev/null | head -n1 || true)
-    if [[ -z "$PACKAGE_PATH" ]]; then
+    # Use nullglob and ls -t to avoid xargs running with no input (which lists current directory)
+    shopt -s nullglob
+    files=("$ARCHIVE_DIR"/compose.manager-*-noarch-*.txz)
+    shopt -u nullglob
+    if [[ ${#files[@]} -eq 0 ]]; then
+      echo "Archive directory content:"
+      ls -al "$ARCHIVE_DIR" 2>/dev/null || echo "Cannot list archive directory"
+      echo "Archive directory: $ARCHIVE_DIR"
       echo "Build completed but package not found"; exit 1
+    fi
+    echo "Checking archive directory: $ARCHIVE_DIR"
+    ls -al "$ARCHIVE_DIR"
+    PACKAGE_PATH=$(printf '%s\n' "${files[@]}" | sort -r | head -n1)
+    echo "Candidate package path: $PACKAGE_PATH"
+    if [[ -z "$PACKAGE_PATH" ]]; then
+      echo "Build completed but package not found"
+      echo "Archive dir content:"
+      ls -al "$ARCHIVE_DIR"
+      exit 1
     fi
   fi
 fi

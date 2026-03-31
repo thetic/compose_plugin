@@ -95,11 +95,115 @@ fi
 CONTAINER_CA_CERT="/etc/ssl/certs/ca-certificates.crt"
 
 # Build in Docker
+# Detect whether script is running inside a container or on the host.
+in_container=false
+if [[ -f "/.dockerenv" ]] || grep -qE '/docker|/lxc|/kubepods' /proc/1/cgroup 2>/dev/null; then
+  in_container=true
+fi
+
+# For dev container usage, plugin code and output are in the workspace under /code.
 ARCHIVE_PATH="$OUTPUT_PATH"
+mkdir -p "$ARCHIVE_PATH"
+
+# Host path for docker socket operations should be the actual unRAID path.
+HOST_ARCHIVE_PATH="$ARCHIVE_PATH"
+if [[ "$in_container" == true && -d "/code" ]]; then
+  # Map /code inside container to host path for Docker bind mounts (normally /mnt/user/code).
+  read -r host_root host_source < <(awk '$5=="/code" {for(i=1;i<=NF;i++){if($i=="-"){print $4, $(i+2); exit}}}' /proc/self/mountinfo 2>/dev/null || true)
+  if [[ -n "$host_root" && -n "$host_source" ]]; then
+    if [[ "$host_source" == "fuse.shfs" || "$host_source" == "shfs" ]]; then
+      if [[ "$host_root" =~ ^/appdata(/.*)$ ]]; then
+        host_code_root="/mnt/user/appdata${BASH_REMATCH[1]}"
+      elif [[ "$host_root" =~ ^/mnt/user(/.*)$ ]]; then
+        host_code_root="$host_root"
+      else
+        host_code_root="/mnt/user${host_root}"
+      fi
+    else
+      host_code_root="${host_source%/}${host_root}"
+    fi
+    HOST_ARCHIVE_PATH="$host_code_root${ARCHIVE_PATH#/code}"
+    echo "Detected code root=$host_root source=$host_source -> HOST_ARCHIVE_PATH=$HOST_ARCHIVE_PATH"
+  fi
+fi
+
+# Fallback for legacy /config mount paths (if /code mapping failed).
+if [[ "$in_container" == true && -d "/config" && "$HOST_ARCHIVE_PATH" == "$ARCHIVE_PATH" ]]; then
+  read -r host_root host_source < <(awk '$5=="/config" {for(i=1;i<=NF;i++){if($i=="-"){print $4, $(i+2); exit}}}' /proc/self/mountinfo 2>/dev/null || true)
+  if [[ -n "$host_root" && -n "$host_source" ]]; then
+    if [[ "$host_source" == "fuse.shfs" || "$host_source" == "shfs" ]]; then
+      if [[ "$host_root" =~ ^/appdata(/.*)$ ]]; then
+        host_code_root="/mnt/user/appdata${BASH_REMATCH[1]}"
+      elif [[ "$host_root" =~ ^/mnt/user(/.*)$ ]]; then
+        host_code_root="$host_root"
+      else
+        host_code_root="/mnt/user${host_root}"
+      fi
+    else
+      host_code_root="${host_source%/}${host_root}"
+    fi
+    HOST_ARCHIVE_PATH="$host_code_root${ARCHIVE_PATH#/config}"
+    echo "Detected config root=$host_root source=$host_source -> HOST_ARCHIVE_PATH=$HOST_ARCHIVE_PATH"
+  fi
+fi
+
+mkdir -p "$HOST_ARCHIVE_PATH" 2>/dev/null || true
+
 SOURCE_PATH="$SCRIPT_DIR/source"
-echo -e "\033[1;33mRunning Docker build...\033[0m"
-if ! docker run --rm --tmpfs /tmp \
-    -v "$ARCHIVE_PATH:/mnt/output:rw" \
+
+mkdir -p "$ARCHIVE_PATH"
+mkdir -p "$HOST_ARCHIVE_PATH"
+# Candidate locations for pkg_build.sh
+CANDIDATES=(
+  "$SOURCE_PATH/pkg_build.sh"
+  "$SCRIPT_DIR/source/compose.manager/pkg_build.sh"
+  "$SCRIPT_DIR/../source/pkg_build.sh"
+  "$SCRIPT_DIR/../source/compose.manager/pkg_build.sh"
+  "$SCRIPT_DIR/source/./pkg_build.sh"
+)
+
+SOURCE_PATH_RESOLVED=""
+for cand in "${CANDIDATES[@]}"; do
+  if [[ -f "$cand" ]]; then
+    SOURCE_PATH_RESOLVED=$(dirname "$cand")
+    break
+  fi
+done
+
+if [[ -z "$SOURCE_PATH_RESOLVED" ]]; then
+  echo "Unable to locate pkg_build.sh in any candidate location:";
+  printf '  %s\n' "${CANDIDATES[@]}"
+  echo "PWD=$(pwd)";
+  echo "SCRIPT_DIR=$SCRIPT_DIR";
+  echo "Listing possible directories:";
+  ls -ld "$SCRIPT_DIR" "$SCRIPT_DIR/source" "$SCRIPT_DIR/source/compose.manager" "$SCRIPT_DIR/../source" "$SCRIPT_DIR/../source/compose.manager" 2>/dev/null || true
+  exit 1
+fi
+
+SOURCE_PATH="$SOURCE_PATH_RESOLVED"
+
+if [[ ! -f "$SOURCE_PATH/pkg_build.sh" ]]; then
+    echo "Unable to locate pkg_build.sh under SOURCE_PATH=$SOURCE_PATH"; exit 1
+fi
+
+echo "Using SOURCE_PATH=$SOURCE_PATH"
+echo "pkg_build.sh exists: $(ls -l "$SOURCE_PATH/pkg_build.sh")"
+
+# Workaround for Docker daemon path visibility issues in nested container setups:
+# copy source tree to /tmp where bind mount access is more likely to work.
+TMP_SOURCE_PATH="/tmp/compose_plugin_build_source"
+rm -rf "$TMP_SOURCE_PATH"
+mkdir -p "$TMP_SOURCE_PATH"
+cp -a "$SOURCE_PATH/." "$TMP_SOURCE_PATH/"
+SOURCE_PATH="$TMP_SOURCE_PATH"
+
+echo "Docker will mount SOURCE_PATH=$SOURCE_PATH"
+
+# Determine a strategy to provide SOURCE_PATH to the container.
+# First attempt direct bind mount; if that fails we fallback to tar stream.
+
+build_cmd_direct=(docker run --rm --tmpfs /tmp \
+    -v "$HOST_ARCHIVE_PATH:/mnt/output:rw" \
     -v "$SOURCE_PATH:/mnt/source:ro" \
     -v "$HOST_CA_CERT:$CONTAINER_CA_CERT:ro" \
     -e TZ=America/New_York \
@@ -109,8 +213,39 @@ if ! docker run --rm --tmpfs /tmp \
     -e PKG_BUILD="$BUILD_NUM" \
     -e CA_CERT="$CONTAINER_CA_CERT" \
     vbatts/slackware:latest \
-    /mnt/source/pkg_build.sh; then
+    sh -c 'test -f /mnt/source/pkg_build.sh')
+
+if "${build_cmd_direct[@]}"; then
+  echo "Direct source mount works. Running build via direct mount..."
+  if ! docker run --rm --tmpfs /tmp \
+      -v "$HOST_ARCHIVE_PATH:/mnt/output:rw" \
+      -v "$SOURCE_PATH:/mnt/source:ro" \
+      -v "$HOST_CA_CERT:$CONTAINER_CA_CERT:ro" \
+      -e TZ=America/New_York \
+      -e COMPOSE_VERSION="$COMPOSE_VERSION" \
+      -e OUTPUT_FOLDER=/mnt/output \
+      -e PKG_VERSION="$VERSION" \
+      -e PKG_BUILD="$BUILD_NUM" \
+      -e CA_CERT="$CONTAINER_CA_CERT" \
+      vbatts/slackware:latest \
+      /mnt/source/pkg_build.sh; then
     echo "Docker build failed."; exit 1
+  fi
+else
+  echo "Direct mount failed, using tar stream fallback."
+  if ! tar -C "$SOURCE_PATH" -cf - . | docker run --rm --tmpfs /tmp -i \
+      -v "$HOST_ARCHIVE_PATH:/mnt/output:rw" \
+      -v "$HOST_CA_CERT:$CONTAINER_CA_CERT:ro" \
+      -e TZ=America/New_York \
+      -e COMPOSE_VERSION="$COMPOSE_VERSION" \
+      -e OUTPUT_FOLDER=/mnt/output \
+      -e PKG_VERSION="$VERSION" \
+      -e PKG_BUILD="$BUILD_NUM" \
+      -e CA_CERT="$CONTAINER_CA_CERT" \
+      vbatts/slackware:latest \
+      sh -c 'mkdir -p /mnt/source && tar -C /mnt/source -xf - && /mnt/source/pkg_build.sh'; then
+    echo "Docker build failed."; exit 1
+  fi
 fi
 
 PACKAGE_PATH="$OUTPUT_PATH/$PACKAGE_NAME"
