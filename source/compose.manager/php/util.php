@@ -393,18 +393,18 @@ class OverrideInfo
         return self::resolveOverride($projectPath, $indirectPath, $composeFilePath);
     }
 
-    /**
-     * Core override resolution logic shared by both factories.
-     *
-     * Computes the override filename from the compose file, resolves project
-     * and indirect override paths, migrates/removes legacy overrides, and
-     * auto-creates a project override template if needed.
-     *
-     * @param string      $projectPath     Full path to the stack directory
-     * @param string|null $indirectPath     Indirect target directory, or null if not indirect
-     * @param string|null $composeFilePath  Resolved main compose file path, or null if none
-     * @return OverrideInfo
-     */
+     /**
+      * Core override resolution logic shared by both factories.
+      *
+      * Computes the override filename from the compose file, resolves project
+      * and indirect override paths while preserving legacy filenames as-is,
+      * and auto-creates a project override template if needed.
+      *
+      * @param string      $projectPath     Full path to the stack directory
+      * @param string|null $indirectPath     Indirect target directory, or null if not indirect
+      * @param string|null $composeFilePath  Resolved main compose file path, or null if none
+      * @return OverrideInfo
+      */
     private static function resolveOverride(string $projectPath, ?string $indirectPath, ?string $composeFilePath): self
     {
         $info = new self();
@@ -413,29 +413,30 @@ class OverrideInfo
         $composeBaseName = $composeFilePath !== null ? basename($composeFilePath) : COMPOSE_FILE_NAMES[0];
         $info->computedName = preg_replace('/(\.[^.]+)$/', '.override$1', $composeBaseName);
 
-        $info->projectOverride = $projectPath . '/' . $info->computedName;
-        $info->indirectOverride = $indirectPath !== null ? ($indirectPath . '/' . $info->computedName) : null;
+        $computedProjectOverride = $projectPath . '/' . $info->computedName;
+        $computedIndirectOverride = $indirectPath !== null ? ($indirectPath . '/' . $info->computedName) : null;
 
         $legacyProject = $projectPath . '/docker-compose.override.yml';
         $legacyIndirect = $indirectPath !== null ? ($indirectPath . '/docker-compose.override.yml') : null;
 
+        if (is_file($computedProjectOverride)) {
+            $info->projectOverride = $computedProjectOverride;
+        } elseif (is_file($legacyProject)) {
+            $info->projectOverride = $legacyProject;
+        } else {
+            $info->projectOverride = $computedProjectOverride;
+        }
+
+        if ($computedIndirectOverride !== null && is_file($computedIndirectOverride)) {
+            $info->indirectOverride = $computedIndirectOverride;
+        } elseif ($legacyIndirect !== null && is_file($legacyIndirect)) {
+            $info->indirectOverride = $legacyIndirect;
+        } else {
+            $info->indirectOverride = $computedIndirectOverride;
+        }
+
         $info->useIndirect = ($info->indirectOverride && is_file($info->indirectOverride));
-        $info->mismatchIndirectLegacy = ($indirectPath !== null && $legacyIndirect && is_file($legacyIndirect) && !($info->indirectOverride && is_file($info->indirectOverride)));
-
-        // Migrate legacy project override to computed project override (project-only migration)
-        if (!is_file($info->projectOverride) && is_file($legacyProject) && realpath($legacyProject) !== @realpath($info->projectOverride)) {
-            @rename($legacyProject, $info->projectOverride);
-            clientDebug("[override] Migrated legacy project override $legacyProject -> $info->projectOverride", null, 'daemon', 'info');
-        }
-
-        if (is_file($info->projectOverride) && is_file($legacyProject) && realpath($legacyProject) !== @realpath($info->projectOverride)) {
-            @rename($legacyProject, $legacyProject . ".bak");
-            clientDebug("[override] Removed stale legacy project override $legacyProject (mismatch with computed override)", null, 'daemon', 'info');
-        }
-
-        if ($info->mismatchIndirectLegacy) {
-            clientDebug("[override] Indirect override exists with non-matching name; using project fallback.", null, 'daemon', 'warning');
-        }
+        $info->mismatchIndirectLegacy = false;
 
         if (!is_file($info->projectOverride) && !$info->useIndirect) {
             $overrideContent = "# Override file for UI labels (icon, webui, shell)\n";
@@ -1747,9 +1748,12 @@ class StackInfo
      * silently skipping folders with no compose file or invalid structure.
      *
      * @param string $composeRoot Compose projects root directory
+     * @param bool   $skipDocker  If true, skip the batch docker ps preload
+     *                            (returns stacks with empty container lists
+     *                            for fast skeleton rendering).
      * @return self[]
      */
-    public static function allFromRoot(string $composeRoot): array
+    public static function allFromRoot(string $composeRoot, bool $skipDocker = false): array
     {
         $stacks = [];
         foreach (self::listProjectFolders($composeRoot) as $project) {
@@ -1759,6 +1763,15 @@ class StackInfo
                 // skip non-stack directories (no compose file, invalid structure, etc.)
                 clientDebug("[allFromRoot] Skipped project '$project': " . $e->getMessage(), null, 'daemon', 'debug');
             }
+        }
+
+        if ($skipDocker) {
+            // Set empty container lists so getContainerList() won't trigger
+            // per-stack docker calls.
+            foreach ($stacks as $stack) {
+                $stack->setContainerList([]);
+            }
+            return $stacks;
         }
 
         // Batch-preload container data with a single docker ps call to avoid

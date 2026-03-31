@@ -14,7 +14,7 @@
 	Generate a development build with timestamp: YYYY.MM.DD.HHmm
 
 .PARAMETER RemoteHost
-	Remote hostname or IP.
+	Remote hostname(s) or IP(s). Accepts a single value or multiple values using PowerShell array syntax (e.g. "saturn","jupiter").
 
 .PARAMETER User
 	SSH username.
@@ -45,6 +45,9 @@
 	./deploy.ps1 -Dev -RemoteHost "saturn"
 
 .EXAMPLE
+	./deploy.ps1 -Dev -RemoteHost "saturn","jupiter"
+
+.EXAMPLE
 	./deploy.ps1 -SkipBuild -RemoteHost "saturn"
 
 .EXAMPLE
@@ -58,7 +61,7 @@
 param(
 	[string]$Version,
 	[switch]$Dev,
-	[string]$RemoteHost = "",
+	[string[]]$RemoteHost = @(),
 	[string]$User = "root",
 	[string]$RemoteDir = "/tmp",
 	[string]$PackagePath,
@@ -75,7 +78,7 @@ $scriptDir = $PSScriptRoot
 $archiveDir = Join-Path $scriptDir "archive"
 
 if ($Quick) {
-	if ([string]::IsNullOrWhiteSpace($RemoteHost)) {
+	if (-not $RemoteHost -or $RemoteHost.Count -eq 0) {
 		throw "RemoteHost is required when using -Quick"
 	}
 
@@ -83,21 +86,14 @@ if ($Quick) {
 		Write-Host "Quick mode ignores -Version, -Dev, -PackagePath, and -SkipBuild." -ForegroundColor DarkYellow
 	}
 
-	$remoteTarget = "$User@$RemoteHost"
-	$quickPrefix = "source/compose.manager/"
-	$quickRemoteRoot = "/usr/local/emhttp/plugins/compose.manager"
-
 	$repoRoot = (& git -C $scriptDir rev-parse --show-toplevel 2>$null)
 	if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($repoRoot)) {
 		throw "Unable to resolve git repository root from $scriptDir"
 	}
 	$repoRoot = $repoRoot.Trim()
 
-	Write-Host "Quick deploy mode (tracked staged+unstaged files):" -ForegroundColor Green
-	Write-Host "  Repo root     : $repoRoot" -ForegroundColor Gray
-	Write-Host "  Source scope  : source/compose.manager" -ForegroundColor Gray
-	Write-Host "  Remote root   : $quickRemoteRoot" -ForegroundColor Gray
-	Write-Host "  Remote target : $remoteTarget" -ForegroundColor Gray
+	$quickPrefix = "source/compose.manager/"
+	$quickRemoteRoot = "/usr/local/emhttp/plugins/compose.manager"
 
 	$statUnstaged = (& git -C $repoRoot diff --stat -- source/compose.manager)
 	$statStaged = (& git -C $repoRoot diff --cached --stat -- source/compose.manager)
@@ -120,7 +116,7 @@ if ($Quick) {
 	if (-not $changedFiles -or $changedFiles.Count -eq 0) {
 		Write-Host "No tracked staged/unstaged file changes found under source/compose.manager." -ForegroundColor Yellow
 		return @{
-			Host = $RemoteHost
+			Hosts = $RemoteHost
 			User = $User
 			Quick = $true
 			FileCount = 0
@@ -132,56 +128,64 @@ if ($Quick) {
 	Write-Host "Files queued for quick sync ($($changedFiles.Count)):" -ForegroundColor Green
 	$changedFiles | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
 
-	$syncedFiles = @()
-	foreach ($relativePath in $changedFiles) {
-		if (-not $relativePath.StartsWith($quickPrefix, [System.StringComparison]::Ordinal)) {
-			continue
-		}
+	$allResults = @()
+	foreach ($host_ in $RemoteHost) {
+		$remoteTarget = "$User@$host_"
+		Write-Host "`nQuick deploy to $remoteTarget :" -ForegroundColor Green
 
-		$subPath = $relativePath.Substring($quickPrefix.Length)
-		if ([string]::IsNullOrWhiteSpace($subPath)) {
-			continue
-		}
-
-		$localPath = Join-Path $repoRoot ($relativePath -replace '/', [IO.Path]::DirectorySeparatorChar)
-		if (-not (Test-Path -Path $localPath -PathType Leaf)) {
-			Write-Host "Skipping missing local file: $relativePath" -ForegroundColor DarkYellow
-			continue
-		}
-
-		$remoteFile = "$quickRemoteRoot/$subPath"
-		$remoteParent = ($remoteFile -replace '/[^/]+$','')
-
-		$syncAction = "Upload changed file via SCP"
-		if ($PSCmdlet.ShouldProcess("$remoteTarget`:$remoteFile", $syncAction)) {
-			ssh -- "$remoteTarget" "mkdir -p '$remoteParent'"
-			if ($LASTEXITCODE -ne 0) {
-				throw "Failed to create remote directory $remoteParent (exit code $LASTEXITCODE)"
+		$syncedFiles = @()
+		foreach ($relativePath in $changedFiles) {
+			if (-not $relativePath.StartsWith($quickPrefix, [System.StringComparison]::Ordinal)) {
+				continue
 			}
 
-			scp -- "$localPath" "$remoteTarget`:$remoteFile"
-			if ($LASTEXITCODE -ne 0) {
-				throw "Failed to upload $relativePath to $remoteFile (exit code $LASTEXITCODE)"
+			$subPath = $relativePath.Substring($quickPrefix.Length)
+			if ([string]::IsNullOrWhiteSpace($subPath)) {
+				continue
 			}
+
+			$localPath = Join-Path $repoRoot ($relativePath -replace '/', [IO.Path]::DirectorySeparatorChar)
+			if (-not (Test-Path -Path $localPath -PathType Leaf)) {
+				Write-Host "Skipping missing local file: $relativePath" -ForegroundColor DarkYellow
+				continue
+			}
+
+			$remoteFile = "$quickRemoteRoot/$subPath"
+			$remoteParent = ($remoteFile -replace '/[^/]+$','')
+
+			$syncAction = "Upload changed file via SCP"
+			if ($PSCmdlet.ShouldProcess("$remoteTarget`:$remoteFile", $syncAction)) {
+				ssh -- "$remoteTarget" "mkdir -p '$remoteParent'"
+				if ($LASTEXITCODE -ne 0) {
+					throw "Failed to create remote directory $remoteParent on $host_ (exit code $LASTEXITCODE)"
+				}
+
+				scp -- "$localPath" "$remoteTarget`:$remoteFile"
+				if ($LASTEXITCODE -ne 0) {
+					throw "Failed to upload $relativePath to $remoteFile on $host_ (exit code $LASTEXITCODE)"
+				}
+			}
+
+			$syncedFiles += $relativePath
 		}
 
-		$syncedFiles += $relativePath
+		$allResults += @{
+			Host = $host_
+			User = $User
+			Quick = $true
+			FileCount = $syncedFiles.Count
+			Files = $syncedFiles
+			WhatIf = [bool]$WhatIfPreference
+		}
 	}
 
 	if ($WhatIfPreference) {
 		Write-Host "WhatIf simulation complete (quick mode)." -ForegroundColor Green
 	} else {
-		Write-Host "Quick deployment complete." -ForegroundColor Green
+		Write-Host "`nQuick deployment complete to $($RemoteHost.Count) host(s)." -ForegroundColor Green
 	}
 
-	return @{
-		Host = $RemoteHost
-		User = $User
-		Quick = $true
-		FileCount = $syncedFiles.Count
-		Files = $syncedFiles
-		WhatIf = [bool]$WhatIfPreference
-	}
+	return $allResults
 }
 
 # Generate dev version with timestamp if -Dev flag is used
@@ -255,7 +259,16 @@ if (-not $PackagePath) {
 }
 
 $packageName = Split-Path -Leaf $PackagePath
-$remotePackage = "$RemoteDir/$packageName"
+
+if (-not $RemoteHost -or $RemoteHost.Count -eq 0) {
+	Write-Host "No RemoteHost specified — build only, skipping deploy." -ForegroundColor Yellow
+	return @{
+		Hosts = @()
+		User = $User
+		PackagePath = $PackagePath
+		WhatIf = [bool]$WhatIfPreference
+	}
+}
 
 # Prefer plugin manifest generated by build.ps1 for this exact package; fallback to repository source .plg
 if ($buildInfo -and $buildInfo.PluginPath -and (Test-Path -Path $buildInfo.PluginPath -PathType Leaf)) {
@@ -267,50 +280,56 @@ if (-not (Test-Path -Path $pluginPath -PathType Leaf)) {
 	throw "Plugin file not found: $pluginPath"
 }
 $pluginName = Split-Path -Leaf $pluginPath
-$remotePlugin = "$RemoteDir/$pluginName"
 $installScriptLocal = Join-Path $scriptDir "install.sh"
 if (-not (Test-Path -Path $installScriptLocal -PathType Leaf)) {
 	throw "Install script not found: $installScriptLocal"
 }
-$remoteInstallScript = "$RemoteDir/install.sh"
-$remoteTarget = "$User@$RemoteHost"
 
-Write-Host "Deploying package, plugin manifest, and install.sh:" -ForegroundColor Green
-Write-Host "  Local package : $PackagePath" -ForegroundColor Gray
-Write-Host "  Local .plg    : $pluginPath" -ForegroundColor Gray
-Write-Host "  Local install : $installScriptLocal" -ForegroundColor Gray
-Write-Host "  Remote target : ${remoteTarget}:$RemoteDir" -ForegroundColor Gray
+$allResults = @()
+foreach ($host_ in $RemoteHost) {
+	$remoteTarget = "$User@$host_"
+	$remotePackage = "$RemoteDir/$packageName"
+	$remotePlugin = "$RemoteDir/$pluginName"
+	$remoteInstallScript = "$RemoteDir/install.sh"
 
-$uploadAction = "Upload package + .plg + install.sh via SCP"
-if ($PSCmdlet.ShouldProcess("${remoteTarget}:$RemoteDir/", $uploadAction)) {
-	Write-Host "Uploading package, .plg and install.sh via SCP..." -ForegroundColor Yellow
-	scp -- "$PackagePath" "$remoteTarget`:$RemoteDir/"
-	scp -- "$pluginPath" "$remoteTarget`:$RemoteDir/"
-	scp -- "$installScriptLocal" "$remoteTarget`:$remoteInstallScript"
-	if ($LASTEXITCODE -ne 0) {
-		throw "SCP upload failed with exit code $LASTEXITCODE"
+	Write-Host "`nDeploying to $remoteTarget :" -ForegroundColor Green
+	Write-Host "  Local package : $PackagePath" -ForegroundColor Gray
+	Write-Host "  Local .plg    : $pluginPath" -ForegroundColor Gray
+	Write-Host "  Local install : $installScriptLocal" -ForegroundColor Gray
+	Write-Host "  Remote target : ${remoteTarget}:$RemoteDir" -ForegroundColor Gray
+
+	$uploadAction = "Upload package + .plg + install.sh via SCP"
+	if ($PSCmdlet.ShouldProcess("${remoteTarget}:$RemoteDir/", $uploadAction)) {
+		Write-Host "Uploading package, .plg and install.sh via SCP..." -ForegroundColor Yellow
+		scp -- "$PackagePath" "$remoteTarget`:$RemoteDir/"
+		scp -- "$pluginPath" "$remoteTarget`:$RemoteDir/"
+		scp -- "$installScriptLocal" "$remoteTarget`:$remoteInstallScript"
+		if ($LASTEXITCODE -ne 0) {
+			throw "SCP upload to $host_ failed with exit code $LASTEXITCODE"
+		}
+	}
+
+	$installAction = "Execute remote install script"
+	if ($PSCmdlet.ShouldProcess($remoteTarget, $installAction)) {
+		Write-Host "Executing remote install script..." -ForegroundColor Yellow
+		ssh -- "$remoteTarget" "bash '$remoteInstallScript' '$remotePackage' '$remotePlugin' && rm -f '$remoteInstallScript'"
+		if ($LASTEXITCODE -ne 0) {
+			throw "Remote install script on $host_ failed with exit code $LASTEXITCODE"
+		}
+	}
+
+	$allResults += @{
+		Host = $host_
+		User = $User
+		PackagePath = $PackagePath
+		RemotePackage = $remotePackage
+		WhatIf = [bool]$WhatIfPreference
 	}
 }
-
-$installAction = "Execute remote install script"
-if ($PSCmdlet.ShouldProcess($remoteTarget, $installAction)) {
-	Write-Host "Executing remote install script..." -ForegroundColor Yellow
-	ssh -- "$remoteTarget" "bash '$remoteInstallScript' '$remotePackage' '$remotePlugin' && rm -f '$remoteInstallScript'"
-	if ($LASTEXITCODE -ne 0) {
-		throw "Remote install script failed with exit code $LASTEXITCODE"
-	}
-}
-
 
 if ($WhatIfPreference) {
 	Write-Host "WhatIf simulation complete." -ForegroundColor Green
 } else {
-	Write-Host "Deployment complete." -ForegroundColor Green
+	Write-Host "`nDeployment complete to $($RemoteHost.Count) host(s)." -ForegroundColor Green
 }
-return @{
-	Host = $RemoteHost
-	User = $User
-	PackagePath = $PackagePath
-	RemotePackage = $remotePackage
-	WhatIf = [bool]$WhatIfPreference
-}
+return $allResults
