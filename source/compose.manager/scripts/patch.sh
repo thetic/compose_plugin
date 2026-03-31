@@ -83,7 +83,8 @@ parse_folder_range() {
     local a=${BASH_REMATCH[1]}
     IFS='.' read -r a1 a2 a3 <<< "$a"
     a1=${a1:-0}; a2=${a2:-0}; a3=${a3:-0}
-    local minI=$(ver_to_int "${a1}.${a2}.${a3}")
+    local minI
+    minI=$(ver_to_int "${a1}.${a2}.${a3}")
     echo "$minI 99999999"
     return
   fi
@@ -93,7 +94,8 @@ parse_folder_range() {
     local a=${BASH_REMATCH[1]}
     IFS='.' read -r a1 a2 a3 <<< "$a"
     a1=${a1:-0}; a2=${a2:-99}; a3=${a3:-99}
-    local maxI=$(ver_to_int "${a1}.${a2}.${a3}")
+    local maxI
+    maxI=$(ver_to_int "${a1}.${a2}.${a3}")
     echo "0 $maxI"
     return
   fi
@@ -106,8 +108,10 @@ parse_folder_range() {
     a1=${a1:-0}; a2=${a2:-0}; a3=${a3:-0}
     IFS='.' read -r b1 b2 b3 <<< "$b"
     b1=${b1:-0}; b2=${b2:-99}; b3=${b3:-99}
-    local minI=$(ver_to_int "${a1}.${a2}.${a3}")
-    local maxI=$(ver_to_int "${b1}.${b2}.${b3}")
+    local minI
+    minI=$(ver_to_int "${a1}.${a2}.${a3}")
+    local maxI
+    maxI=$(ver_to_int "${b1}.${b2}.${b3}")
     echo "$minI $maxI"
     return
   fi
@@ -115,8 +119,10 @@ parse_folder_range() {
   # Exact minor
   if [[ "$n" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
     local v="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-    local minI=$(ver_to_int "${v}.0")
-    local maxI=$(ver_to_int "${v}.99")
+    local minI
+    minI=$(ver_to_int "${v}.0")
+    local maxI
+    maxI=$(ver_to_int "${v}.99")
     echo "$minI $maxI"
     return
   fi
@@ -124,8 +130,10 @@ parse_folder_range() {
   # Major only
   if [[ "$n" =~ ^([0-9]+)$ ]]; then
     local maj=${BASH_REMATCH[1]}
-    local minI=$(ver_to_int "${maj}.0.0")
-    local maxI=$(ver_to_int "${maj}.99.99")
+    local minI
+    minI=$(ver_to_int "${maj}.0.0")
+    local maxI
+    maxI=$(ver_to_int "${maj}.99.99")
     echo "$minI $maxI"
     return
   fi
@@ -147,8 +155,8 @@ if [ -d "$PATCH_ROOT" ]; then
   tmpfile=$(mktemp /tmp/patchdirs.XXXXXXXX)
   for d in "$PATCH_ROOT"/*; do
     [ -d "$d" ] || continue
-    read minI maxI <<< $(parse_folder_range "$d")
-    if [ "$UNRAID_VER" = "" ] || ([ "$host_ver_int" -ge "$minI" ] && [ "$host_ver_int" -le "$maxI" ]); then
+    read -r minI maxI <<< "$(parse_folder_range "$d")"
+    if [ "$UNRAID_VER" = "" ] || { [ "$host_ver_int" -ge "$minI" ] && [ "$host_ver_int" -le "$maxI" ]; }; then
       printf "%s %s\n" "$minI" "$d" >> "$tmpfile"
     fi
   done
@@ -309,6 +317,7 @@ apply_patches(){
 remove_patches(){
   local failed=0
   local failed_unpatches_list=()
+  local to_remove=()
   # First pass: try to apply reverse patches in applied dir
   if [ -f "$APPLIED_MANIFEST" ]; then
     # iterate reverse patches in the same order they were recorded
@@ -321,14 +330,12 @@ remove_patches(){
         continue
       fi
       if [ -f "$rev" ]; then
-        (cd / && patch -s -p0 -R < "$rev")
-        if [ $? -eq 0 ]; then
+        if (cd / && patch -s -p0 -R < "$rev"); then
           echo "Reverted via $rev"
           rm -f "$rev" || true
           rm -f "$orig_saved" || true
-          # remove manifest line
-          grep -v "^${pbase}," "$APPLIED_MANIFEST" > "$APPLIED_MANIFEST.tmp" || true
-          mv "$APPLIED_MANIFEST.tmp" "$APPLIED_MANIFEST" || true
+          # schedule manifest removal; commit after loop to avoid in-loop file rewrite
+          to_remove+=("$pbase")
           continue
         else
           echo "Reverse patch failed for $pbase"
@@ -342,8 +349,7 @@ remove_patches(){
       if [ -f "$orig_saved" ]; then
         cp "$orig_saved" "$tpath" || { echo "Failed to restore $tpath from ${orig_saved}"; failed=$((failed+1)); failed_unpatches_list+=("$pbase"); continue; }
         rm -f "$orig_saved" || true
-        grep -v "^${pbase}," "$APPLIED_MANIFEST" > "$APPLIED_MANIFEST.tmp" || true
-        mv "$APPLIED_MANIFEST.tmp" "$APPLIED_MANIFEST" || true
+        to_remove+=("$pbase")
         continue
       fi
 
@@ -352,6 +358,15 @@ remove_patches(){
       failed=$((failed+1))
       failed_unpatches_list+=("$pbase")
     done < "$APPLIED_MANIFEST"
+
+    if [ ${#to_remove[@]} -ne 0 ]; then
+      cp "$APPLIED_MANIFEST" "$APPLIED_MANIFEST.tmp" 2>/dev/null || true
+      for rm_entry in "${to_remove[@]}"; do
+        grep -v "^${rm_entry}," "$APPLIED_MANIFEST.tmp" > "$APPLIED_MANIFEST.tmp2" || true
+        mv "$APPLIED_MANIFEST.tmp2" "$APPLIED_MANIFEST.tmp" || true
+      done
+      mv "$APPLIED_MANIFEST.tmp" "$APPLIED_MANIFEST" || true
+    fi
   else
     vmsg "No manifest found; nothing to revert via manifest"
   fi
