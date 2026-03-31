@@ -17,11 +17,31 @@ result=$(php -r "
 ")
 
 # Parse result fields individually to avoid eval
-status=$(echo "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["result"] ?? "error";')
-message=$(echo "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["message"] ?? "Unknown error";')
-archive=$(echo "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["archive"] ?? "";')
-size=$(echo "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["size"] ?? "";')
-stacks=$(echo "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["stacks"] ?? "0";')
+status=$(echo "$result" | php <<'PHP'
+$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
+echo $j['result'] ?? 'error';
+PHP
+)
+message=$(echo "$result" | php <<'PHP'
+$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
+echo $j['message'] ?? 'Unknown error';
+PHP
+)
+archive=$(echo "$result" | php <<'PHP'
+$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
+echo $j['archive'] ?? '';
+PHP
+)
+size=$(echo "$result" | php <<'PHP'
+$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
+echo $j['size'] ?? '';
+PHP
+)
+stacks=$(echo "$result" | php <<'PHP'
+$j = json_decode(file_get_contents('php://stdin'), true) ?: [];
+echo $j['stacks'] ?? '0';
+PHP
+)
 
 if [ "$status" = "success" ]; then
     logger -t "$LOG_TAG" "[backup] Scheduled backup completed: $archive ($size, $stacks stacks)"
