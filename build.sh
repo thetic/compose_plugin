@@ -81,7 +81,7 @@ sed -E \
     -e "s|^\s*<!ENTITY packageName \".*\"|<!ENTITY packageName \"$PACKAGE_BASENAME\"|" \
     -e "s|^\s*<!ENTITY packagefile \".*\"|<!ENTITY packagefile \"$PACKAGE_NAME\"|" \
     -e "s|^\s*<!ENTITY packageURL \".*\"|<!ENTITY packageURL \"file:///tmp/$PACKAGE_NAME\"|" \
-    -e "s|^\s*<FILE Name="&pluginLOC;/&packagefile;".*|<FILE Name='/tmp/$PACKAGE_NAME' Run='upgradepkg --install-new'>|" \
+    -e "s|^\s*<FILE Name=\"&pluginLOC;/&packagefile;\".*|<FILE Name='/tmp/$PACKAGE_NAME' Run='upgradepkg --install-new'>|" \
     -e "s|^\s*<URL>.*</URL>|<URL>file:///tmp/$PACKAGE_NAME</URL>|" \
     "$PLG_FILE" > "$TEMP_PLG"
 echo -e "\033[1;36mGenerated temporary plugin manifest for build: $TEMP_PLG\033[0m"
@@ -98,7 +98,7 @@ CONTAINER_CA_CERT="/etc/ssl/certs/ca-certificates.crt"
 ARCHIVE_PATH="$OUTPUT_PATH"
 SOURCE_PATH="$SCRIPT_DIR/source"
 echo -e "\033[1;33mRunning Docker build...\033[0m"
-docker run --rm --tmpfs /tmp \
+if ! docker run --rm --tmpfs /tmp \
     -v "$ARCHIVE_PATH:/mnt/output:rw" \
     -v "$SOURCE_PATH:/mnt/source:ro" \
     -v "$HOST_CA_CERT:$CONTAINER_CA_CERT:ro" \
@@ -109,9 +109,7 @@ docker run --rm --tmpfs /tmp \
     -e PKG_BUILD="$BUILD_NUM" \
     -e CA_CERT="$CONTAINER_CA_CERT" \
     vbatts/slackware:latest \
-    /mnt/source/pkg_build.sh
-
-if [[ $? -ne 0 ]]; then
+    /mnt/source/pkg_build.sh; then
     echo "Docker build failed."; exit 1
 fi
 

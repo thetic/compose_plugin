@@ -26,7 +26,9 @@ fi
 
 # Remove any stale legacy package entries (compose.manager-package-*)
 for pkg in /var/log/packages/compose.manager-*; do
-  [ -e "$pkg" ] && removepkg "$(basename "$pkg")" 2>/dev/null || true
+  if [ -e "$pkg" ]; then
+    removepkg "$(basename "$pkg")" 2>/dev/null || true
+  fi
 done
 
 cp -- "$PLUGIN_FILE" "/boot/config/plugins/$(basename "$PLUGIN_FILE")"
