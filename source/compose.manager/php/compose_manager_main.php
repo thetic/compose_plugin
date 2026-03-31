@@ -258,9 +258,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     ? '/webGui/javascript/ace'
     : '/plugins/compose.manager/javascript/ace';
 ?>
-<script src="<?php echo $acePath; ?>/ace.js" type="text/javascript"></script>
-<script src="/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js" type="text/javascript"></script>
-<script src="/plugins/compose.manager/javascript/common.js" type="text/javascript"></script>
+<script src="<?php echo autov($acePath . '/ace.js'); ?>" type="text/javascript"></script>
+<script src="<?php echo autov('/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js'); ?>" type="text/javascript"></script>
+<script src="<?php echo autov('/plugins/compose.manager/javascript/common.js'); ?>" type="text/javascript"></script>
 <script>
     var compose_root = <?php echo json_encode($compose_root); ?>;
     var caURL = "/plugins/compose.manager/php/exec.php";

@@ -34,10 +34,10 @@ $themeSheetJson = json_encode("themes/{$themeFile}.css");
 <html class="Theme--<?= htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') ?>" style="height:100%;margin:0;padding:0">
 
 <head>
-    <link rel="stylesheet" href="/webGui/styles/default-base.css">
-    <link rel="stylesheet" href="/webGui/styles/default-dynamix.css">
-    <link rel="stylesheet" href="/webGui/styles/default-color-palette.css">
-    <link rel="stylesheet" href="/webGui/styles/themes/<?= htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') ?>.css">
+    <link rel="stylesheet" href="<? autov('/webGui/styles/default-base.css') ?>">
+    <link rel="stylesheet" href="<? autov('/webGui/styles/default-dynamix.css') ?>">
+    <link rel="stylesheet" href="<? autov('/webGui/styles/default-color-palette.css') ?>">
+    <link rel="stylesheet" href="<?php echo autov('/webGui/styles/themes/' . htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') . '.css'); ?>">
     <style>
         html,
         body {
