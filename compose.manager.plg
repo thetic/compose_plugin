@@ -31,19 +31,19 @@
 >
 
 <CHANGES>
-###2026.03.30.1251
-- Bug Fixes (cpu-mem): pin values to two decimal places
-- Bug Fixes (compose-manager): improve memory limit handling for stack resources
-- Bug Fixes (compose-load): improve WebSocket subscriber management and error handling
-- Bug Fixes (compose-load): enhance debugging for dockerload socket initialization and visibility handling
-- Bug Fixes (compose-load): defer dockerload socket start until stack list is ready
-- Refactoring (override-resolution): enhance legacy handling in override resolution logic
-- Refactoring (compose-load): remove outdated project upgrade logic from plugin
-- Documentation: update file management references to include all standard Compose file names
-- Tests: update memory limit assertions in ComposeManagerMainSourceTest
-- Tests: enhance override path tests and add compose file resolution tests
+###2026.04.01.1554
+- Features: enhance build and deploy scripts for container compatibility and archive handling
+- Features: add bash test, build and deploy scripts for package management on linux
+- Bug Fixes: update autov function usage for consistency across PHP files and ensure its included in show_ttyd.php
+- Bug Fixes: update Nchan paths for consistency and add docker_load wrapper script
+- Bug Fixes: improve plugin manifest generation and error handling in build script
+- Bug Fixes: update script paths to use autov for better compatibility and caching control
+- Bug Fixes: improve script robustness and error handling in build, deploy, and install scripts (shellcheck)
+- Chores: more shellcheck fixes
+- Chores: fix shellcheck issues
+- Chores (patch): fix shellcheck issues
 - [PR #74](https://github.com/mstrhakr/compose_plugin/pull/74)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28...v2026.03.30.1251)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28...v2026.04.01.1554)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
