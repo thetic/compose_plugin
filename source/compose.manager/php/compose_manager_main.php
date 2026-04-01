@@ -5534,6 +5534,20 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 opts.push({ divider: true });
             }
 
+            // Compose Up (allows starting additional profile-scoped services)
+            opts.push({
+                text: 'Compose Up',
+                icon: 'fa-play',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('up', path, profiles);
+                    } else {
+                        ComposeUp(path);
+                    }
+                }
+            });
+
             // Compose Down (stop and remove containers)
             opts.push({
                 text: 'Compose Down',
