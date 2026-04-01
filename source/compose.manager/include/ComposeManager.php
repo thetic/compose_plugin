@@ -2279,6 +2279,65 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         $("#" + myID).tooltipster("close");
     }
 
+    var composeYamlSchemaCache = null;
+
+    function buildComposeYamlSchema() {
+        if (!jsyaml || typeof jsyaml.Type !== 'function' || !jsyaml.DEFAULT_SCHEMA || typeof jsyaml.DEFAULT_SCHEMA.extend !== 'function') {
+            return null;
+        }
+
+        var customTags = ['!override', '!reset', '!merge'];
+        var kinds = ['scalar', 'sequence', 'mapping'];
+        var types = [];
+
+        customTags.forEach(function(tag) {
+            kinds.forEach(function(kind) {
+                types.push(new jsyaml.Type(tag, {
+                    kind: kind,
+                    resolve: function() {
+                        return true;
+                    },
+                    construct: function(data) {
+                        if (data === null || data === undefined) {
+                            if (kind === 'sequence') return [];
+                            if (kind === 'mapping') return {};
+                            return '';
+                        }
+                        return data;
+                    }
+                }));
+            });
+        });
+
+        return jsyaml.DEFAULT_SCHEMA.extend(types);
+    }
+
+    function stripUnsupportedYamlTags(content) {
+        if (!content) return content;
+        return content.replace(/!<[^>\n]+>|![A-Za-z_][A-Za-z0-9_.-]*/g, '');
+    }
+
+    function loadComposeYaml(content) {
+        var input = content || '';
+
+        if (!composeYamlSchemaCache) {
+            composeYamlSchemaCache = buildComposeYamlSchema();
+        }
+
+        try {
+            if (composeYamlSchemaCache) {
+                return jsyaml.load(input, {
+                    schema: composeYamlSchemaCache
+                });
+            }
+            return jsyaml.load(input);
+        } catch (e) {
+            if (e && /unknown tag/i.test(String(e.message || ''))) {
+                return jsyaml.load(stripUnsupportedYamlTags(input));
+            }
+            throw e;
+        }
+    }
     function applyDesc(myID) {
         var newDesc = $("#newDesc" + myID).val();
         var project = $("#" + myID).attr("data-scriptname");
@@ -2315,7 +2374,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 var rawComposefile = JSON.parse(rawComposefile);
 
                 if ((rawComposefile.result == 'success')) {
-                    var main_doc = jsyaml.load(rawComposefile.content);
+                    var main_doc = loadComposeYaml(rawComposefile.content);
 
                     for (var service_key in main_doc.services) {
                         var service = main_doc.services[service_key];
@@ -4085,10 +4144,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     throw new Error('Failed to load compose file');
                 }
 
-                var mainDoc = jsyaml.load(composeData.content) || {
+                var mainDoc = loadComposeYaml(composeData.content) || {
                     services: {}
                 };
-                var overrideDoc = jsyaml.load(overrideData.content || '') || {
+                var overrideDoc = loadComposeYaml(overrideData.content || '') || {
                     services: {}
                 };
 
@@ -4279,7 +4338,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         try {
             if (content.trim()) {
-                jsyaml.load(content);
+                loadComposeYaml(content);
             }
             updateValidation(type, content, true);
         } catch (e) {
