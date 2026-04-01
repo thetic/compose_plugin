@@ -74,17 +74,29 @@ mkdir -p "$OUTPUT_PATH"
 
 # Generate temporary plugin manifest
 TEMP_PLG="$OUTPUT_PATH/compose.manager.plg"
-sed -E \
-    -e "s|^\s*<!ENTITY version \".*\"|<!ENTITY version \"$VERSION\"|" \
-    -e "s|^\s*<!ENTITY packageVER \".*\"|<!ENTITY packageVER \"$VERSION\"|" \
-    -e "s|^\s*<!ENTITY pkgBUILD \".*\"|<!ENTITY pkgBUILD \"$BUILD_NUM\"|" \
-    -e "s|^\s*<!ENTITY packageName \".*\"|<!ENTITY packageName \"$PACKAGE_BASENAME\"|" \
-    -e "s|^\s*<!ENTITY packagefile \".*\"|<!ENTITY packagefile \"$PACKAGE_NAME\"|" \
-    -e "s|^\s*<!ENTITY packageURL \".*\"|<!ENTITY packageURL \"file:///tmp/$PACKAGE_NAME\"|" \
-    -e "s|^\s*<FILE Name=\"&pluginLOC;/&packagefile;\".*|<FILE Name='/tmp/$PACKAGE_NAME' Run='upgradepkg --install-new'>|" \
-    -e "s|^\s*<URL>.*</URL>|<URL>file:///tmp/$PACKAGE_NAME</URL>|" \
-    "$PLG_FILE" > "$TEMP_PLG"
+if [[ ! -f "$PLG_FILE" ]]; then
+    echo "ERROR: .plg manifest not found: $PLG_FILE"
+    exit 1
+fi
+
+# Ensure the version/build in the plugin file matches the generated package.
+# NOTE: Use a heredoc sed script to avoid shell quoting issues with double quotes in regex.
+SED_SCRIPT=$(mktemp)
+cat > "$SED_SCRIPT" << SEDEOF
+s|^\s*<!ENTITY[[:space:]]+version[[:space:]]+"[^"]*"|<!ENTITY version "$VERSION"|
+s|^\s*<!ENTITY[[:space:]]+packageVER[[:space:]]+"[^"]*"|<!ENTITY packageVER "$VERSION"|
+s|^\s*<!ENTITY[[:space:]]+pkgBUILD[[:space:]]+"[^"]*"|<!ENTITY pkgBUILD "$BUILD_NUM"|
+s|^\s*<!ENTITY[[:space:]]+packageName[[:space:]]+"[^"]*"|<!ENTITY packageName "$PACKAGE_BASENAME"|
+s|^\s*<!ENTITY[[:space:]]+packagefile[[:space:]]+"[^"]*"|<!ENTITY packagefile "$PACKAGE_NAME"|
+s|^\s*<!ENTITY[[:space:]]+packageURL[[:space:]]+"[^"]*"|<!ENTITY packageURL "file:///tmp/$PACKAGE_NAME"|
+s|^\s*<FILE[[:space:]]+Name=['"]?[^'">]+['"]?.*|<FILE Name='/tmp/$PACKAGE_NAME' Run='upgradepkg --install-new'>|
+s|^\s*<URL>.*</URL>|<URL>file:///tmp/$PACKAGE_NAME</URL>|
+SEDEOF
+sed -E -f "$SED_SCRIPT" "$PLG_FILE" > "$TEMP_PLG"
+rm -f "$SED_SCRIPT"
+
 echo -e "\033[1;36mGenerated temporary plugin manifest for build: $TEMP_PLG\033[0m"
+
 
 # CA bundle setup
 HOST_CA_CERT="${CA_CERT_PATH:-/tmp/cacert.pem}"
@@ -254,9 +266,15 @@ if [[ -f "$PACKAGE_PATH" ]]; then
     echo -e "\n\033[1;32mBuild successful!\033[0m"
     echo -e "  \033[1;36mPackage: $PACKAGE_PATH\033[0m"
     echo -e "  \033[1;36mMD5: $MD5\033[0m"
+
     # Update packageMD5 in the temporary plugin manifest
-    sed -i -E \
-        -e "s|^\s*<!ENTITY packageMD5 \".*\"|<!ENTITY packageMD5 \"$MD5\"|" \
-        -e "s|^\s*<MD5>.*</MD5>|<MD5>$MD5</MD5>|" \
-        "$TEMP_PLG"
+    SED_MD5=$(mktemp)
+    cat > "$SED_MD5" << SEDEOF
+s|^\s*<!ENTITY[[:space:]]+packageMD5[[:space:]]+"[^"]*"|<!ENTITY packageMD5 "$MD5"|
+s|^\s*<MD5>.*</MD5>|<MD5>$MD5</MD5>|
+SEDEOF
+    sed -i -E -f "$SED_MD5" "$TEMP_PLG"
+    rm -f "$SED_MD5"
+
+
 fi
