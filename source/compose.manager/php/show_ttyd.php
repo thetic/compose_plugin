@@ -13,12 +13,36 @@ $url = "/logterminal/$active_socket/";
 
 $version = parse_ini_file("/etc/unraid-version");
 if (version_compare($version['version'], "6.10.0", "<")) {
-    $url = "/dockerterminal/$socket_name/";
+    $url = "/dockerterminal/$active_socket/";
 }
 
 // Read active Dynamix theme — iframe pages don't inherit parent PHP vars.
 $docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
 require_once "$docroot/webGui/include/Wrappers.php";
+if (!function_exists('autov')) {
+    $helperCandidates = [
+        "$docroot/webGui/include/Helpers.php",
+        "$docroot/plugins/dynamix/include/Helpers.php",
+    ];
+    foreach ($helperCandidates as $helperFile) {
+        if (is_file($helperFile)) {
+            require_once $helperFile;
+            break;
+        }
+    }
+}
+
+if (!function_exists('autov')) {
+    // Fallback for environments where Helpers.php is unavailable.
+    function autov($file, $ret = false)
+    {
+        $newFile = $file;
+        if ($ret) {
+            return $newFile;
+        }
+        echo $newFile;
+    }
+}
 extract(parse_plugin_cfg('dynamix', true));
 $themeFile = 'gray';
 if (!empty($display['theme'])) {
@@ -34,10 +58,10 @@ $themeSheetJson = json_encode("themes/{$themeFile}.css");
 <html class="Theme--<?= htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') ?>" style="height:100%;margin:0;padding:0">
 
 <head>
-    <link rel="stylesheet" href="<? autov('/webGui/styles/default-base.css') ?>">
-    <link rel="stylesheet" href="<? autov('/webGui/styles/default-dynamix.css') ?>">
-    <link rel="stylesheet" href="<? autov('/webGui/styles/default-color-palette.css') ?>">
-    <link rel="stylesheet" href="<?php echo autov('/webGui/styles/themes/' . htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') . '.css'); ?>">
+    <link rel="stylesheet" href="<?php autov('/webGui/styles/default-base.css'); ?>">
+    <link rel="stylesheet" href="<?php autov('/webGui/styles/default-dynamix.css'); ?>">
+    <link rel="stylesheet" href="<?php autov('/webGui/styles/default-color-palette.css'); ?>">
+    <link rel="stylesheet" href="<?php autov('/webGui/styles/themes/' . htmlspecialchars($themeFile, ENT_QUOTES, 'UTF-8') . '.css'); ?>">
     <style>
         html,
         body {

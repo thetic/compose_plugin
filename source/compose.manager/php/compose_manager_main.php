@@ -258,9 +258,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     ? '/webGui/javascript/ace'
     : '/plugins/compose.manager/javascript/ace';
 ?>
-<script src="<?php echo autov($acePath . '/ace.js'); ?>" type="text/javascript"></script>
-<script src="<?php echo autov('/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js'); ?>" type="text/javascript"></script>
-<script src="<?php echo autov('/plugins/compose.manager/javascript/common.js'); ?>" type="text/javascript"></script>
+<script src="<?php autov($acePath . '/ace.js'); ?>" type="text/javascript"></script>
+<script src="<?php autov('/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js'); ?>" type="text/javascript"></script>
+<script src="<?php autov('/plugins/compose.manager/javascript/common.js'); ?>" type="text/javascript"></script>
 <script>
     var compose_root = <?php echo json_encode($compose_root); ?>;
     var caURL = "/plugins/compose.manager/php/exec.php";
@@ -657,8 +657,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
     // Load external stylesheets (non-critical styles — critical ones are inline above)
     (function() {
-        var base = '<? autov("/plugins/compose.manager/styles/comboButton.css"); ?>';
-        var editor = '<? autov("/plugins/compose.manager/styles/editorModal.css"); ?>';
+        var base = '<?php autov("/plugins/compose.manager/styles/comboButton.css"); ?>';
+        var editor = '<?php autov("/plugins/compose.manager/styles/editorModal.css"); ?>';
         if (!$('link[href="' + base + '"]').length)
             $('head').append($('<link rel="stylesheet" type="text/css" />').attr('href', base));
         if (!$('link[href="' + editor + '"]').length)
