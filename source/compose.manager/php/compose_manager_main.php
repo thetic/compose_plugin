@@ -1785,6 +1785,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket', reconnectTimeout: 5000});
             window._composeDockerLoad = composeDockerLoad;
             var composeDockerLoadRunning = false;
+            var composeDockerLoadDropped = 0;
 
             // Cache of { stackId, containerIds[] } built from the DOM once after
             // composeLoadlist() and reused until the row count changes.
@@ -1921,11 +1922,6 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             }
 
             composeDockerLoad.on('message', function(msg) {
-                if (!isComposeLoadVisible()) {
-                    composeClientDebug('[dockerload] message dropped — not visible (advanced=' + isComposeAdvancedMode() + ', docHidden=' + (document.visibilityState === 'hidden') + ')', null, 'daemon', 'debug');
-                    return;
-                }
-
                 var now = Date.now();
                 var data = msg.split('\n');
                 var i = 0;
@@ -1950,6 +1946,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 }
 
                 pruneStaleLoadEntries(now);
+
+                // Skip DOM updates when the page isn't visible — the cache
+                // stays warm so we can render instantly on return.
+                if (!isComposeLoadVisible()) {
+                    composeDockerLoadDropped++;
+                    return;
+                }
 
                 // Update per-container CPU & MEM elements in expanded detail tables
                 for (var shortId in composeLoadById) {
@@ -1983,8 +1986,21 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // the page loaded or sat in a background tab.
             window._composeDockerLoadVisHandler = function() {
                 if (document.visibilityState === 'visible' && composeDockerLoadRunning) {
-                    composeClientDebug('[dockerload] browser tab became visible — invalidating stack index', null, 'daemon', 'debug');
+                    if (composeDockerLoadDropped > 0) {
+                        composeClientDebug('[dockerload] browser tab became visible — skipped ' + composeDockerLoadDropped + ' messages while hidden, rendering cached data', null, 'daemon', 'debug');
+                        composeDockerLoadDropped = 0;
+                    }
                     composeStackIndex = null;
+
+                    // Immediately render the cached load data so the UI
+                    // shows current metrics without waiting for the next tick.
+                    for (var shortId in composeLoadById) {
+                        var info = composeLoadById[shortId];
+                        $('.compose-cpu-' + shortId).removeClass('compose-text-muted').text(info.cpuText);
+                        $('.compose-mem-' + shortId).show().text(info.mem);
+                        $('#compose-cpu-' + shortId).css('width', info.cpuText);
+                    }
+                    renderStackAggregates();
                 }
             };
             document.addEventListener('visibilitychange', window._composeDockerLoadVisHandler);
@@ -1995,10 +2011,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var $loadTable = $('#compose_stacks');
             var $loadTabPanel = $loadTable.length ? $loadTable.closest('[role="tabpanel"]') : $();
             if ($loadTabPanel.length) {
-                composeClientDebug('[dockerload] tabbed mode detected — observing panel visibility', null, 'daemon', 'debug');
+                composeClientDebug('[dockerload] tabbed mode detected — observing panel visibility', {}, 'daemon', 'debug');
                 window._composeDockerLoadPanelObserver = new MutationObserver(function() {
                     if ($loadTabPanel[0].style.display !== 'none' && composeDockerLoadRunning) {
-                        composeClientDebug('[dockerload] compose tab became visible — invalidating stack index', null, 'daemon', 'debug');
+                        composeClientDebug('[dockerload] compose tab became visible — invalidating stack index', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'daemon', 'debug');
                         composeStackIndex = null;
                     }
                 });
@@ -2009,11 +2025,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // loaded (composeListReady is true).  Otherwise the
             // composeLoadlist().then() callback will start it.
             if (composeListReady && isComposeAdvancedMode()) {
-                composeClientDebug('[dockerload] auto-starting socket (listReady=true, advanced=true)', null, 'daemon', 'info');
+                composeClientDebug('[dockerload] auto-starting socket', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'daemon', 'info');
                 composeDockerLoad.start();
                 composeDockerLoadRunning = true;
             } else {
-                composeClientDebug('[dockerload] deferring socket start (listReady=' + composeListReady + ', advanced=' + isComposeAdvancedMode() + ')', null, 'daemon', 'debug');
+                composeClientDebug('[dockerload] deferring socket start', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'daemon', 'debug');
             }
             return true;
         }
