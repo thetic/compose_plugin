@@ -4081,8 +4081,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             html += '</div>';
             html += '<div class="labels-service-fields">';
             html += '<div class="labels-field">';
-            html += '<label><i class="fa fa-picture-o"></i> Icon URL</label>';
-            html += '<input type="text" id="label-' + composeEscapeAttr(serviceKey) + '-icon" value="' + composeEscapeAttr(iconValue) + '" placeholder="https://example.com/icon.png" data-service="' + composeEscapeAttr(serviceKey) + '" data-field="icon">';
+            html += '<label><i class="fa fa-picture-o"></i> Icon URL / Path</label>';
+            html += '<input type="text" id="label-' + composeEscapeAttr(serviceKey) + '-icon" value="' + composeEscapeAttr(iconValue) + '" placeholder="https://example.com/icon.png or /path/to/icon.png" data-service="' + composeEscapeAttr(serviceKey) + '" data-field="icon" data-pickroot="/" data-picktop="/boot/config/plugins/compose.manager/projects" data-pickcloseonfile="true" data-pickfilter="png,jpg,jpeg,gif,svg,ico,webp">';
             html += '</div>';
             html += '<div class="labels-field">';
             html += '<label><i class="fa fa-globe"></i> WebUI URL</label>';
@@ -4133,6 +4133,16 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }
 
         $('#labels-services-container').html(html);
+
+        // Attach file tree picker to container icon inputs
+        if ($.fn.fileTreeAttach && typeof composeBindFileTreeInputs === 'function') {
+            var $iconInputs = $('#labels-services-container').find('input[data-pickroot]');
+            composeBindFileTreeInputs($iconInputs, {
+                zIndex: 100010,
+                minWidth: 320,
+                addClass: true
+            });
+        }
 
         // Attach change handlers to label inputs
         $('#labels-services-container').find('input[data-service]').on('input', function() {
@@ -6051,8 +6061,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                         <div class="settings-field">
                             <label for="settings-icon-url">Icon URL / Path</label>
-                            <input type="text" id="settings-icon-url" placeholder="https://example.com/icon.png or /path/to/icon.png">
-                            <div class="settings-field-help">URL or local path to a custom icon for this stack. Leave empty to use the default icon.</div>
+                            <input type="text" id="settings-icon-url" placeholder="https://example.com/icon.png or /path/to/icon.png" data-pickroot="/" data-picktop="/boot/config/plugins/compose.manager/projects" data-pickcloseonfile="true" data-pickfilter="png,jpg,jpeg,gif,svg,ico,webp">
+                            <div class="settings-field-help">URL or local path to a custom icon for this stack. Use the file picker or enter a URL. Leave empty to use the default icon.</div>
                             <div class="settings-field-icon-preview" id="settings-icon-preview" style="display:none;">
                                 <span>Preview:</span>
                                 <img id="settings-icon-preview-img" src="" alt="Icon preview" onerror="this.parentElement.style.display='none';">
