@@ -1541,25 +1541,79 @@ class StackInfo
     /**
      * Check if any service in the stack has a build configuration.
      *
-     * Uses `docker compose config` to parse the compose files and checks
-     * for services with build contexts, indicating they need to be built
-     * at startup rather than pulled from a registry.
+     * Returns a cached result from the `has_build` metadata file when the
+     * compose (and override) files have not changed since the cache was
+     * written.  On a cache miss the method falls back to
+     * `docker compose config` and persists the result for future calls.
      *
      * @return bool True if any service has a build configuration
      */
     public function hasBuildConfig(): bool
     {
-        // Check cache first
+        // In-memory cache (same request)
         if (array_key_exists('has_build', $this->metadataCache)) {
             return (bool) $this->metadataCache['has_build'];
         }
 
+        // Persistent file cache – use when fresh
+        $raw = $this->readMetadata('has_build');
+        if ($raw !== null && $raw !== '' && !$this->isHasBuildCacheStale()) {
+            $val = ($raw === '1');
+            $this->metadataCache['has_build'] = $val;
+            return $val;
+        }
+
+        return $this->extractHasBuildFromCompose();
+    }
+
+    /**
+     * Check whether the cached `has_build` metadata file is stale.
+     *
+     * Compares filemtime of the cache file against the compose file (and
+     * override file when present).  Returns true when either source file
+     * is newer than the cache or when the cache file does not exist.
+     *
+     * @return bool
+     */
+    private function isHasBuildCacheStale(): bool
+    {
+        $cacheFile = $this->path . '/has_build';
+        if (!is_file($cacheFile)) {
+            return true;
+        }
+        $cacheMtime = filemtime($cacheFile);
+
+        if ($this->composeFilePath !== null && is_file($this->composeFilePath)) {
+            if (filemtime($this->composeFilePath) > $cacheMtime) {
+                return true;
+            }
+        }
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null && is_file($overridePath)) {
+            if (filemtime($overridePath) > $cacheMtime) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Run `docker compose config` and check for build directives.
+     *
+     * On success the result is written to the `has_build` metadata file so
+     * subsequent calls hit the fast-path file cache.
+     *
+     * @return bool
+     */
+    private function extractHasBuildFromCompose(): bool
+    {
         if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
             $this->metadataCache['has_build'] = false;
             return false;
         }
 
-        // Use docker compose config to get the resolved configuration
         $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
 
         $overridePath = $this->getOverridePath();
@@ -1579,11 +1633,10 @@ class StackInfo
             return false;
         }
 
-        // Parse the YAML output and check for build keys
-        // Look for "build:" at the start of a line (indented under services)
-        // This is a simple heuristic - build: can be a string (context) or object
         $hasBuild = preg_match('/^\s+build:/m', $output) === 1;
 
+        // Persist so future reads hit the cache
+        $this->writeMetadata('has_build', $hasBuild ? '1' : '0');
         $this->metadataCache['has_build'] = $hasBuild;
         return $hasBuild;
     }
