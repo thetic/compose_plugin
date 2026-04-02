@@ -1482,6 +1482,14 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         return lowerUrl.startsWith('http://') || lowerUrl.startsWith('https://');
     }
 
+    // Validate an icon source: http(s) URL, data URI, or local server path
+    function isValidIconSrc(src) {
+        if (!src) return false;
+        var s = src.trim();
+        return s.indexOf('http://') === 0 || s.indexOf('https://') === 0
+            || s.indexOf('data:image/') === 0 || s.indexOf('/') === 0;
+    }
+
     // Process WebUI URL placeholders for stack-level WebUI (where no container context exists)
     // For container-level WebUI, resolution is done server-side in exec.php
     function processWebUIUrl(url) {
@@ -3422,7 +3430,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 var localSha = container.localSha || '';
                 var remoteSha = container.remoteSha || '';
 
-                var iconSrc = (container.icon && (container.icon.indexOf('http://') === 0 || container.icon.indexOf('https://') === 0 || container.icon.indexOf('data:image/') === 0)) ?
+                var iconSrc = (container.icon && isValidIconSrc(container.icon)) ?
                     composeEscapeAttr(container.icon) :
                     '/plugins/dynamix.docker.manager/images/question.png';
 
@@ -4898,7 +4906,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var containerShell = container.shell || '/bin/sh';
             html += '<span id="' + uniqueId + '" class="hand" data-name="' + composeEscapeAttr(containerName) + '" data-state="' + composeEscapeAttr(state) + '" data-webui="' + composeEscapeAttr(webui) + '" data-stackid="' + composeEscapeAttr(stackId) + '" data-shell="' + composeEscapeAttr(containerShell) + '">';
             // Use actual image like Docker tab - either container icon or default question.png
-            var iconSrc = (container.icon && (isValidWebUIUrl(container.icon) || container.icon.startsWith('data:image/'))) ?
+            var iconSrc = (container.icon && isValidIconSrc(container.icon)) ?
                 container.icon :
                 '/plugins/dynamix.docker.manager/images/question.png';
             html += '<img src="' + composeEscapeAttr(iconSrc) + '" class="img" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
