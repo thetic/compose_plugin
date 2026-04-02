@@ -1305,17 +1305,92 @@ class StackInfo
     }
 
     /**
-     * Get available profiles (from `profiles` JSON file).
-     * @return array
+     * Get available profiles (from `profiles` JSON metadata cache).
+     *
+     * Returns cached profiles if the metadata file is newer than the compose
+     * file.  When the cache is missing or stale, delegates to
+     * `docker compose config --profiles` and writes the result back.
+     *
+     * @return string[]
      */
     public function getProfiles(): array
     {
         $raw = $this->readMetadata('profiles');
-        if ($raw === null || $raw === '') {
+        if ($raw !== null && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded) && !$this->isProfilesCacheStale()) {
+                return $decoded;
+            }
+        }
+
+        return $this->extractProfilesFromCompose();
+    }
+
+    /**
+     * Check whether the cached profiles metadata file is stale.
+     *
+     * Compares filemtime of the profiles metadata file against the compose
+     * file.  Returns true when the compose file is newer (profiles need
+     * re-extraction) or when the metadata file does not exist.
+     *
+     * @return bool
+     */
+    private function isProfilesCacheStale(): bool
+    {
+        $profilesFile = $this->path . '/profiles';
+        if (!is_file($profilesFile)) {
+            return true;
+        }
+
+        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
+            return false;
+        }
+
+        return filemtime($this->composeFilePath) > filemtime($profilesFile);
+    }
+
+    /**
+     * Extract available profiles via `docker compose config --profiles`.
+     *
+     * Mirrors the approach used by {@see getDefinedServices()}.  On success
+     * the result is written back to the profiles metadata file so subsequent
+     * reads hit the fast-path cache.
+     *
+     * @return string[]
+     */
+    private function extractProfilesFromCompose(): array
+    {
+        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
             return [];
         }
-        $decoded = json_decode($raw, true);
-        return is_array($decoded) ? $decoded : [];
+
+        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null && is_file($overridePath)) {
+            $cmd .= " -f " . escapeshellarg($overridePath);
+        }
+
+        $envFilePath = $this->getEnvFilePath();
+        if ($envFilePath !== null && is_file($envFilePath)) {
+            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        }
+        $cmd .= " config --profiles 2>/dev/null";
+
+        $output = shell_exec($cmd);
+        if (!is_string($output) || trim($output) === '') {
+            return [];
+        }
+
+        $profiles = array_values(array_filter(
+            array_map('trim', explode("\n", trim($output))),
+            fn(string $p): bool => $p !== ''
+        ));
+
+        // Write-through: persist so future reads hit the cache.
+        $this->writeMetadata('profiles', json_encode($profiles));
+
+        return $profiles;
     }
 
     // ---------------------------------------------------------------
