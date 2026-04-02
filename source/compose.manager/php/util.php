@@ -1418,8 +1418,10 @@ class StackInfo
     /**
      * Get the list of services defined in the main compose file.
      *
-     * Uses `docker compose config --services` to accurately resolve
-     * services including extends, anchors, etc.
+     * Returns cached services from the `services` metadata file when the
+     * compose (and override) files have not changed since the cache was
+     * written.  On a cache miss delegates to `docker compose config
+     * --services` and persists the result for future calls.
      *
      * @return string[] List of service names
      */
@@ -1429,9 +1431,67 @@ class StackInfo
             return [];
         }
 
+        // Persistent file cache – use when fresh
+        $raw = $this->readMetadata('services');
+        if ($raw !== null && $raw !== '' && !$this->isServicesCacheStale()) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return $this->extractServicesFromCompose();
+    }
+
+    /**
+     * Check whether the cached `services` metadata file is stale.
+     *
+     * Compares filemtime of the cache file against the compose file (and
+     * override file when present).  Returns true when either source file
+     * is newer than the cache or when the cache file does not exist.
+     *
+     * @return bool
+     */
+    private function isServicesCacheStale(): bool
+    {
+        $cacheFile = $this->path . '/services';
+        if (!is_file($cacheFile)) {
+            return true;
+        }
+        $cacheMtime = filemtime($cacheFile);
+
+        if ($this->composeFilePath !== null && is_file($this->composeFilePath)) {
+            if (filemtime($this->composeFilePath) > $cacheMtime) {
+                return true;
+            }
+        }
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null && is_file($overridePath)) {
+            if (filemtime($overridePath) > $cacheMtime) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Run `docker compose config --services` and persist the result.
+     *
+     * On success the service list is written to the `services` metadata
+     * file so subsequent calls hit the fast-path file cache.
+     *
+     * @return string[]
+     */
+    private function extractServicesFromCompose(): array
+    {
+        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
+            return [];
+        }
+
         $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
 
-        // Include override file if available
         $overridePath = $this->getOverridePath();
         if ($overridePath !== null && is_file($overridePath)) {
             $cmd .= " -f " . escapeshellarg($overridePath);
@@ -1448,9 +1508,15 @@ class StackInfo
             return [];
         }
 
-        return array_values(array_filter(array_map('trim', explode("\n", trim($output))), function ($service) {
-            return $service !== '';
-        }));
+        $services = array_values(array_filter(
+            array_map('trim', explode("\n", trim($output))),
+            fn(string $s): bool => $s !== ''
+        ));
+
+        // Write-through: persist so future reads hit the cache.
+        $this->writeMetadata('services', json_encode($services));
+
+        return $services;
     }
 
     /**
