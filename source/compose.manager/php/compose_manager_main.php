@@ -2545,7 +2545,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             actionName: opts.actionName,
             title: (opts.titlePrefix ? opts.titlePrefix + ': ' : '') + stackName,
             requestUrl: opts.requestUrl,
-            payload: $.extend({}, opts.payload, { path: path, profile: opts.profile || '' }),
+            payload: opts.payload,
             background: opts.background,
             suppressBackgroundNotification: opts.suppressBackgroundNotification,
             pendingReload: opts.pendingReload,
