@@ -96,12 +96,12 @@ if ($cpuCount <= 0) {
     /* Basic-view column widths (7 visible columns)
    Arrow + Icon are fixed px (small fixed content); rest are % of table. */
     #compose_stacks thead th.col-arrow {
-        width: 1%;
+        width: 15px;
         padding: 0;
     }
 
     #compose_stacks thead th.col-icon {
-        width: 2%;
+        width: 30px;
         padding: 0;
     }
 
@@ -128,11 +128,11 @@ if ($cpuCount <= 0) {
     /* Advanced-view column widths (10 visible columns)
    Arrow + Icon stay fixed px; Description + Path get the most %. */
     #compose_stacks.cm-advanced-view thead th.col-arrow {
-        width: 1%;
+        width: 15px;
     }
 
     #compose_stacks.cm-advanced-view thead th.col-icon {
-        width: 2%;
+        width: 30px;
     }
 
     #compose_stacks.cm-advanced-view thead th.col-name {
