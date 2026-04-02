@@ -10,10 +10,6 @@ require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
 
 $cfg = parse_plugin_cfg($sName);
 
-// Get stack state
-$stackstate = shell_exec($plugin_root . "/scripts/compose.sh -c list");
-$stackstate = json_decode($stackstate, TRUE);
-
 $o = "";
 $stackCount = 0;
 
