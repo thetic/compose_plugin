@@ -811,7 +811,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             clearTimeout(settingsIconDebounce);
             settingsIconDebounce = setTimeout(function() {
                 var url = $input.val().trim();
-                if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                if (url && isValidIconSrc(url)) {
                     $('#settings-icon-preview-img').attr('src', url);
                     $('#settings-icon-preview').show();
                 } else {
@@ -3915,7 +3915,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     var iconUrl = response.iconUrl || '';
                     $('#settings-icon-url').val(iconUrl);
                     editorModal.originalSettings['icon-url'] = iconUrl;
-                    if (iconUrl && (iconUrl.startsWith('http://') || iconUrl.startsWith('https://'))) {
+                    if (iconUrl && isValidIconSrc(iconUrl)) {
                         $('#settings-icon-preview-img').attr('src', iconUrl);
                         $('#settings-icon-preview').show();
                     } else {
@@ -6050,9 +6050,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         <div class="settings-section-title"><i class="fa fa-picture-o"></i> Appearance</div>
 
                         <div class="settings-field">
-                            <label for="settings-icon-url">Icon URL</label>
-                            <input type="url" id="settings-icon-url" placeholder="https://example.com/icon.png">
-                            <div class="settings-field-help">URL to a custom icon for this stack. Leave empty to use the default icon.</div>
+                            <label for="settings-icon-url">Icon URL / Path</label>
+                            <input type="text" id="settings-icon-url" placeholder="https://example.com/icon.png or /path/to/icon.png">
+                            <div class="settings-field-help">URL or local path to a custom icon for this stack. Leave empty to use the default icon.</div>
                             <div class="settings-field-icon-preview" id="settings-icon-preview" style="display:none;">
                                 <span>Preview:</span>
                                 <img id="settings-icon-preview-img" src="" alt="Icon preview" onerror="this.parentElement.style.display='none';">

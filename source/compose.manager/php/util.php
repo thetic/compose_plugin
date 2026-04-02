@@ -1246,9 +1246,21 @@ class StackInfo
     public function getIconUrl(): ?string
     {
         $url = $this->readMetadata('icon_url');
+        if ($url === null) {
+            return null;
+        }
+        // Accept http(s) URLs
         if (
-            $url !== null && filter_var($url, FILTER_VALIDATE_URL)
+            filter_var($url, FILTER_VALIDATE_URL)
             && (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0)
+        ) {
+            return $url;
+        }
+        // Accept local server paths under allowed prefixes
+        if (
+            strpos($url, '/') === 0
+            && strpos($url, '..') === false
+            && (strpos($url, '/mnt/') === 0 || strpos($url, '/boot/config/plugins/compose.manager/projects/') === 0)
         ) {
             return $url;
         }
