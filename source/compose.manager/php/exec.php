@@ -697,7 +697,7 @@ switch ($_POST['action']) {
             $containers[] = ContainerInfo::fromDockerInspect($rawContainer)->toArray();
         }
 
-        echo json_encode(['result' => 'success', 'containers' => $containers, 'definedServices' => $definedServices, 'projectName' => $stackInfo->projectFolder]);
+        echo json_encode(['result' => 'success', 'containers' => $containers, 'definedServices' => $definedServices, 'projectName' => $stackInfo->projectFolder, 'startedAt' => $stackInfo->getStartedAt()]);
         break;
     case 'containerAction':
         $containerName = isset($_POST['container']) ? trim($_POST['container']) : "";

@@ -2897,6 +2897,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         // Update cache with fresh data
                         stackContainersCache[stackId] = containers;
                         stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
+                        if (response.startedAt) stackStartedAtCache[stackId] = response.startedAt;
                         // Now update the row using the fresh cache
                         updateParentStackFromContainers(stackId, project);
                         // If details are expanded, refresh them too
@@ -3590,6 +3591,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     var expandedStacks = {};
     var stackContainersCache = {};
     var stackDefinedServicesCache = {}; // Cache for defined service counts
+    var stackStartedAtCache = {}; // Cache for stack-level started_at timestamps
     // Track stacks currently loading details to prevent concurrent reloads
     var stackDetailsLoading = {};
     // Suppress immediate refresh after a render to avoid loops
@@ -4742,6 +4744,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                         stackContainersCache[stackId] = containers;
                         stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
+                        if (response.startedAt) stackStartedAtCache[stackId] = response.startedAt;
                         composeClientDebug('[loadStackContainerDetails] success', {
                             stackId: stackId,
                             project: project,
@@ -5160,29 +5163,33 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 addComposeStackContext(stackElementId);
             }
 
-            // Update the uptime column
+            // Update the uptime column using stack-level started_at (same
+            // source as the initial PHP render in compose_list.php) so the
+            // displayed value doesn't jump when details are expanded.
             try {
                 var $uptimeCell = $stackRow.find('td.col-uptime');
                 var uptimeText = 'stopped';
                 var uptimeClass = 'grey-text';
                 if (anyRunning) {
-                    // Find the earliest startedAt among running containers
-                    var earliest = null;
-                    stackInfo.containers.forEach(function(c) {
-                        if (c.isRunning && c.startedAt) {
-                            // Docker timestamps have nanosecond precision e.g. "2026-03-11T12:34:56.789012345Z"
-                            // JS Date only handles milliseconds — trim excess fractional digits
-                            var ts = c.startedAt.replace(/(\.\d{3})\d+(Z|[+-]\d{2}:\d{2})$/, '$1$2');
-                            var t = new Date(ts).getTime();
-                            if (!isNaN(t) && (earliest === null || t < earliest)) earliest = t;
+                    var stackStarted = stackStartedAtCache[stackId] || null;
+                    if (stackStarted) {
+                        var t = new Date(stackStarted).getTime();
+                        if (!isNaN(t)) {
+                            var secs = Math.max(0, Math.floor((Date.now() - t) / 1000));
+                            var mins = Math.floor(secs / 60);
+                            var hours = Math.floor(secs / 3600);
+                            var days = Math.floor(secs / 86400);
+                            var weeks = Math.floor(days / 7);
+                            var months = Math.floor(days / 30);
+                            if (mins < 120) uptimeText = mins + ' min' + (mins !== 1 ? 's' : '');
+                            else if (hours < 48) uptimeText = hours + ' hour' + (hours !== 1 ? 's' : '');
+                            else if (days < 14) uptimeText = days + ' day' + (days !== 1 ? 's' : '');
+                            else if (weeks < 8) uptimeText = weeks + ' week' + (weeks !== 1 ? 's' : '');
+                            else if (months < 24) uptimeText = months + ' month' + (months !== 1 ? 's' : '');
+                            else { var years = Math.floor(days / 365); uptimeText = years + ' year' + (years !== 1 ? 's' : ''); }
+                        } else {
+                            uptimeText = 'running';
                         }
-                    });
-                    if (earliest !== null) {
-                        var secs = Math.max(0, Math.floor((Date.now() - earliest) / 1000));
-                        if (secs < 60) uptimeText = '< 1 min';
-                        else if (secs < 3600) uptimeText = Math.floor(secs / 60) + ' min' + (Math.floor(secs / 60) !== 1 ? 's' : '');
-                        else if (secs < 86400) uptimeText = Math.floor(secs / 3600) + ' hour' + (Math.floor(secs / 3600) !== 1 ? 's' : '');
-                        else uptimeText = Math.floor(secs / 86400) + ' day' + (Math.floor(secs / 86400) !== 1 ? 's' : '');
                     } else {
                         uptimeText = 'running';
                     }
