@@ -3,16 +3,16 @@ Type="xmenu"
 Title="Docker Compose"
 Tag="fa-cubes"
 Code="f1b3"
-Nchan="../../dynamix.docker.manager/nchan/docker_load"
+Nchan="docker_load"
 Cond="$var['fsState'] == 'Started' && exec('/etc/rc.d/rc.docker status | grep -v \"not\"') && exec(\"grep '^SHOW_COMPOSE_IN_HEADER_MENU=' /boot/config/plugins/compose.manager/compose.manager.cfg 2>/dev/null | grep 'true'\")"
 ---
-<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
-<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.filetree.css')?>">
-<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/styles/comboButton.css')?>">
-<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/styles/editorModal.css')?>">
-<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
-<script src="<?autov('/webGui/javascript/jquery.filetree.js')?>" charset="utf-8"></script>
-<script src="<?autov('/plugins/dynamix.docker.manager/javascript/docker.js')?>"></script>
+<link type="text/css" rel="stylesheet" href="<?php autov('/webGui/styles/jquery.switchbutton.css'); ?>">
+<link type="text/css" rel="stylesheet" href="<?php autov('/webGui/styles/jquery.filetree.css'); ?>">
+<link type="text/css" rel="stylesheet" href="<?php autov('/plugins/compose.manager/styles/comboButton.css'); ?>">
+<link type="text/css" rel="stylesheet" href="<?php autov('/plugins/compose.manager/styles/editorModal.css'); ?>">
+<script src="<?php autov('/webGui/javascript/jquery.switchbutton.js'); ?>"></script>
+<script src="<?php autov('/webGui/javascript/jquery.filetree.js'); ?>" charset="utf-8"></script>
+<script src="<?php autov('/plugins/dynamix.docker.manager/javascript/docker.js'); ?>"></script>
 <style>
 table tbody td {
     line-height:normal

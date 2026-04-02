@@ -23,7 +23,7 @@ exec 9>"$LOCK_FILE"
 
 waited=0
 while ! flock -n 9 2>/dev/null; do
-    if [ $waited -ge $LOCK_TIMEOUT ]; then
+    if [ "$waited" -ge "$LOCK_TIMEOUT" ]; then
         echo "Could not acquire lock for $PROJECT_NAME after ${LOCK_TIMEOUT}s - another operation may be in progress" >&2
         exit 1
     fi

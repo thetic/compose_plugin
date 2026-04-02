@@ -21,11 +21,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     ? '/webGui/javascript/ace'
     : '/plugins/compose.manager/javascript/ace';
 ?>
-<link type="text/css" rel="stylesheet" href="<? autov('/webGui/styles/jquery.switchbutton.css') ?>">
-<link type="text/css" rel="stylesheet" href="<? autov('/webGui/styles/jquery.filetree.css') ?>">
-<script src="<? autov('/webGui/javascript/jquery.switchbutton.js') ?>"></script>
-<script src="<? autov('/webGui/javascript/jquery.filetree.js') ?>" charset="utf-8"></script>
-<script src="/plugins/compose.manager/javascript/common.js" type="text/javascript"></script>
+<link type="text/css" rel="stylesheet" href="<?php autov('/webGui/styles/jquery.switchbutton.css'); ?>">
+<link type="text/css" rel="stylesheet" href="<?php autov('/webGui/styles/jquery.filetree.css'); ?>">
+<script src="<?php autov('/webGui/javascript/jquery.switchbutton.js'); ?>"></script>
+<script src="<?php autov('/webGui/javascript/jquery.filetree.js'); ?>" charset="utf-8"></script>
+<script src="<?php autov('/plugins/compose.manager/javascript/common.js'); ?>" type="text/javascript"></script>
 <style>
 
     /* Toggle switch overrides */
@@ -615,7 +615,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         gap: 8px;
     }
 </style>
-<script src="<? autov('/plugins/compose.manager/javascript/common.js') ?>"></script>
+<script src="<?php autov('/plugins/compose.manager/javascript/common.js'); ?>"></script>
 <script>
     var caURL = "/plugins/compose.manager/php/exec.php";
     var skipPatchUI = <?php echo json_encode($option_patch_ui); ?>; // true when Unraid >= 6.12

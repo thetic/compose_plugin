@@ -16,6 +16,17 @@ QUICK=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARCHIVE_DIR="$SCRIPT_DIR/archive"
 
+in_container=false
+if [[ -f "/.dockerenv" ]] || grep -qE '/docker|/lxc|/kubepods' /proc/1/cgroup 2>/dev/null; then
+  in_container=true
+fi
+
+# Prefer the workspace archive in /code when running in a container.
+ARCHIVE_DIR="$SCRIPT_DIR/archive"
+if [[ "$in_container" == true && -d "/code" ]]; then
+  ARCHIVE_DIR="$SCRIPT_DIR/archive"
+fi
+
 usage() {
   cat <<EOF
 Usage: $0 [options]
@@ -54,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     -ComposeVersion|--ComposeVersion)
       COMPOSE_VERSION="$2"; shift 2;;
     -AceVersion|--AceVersion)
+      # shellcheck disable=SC2034
       ACE_VERSION="$2"; shift 2;;
     -Quick|--Quick)
       QUICK=true; shift;;
@@ -80,7 +92,7 @@ if [[ "$QUICK" == true ]]; then
   mapfile -t UNSTAGED < <(git -C "$REPO_ROOT" diff --name-only --diff-filter=ACMR -- "$QUICK_PREFIX")
   mapfile -t STAGED < <(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACMR -- "$QUICK_PREFIX")
 
-  CHANGED_FILES=($(printf '%s\n' "${UNSTAGED[@]}" "${STAGED[@]}" | sort -u))
+  mapfile -t CHANGED_FILES < <(printf '%s\n' "${UNSTAGED[@]}" "${STAGED[@]}" | sort -u)
   if [[ ${#CHANGED_FILES[@]} -eq 0 ]]; then
     echo "No tracked staged/unstaged file changes found under source/compose.manager.";
     exit 0
@@ -91,12 +103,10 @@ if [[ "$QUICK" == true ]]; then
 
   for host in "${REMOTE_HOSTS[@]}"; do
     target="$USER_NAME@$host"
-    echo "\nQuick deploy to $target :"
+    printf '\nQuick deploy to %s :\n' "$target"
     for relative in "${CHANGED_FILES[@]}"; do
       [[ $relative == $QUICK_PREFIX* ]] || continue
-      subpath=${relative#$QUICK_PREFIX}
-      [[ -n $subpath ]] || continue
-
+      subpath=${relative#"$QUICK_PREFIX"}
       local_path="$REPO_ROOT/$relative"
       if [[ ! -f "$local_path" ]]; then
         echo "Skipping missing local file: $relative"; continue
@@ -105,7 +115,7 @@ if [[ "$QUICK" == true ]]; then
       remote_file="$QUICK_REMOTE_ROOT/$subpath"
       remote_parent=$(dirname "$remote_file")
 
-      ssh "$target" "mkdir -p '$remote_parent'"
+      ssh "$target" mkdir -p "$remote_parent"
       scp "$local_path" "$target:$remote_file"
     done
   done
@@ -121,7 +131,13 @@ if [[ -n "$PACKAGE_PATH" ]]; then
   PACKAGE_PATH=$(realpath "$PACKAGE_PATH")
 else
   if [[ "$SKIP_BUILD" == true ]]; then
-    PACKAGE_PATH=$(ls -t "$ARCHIVE_DIR"/compose.manager-*-noarch-*.txz 2>/dev/null | head -n1 || true)
+    shopt -s nullglob
+    files=("$ARCHIVE_DIR"/compose.manager-*-noarch-*.txz)
+    shopt -u nullglob
+    if [[ ${#files[@]} -eq 0 ]]; then
+      echo "No package found in archive"; exit 1
+    fi
+    PACKAGE_PATH=$(printf '%s\n' "${files[@]}" | sort -r | head -n1)
     if [[ -z "$PACKAGE_PATH" ]]; then
       echo "No package found in archive"; exit 1
     fi
@@ -134,9 +150,25 @@ else
     echo "Building package via build.sh..."
     bash "$SCRIPT_DIR/build.sh" "${build_args[@]}"
 
-    PACKAGE_PATH=$(ls -t "$ARCHIVE_DIR"/compose.manager-*-noarch-*.txz 2>/dev/null | head -n1 || true)
-    if [[ -z "$PACKAGE_PATH" ]]; then
+    # Use nullglob and ls -t to avoid xargs running with no input (which lists current directory)
+    shopt -s nullglob
+    files=("$ARCHIVE_DIR"/compose.manager-*-noarch-*.txz)
+    shopt -u nullglob
+    if [[ ${#files[@]} -eq 0 ]]; then
+      echo "Archive directory content:"
+      ls -al "$ARCHIVE_DIR" 2>/dev/null || echo "Cannot list archive directory"
+      echo "Archive directory: $ARCHIVE_DIR"
       echo "Build completed but package not found"; exit 1
+    fi
+    echo "Checking archive directory: $ARCHIVE_DIR"
+    ls -al "$ARCHIVE_DIR"
+    PACKAGE_PATH=$(printf '%s\n' "${files[@]}" | sort -r | head -n1)
+    echo "Candidate package path: $PACKAGE_PATH"
+    if [[ -z "$PACKAGE_PATH" ]]; then
+      echo "Build completed but package not found"
+      echo "Archive dir content:"
+      ls -al "$ARCHIVE_DIR"
+      exit 1
     fi
   fi
 fi
@@ -167,7 +199,7 @@ for host in "${REMOTE_HOSTS[@]}"; do
   remote_plugin="$REMOTE_DIR/$(basename "$PLUGIN_PATH")"
   remote_install_script="$REMOTE_DIR/install.sh"
 
-  echo "\nDeploying to $target :"
+  printf '\nDeploying to %s :\n' "$target"
   echo "  Local package : $PACKAGE_PATH"
   echo "  Local .plg    : $PLUGIN_PATH"
   echo "  Local install : $INSTALL_SCRIPT_LOCAL"
@@ -179,7 +211,8 @@ for host in "${REMOTE_HOSTS[@]}"; do
   scp "$INSTALL_SCRIPT_LOCAL" "$target:$remote_install_script"
 
   echo "Executing remote install script..."
-  ssh "$target" "bash '$remote_install_script' '$remote_package' '$remote_plugin' && rm -f '$remote_install_script'"
+  # shellcheck disable=SC2029
+  ssh "$target" bash "$remote_install_script" "$remote_package" "$remote_plugin" && ssh "$target" rm -f "$remote_install_script"
 
   echo "Deployment complete to $host"
 done
