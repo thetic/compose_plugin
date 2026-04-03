@@ -1919,7 +1919,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         }
                         var aggMem = formatMemUsageText(totalMemUsedBytes, stackMemTotalBytes);
                         $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
-                        $('#compose-stack-cpu-' + entry.stackId).css('width', aggCpu);
+                        $('#compose-stack-cpu-' + entry.stackId).css('width', Math.min(totalCpu, 100).toFixed(2) + '%');
                         $('.compose-stack-mem-' + entry.stackId).show().text(aggMem);
                     } else {
                         $('.compose-stack-cpu-' + entry.stackId).addClass('compose-text-muted').text('-');
