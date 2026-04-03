@@ -10,7 +10,6 @@ REMOTE_DIR="/tmp"
 PACKAGE_PATH=""
 SKIP_BUILD=false
 COMPOSE_VERSION="5.0.2"
-ACE_VERSION="1.43.5"
 QUICK=false
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,7 +37,6 @@ Usage: $0 [options]
   -PackagePath <package.txz>
   -SkipBuild
   -ComposeVersion <compose-version>
-  -AceVersion <ace-version>
   -Quick
   -Help
 EOF
@@ -64,9 +62,6 @@ while [[ $# -gt 0 ]]; do
       SKIP_BUILD=true; shift;;
     -ComposeVersion|--ComposeVersion)
       COMPOSE_VERSION="$2"; shift 2;;
-    -AceVersion|--AceVersion)
-      # shellcheck disable=SC2034
-      ACE_VERSION="$2"; shift 2;;
     -Quick|--Quick)
       QUICK=true; shift;;
     -Help|--Help|-h)
