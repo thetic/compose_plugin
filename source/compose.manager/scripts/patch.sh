@@ -362,7 +362,7 @@ remove_patches(){
     if [ ${#to_remove[@]} -ne 0 ]; then
       cp "$APPLIED_MANIFEST" "$APPLIED_MANIFEST.tmp" 2>/dev/null || true
       for rm_entry in "${to_remove[@]}"; do
-        grep -v "^${rm_entry}," "$APPLIED_MANIFEST.tmp" > "$APPLIED_MANIFEST.tmp2" || true
+        awk -F',' -v entry="$rm_entry" '$1 != entry' "$APPLIED_MANIFEST.tmp" > "$APPLIED_MANIFEST.tmp2" || true
         mv "$APPLIED_MANIFEST.tmp2" "$APPLIED_MANIFEST.tmp" || true
       done
       mv "$APPLIED_MANIFEST.tmp" "$APPLIED_MANIFEST" || true
