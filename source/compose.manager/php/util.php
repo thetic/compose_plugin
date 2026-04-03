@@ -1571,8 +1571,9 @@ class StackInfo
      * Get the list of services defined in the main compose file only (without override).
      *
      * Used internally by pruneOrphanOverrideServices() to determine which services
-     * are valid. Excludes the override file so orphaned override services are not
-     * counted as valid.
+        * are valid. Excludes the override file so orphaned override services are not
+        * counted as valid, but enables all profiles so profile-tagged services remain
+        * valid targets for Unraid label metadata stored in the override file.
      *
      * External callers should typically use getDefinedServices() which includes
      * the override file for a complete picture.
@@ -1591,7 +1592,7 @@ class StackInfo
         if ($envFilePath !== null && is_file($envFilePath)) {
             $cmd .= " --env-file " . escapeshellarg($envFilePath);
         }
-        $cmd .= " config --services 2>/dev/null";
+        $cmd .= " --profile '*' config --services 2>/dev/null";
 
         $output = shell_exec($cmd);
         if (!is_string($output) || trim($output) === '') {
