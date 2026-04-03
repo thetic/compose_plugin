@@ -1349,9 +1349,10 @@ class StackInfo
     /**
      * Check whether the cached profiles metadata file is stale.
      *
-     * Compares filemtime of the profiles metadata file against the compose
-     * file.  Returns true when the compose file is newer (profiles need
-     * re-extraction) or when the metadata file does not exist.
+     * Compares filemtime of the profiles metadata file against compose inputs
+     * that can affect profile resolution (compose, override, env-file).
+     * Returns true when any input is newer than the cache or when the cache
+     * file does not exist.
      *
      * @return bool
      */
@@ -1362,11 +1363,27 @@ class StackInfo
             return true;
         }
 
+        $cacheMtime = filemtime($profilesFile);
+
         if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
             return false;
         }
 
-        return filemtime($this->composeFilePath) > filemtime($profilesFile);
+        if (filemtime($this->composeFilePath) > $cacheMtime) {
+            return true;
+        }
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null && is_file($overridePath) && filemtime($overridePath) > $cacheMtime) {
+            return true;
+        }
+
+        $envFilePath = $this->getEnvFilePath();
+        if ($envFilePath !== null && is_file($envFilePath) && filemtime($envFilePath) > $cacheMtime) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
