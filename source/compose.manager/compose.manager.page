@@ -27,5 +27,7 @@ if (!empty($_SERVER['REQUEST_URI'])) {
 <link type="text/css" rel="stylesheet" href="<?php autov('/plugins/compose.manager/styles/comboButton.css'); ?>">
 <link type="text/css" rel="stylesheet" href="<?php autov('/plugins/compose.manager/styles/editorModal.css'); ?>">
 <link type="text/css" rel="stylesheet" href="<?php autov('/webGui/styles/jquery.filetree.css'); ?>">
+<link type="text/css" rel="stylesheet" href="<?php autov('/webGui/styles/jquery.switchbutton.css'); ?>">
 <script src="<?php autov('/webGui/javascript/jquery.filetree.js'); ?>" charset="utf-8"></script>
+<script src="<?php autov('/webGui/javascript/jquery.switchbutton.js'); ?>"></script>
 <?php include '/usr/local/emhttp/plugins/compose.manager/php/compose_manager_main.php';?>
