@@ -703,6 +703,36 @@ switch ($_POST['action']) {
 
         echo json_encode(['result' => 'success', 'containers' => $containers, 'definedServices' => $definedServices, 'projectName' => $stackInfo->projectFolder, 'startedAt' => $stackInfo->getStartedAt()]);
         break;
+    case 'getProfileServices':
+        // Returns the list of services that docker compose would act on for the
+        // given profile selection.  Uses `docker compose config --services` with
+        // --profile flags so compose is the authoritative parser/interpreter.
+        $script = getPostScript();
+        if (!$script) {
+            echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
+            break;
+        }
+        $profiles = isset($_POST['profiles']) ? trim($_POST['profiles']) : '';
+
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $args = $stackInfo->buildComposeArgs();
+
+        $cmd = "docker compose {$args['files']} {$args['envFile']} -p " . escapeshellarg($args['projectName']);
+        if ($profiles !== '') {
+            foreach (array_filter(array_map('trim', explode(',', $profiles))) as $p) {
+                $cmd .= " --profile " . escapeshellarg($p);
+            }
+        }
+        $cmd .= " config --services 2>/dev/null";
+
+        $output = shell_exec($cmd);
+        $services = [];
+        if (is_string($output) && trim($output) !== '') {
+            $services = array_values(array_filter(array_map('trim', explode("\n", trim($output))), fn($s) => $s !== ''));
+        }
+
+        echo json_encode(['result' => 'success', 'services' => $services]);
+        break;
     case 'containerAction':
         $containerName = isset($_POST['container']) ? trim($_POST['container']) : "";
         $containerAction = isset($_POST['containerAction']) ? trim($_POST['containerAction']) : "";

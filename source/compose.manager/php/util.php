@@ -953,6 +953,14 @@ class ContainerInfo
  */
 class StackInfo
 {
+    /**
+     * Marker for the services cache semantics.
+     *
+     * `all_profiles_v1` means the cached `services` file was generated with
+     * `docker compose --profile '*' config --services`.
+     */
+    private const SERVICES_CACHE_MODE = 'all_profiles_v1';
+
     /** @var string Compose project folder basename (actual directory name on disk) */
     public string $projectFolder;
     /** @var string Sanitized Docker Compose project name (always lowercase, valid for -p flag) */
@@ -1470,6 +1478,14 @@ class StackInfo
         if (!is_file($cacheFile)) {
             return true;
         }
+
+        // Invalidate legacy cache entries created before all-profile service
+        // extraction was introduced.
+        $modeRaw = $this->readMetadata('services_cache_mode');
+        if (!is_string($modeRaw) || trim($modeRaw) !== self::SERVICES_CACHE_MODE) {
+            return true;
+        }
+
         $cacheMtime = filemtime($cacheFile);
 
         if ($this->composeFilePath !== null && is_file($this->composeFilePath)) {
@@ -1513,7 +1529,9 @@ class StackInfo
         if ($envFilePath !== null && is_file($envFilePath)) {
             $cmd .= " --env-file " . escapeshellarg($envFilePath);
         }
-        $cmd .= " config --services 2>/dev/null";
+        // Include all profile-scoped services so stack totals reflect the
+        // full compose definition, not only default-profile services.
+        $cmd .= " --profile '*' config --services 2>/dev/null";
 
         $output = shell_exec($cmd);
         if (!is_string($output) || trim($output) === '') {
@@ -1527,6 +1545,7 @@ class StackInfo
 
         // Write-through: persist so future reads hit the cache.
         $this->writeMetadata('services', json_encode($services));
+        $this->writeMetadata('services_cache_mode', self::SERVICES_CACHE_MODE);
 
         return $services;
     }

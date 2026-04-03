@@ -3286,7 +3286,55 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             hasBuild = $stackRow.data('hasbuild') == "1";
         }
 
-        // Check if we have cached container data
+        // When profiles are selected, ask compose for the authoritative service
+        // list so the dialog shows profile-scoped services that may not be
+        // running yet.  We fetch both the profile service list and the running
+        // containers in parallel, then merge them.
+        if (profile) {
+            var cachedContainers = (stackId && stackContainersCache[stackId]) ? stackContainersCache[stackId] : [];
+            $.post(caURL, {
+                action: 'getProfileServices',
+                script: project,
+                profiles: profile
+            }, function(data) {
+                var profileServices = [];
+                try {
+                    var response = JSON.parse(data);
+                    if (response.result === 'success') {
+                        profileServices = response.services || [];
+                    }
+                } catch (e) {}
+
+                // Build a lookup of running containers by service name
+                var containersByService = {};
+                cachedContainers.forEach(function(ct) {
+                    var svc = ct.service || '';
+                    if (svc) containersByService[svc] = ct;
+                });
+
+                // Build the container list: use real container data when
+                // available, otherwise create a minimal placeholder so the
+                // service still appears in the dialog.
+                var containers = [];
+                profileServices.forEach(function(svc) {
+                    if (containersByService[svc]) {
+                        containers.push(containersByService[svc]);
+                    } else {
+                        containers.push({ service: svc, name: svc, state: 'stopped', image: '' });
+                    }
+                });
+
+                containers = mergeUpdateStatus(containers, project);
+                renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
+            }).fail(function() {
+                // Fallback: show whatever we have cached
+                var containers = mergeUpdateStatus(cachedContainers, project);
+                renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
+            });
+            return;
+        }
+
+        // No profile — use cached or fetched running containers as before
         if (stackId && stackContainersCache[stackId] && stackContainersCache[stackId].length > 0) {
             // Merge update status into cached data before rendering
             var containers = mergeUpdateStatus(stackContainersCache[stackId], project);
@@ -3711,17 +3759,23 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             'logs': 'Compose Logs'
         };
 
-        // Build profile selection HTML with checkboxes for multi-select
+        // Build profile selection UI:
+        // - Default services (no profile) are always included and non-toggleable.
+        // - "All profile-based services" enables every profile via "*".
+        // - Individual profiles can be multi-selected when all-profiles is off.
         var profileHtml = '<div style="text-align: left;">';
+        profileHtml += '<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--dynamix-box-inner-div-border-color);">';
+        profileHtml += '<label style="font-weight:bold;"><input type="checkbox" id="profile_default" checked disabled> Default services (no profile)</label>';
+        profileHtml += '</div>';
         profileHtml += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--dynamix-box-inner-div-border-color);">';
-        profileHtml += '<label style="font-weight:bold;"><input type="checkbox" id="profile_all" checked onchange="toggleAllProfiles(this)"> All Services (no profile filter)</label>';
+        profileHtml += '<label style="font-weight:bold;"><input type="checkbox" id="profile_all_profiles" checked onchange="toggleAllProfiles(this)"> All profile-based services (*)</label>';
         profileHtml += '</div>';
         profileHtml += '<div id="profile_list">';
         profiles.forEach(function(profile) {
             profileHtml += '<label style="display:block;margin:5px 0;"><input type="checkbox" class="profile_checkbox" value="' + composeEscapeHtml(profile) + '" disabled> ' + composeEscapeHtml(profile) + '</label>';
         });
         profileHtml += '</div>';
-        profileHtml += '<div class="compose-text-muted" style="margin-top:10px;font-size:0.9em;"><i class="fa fa-info-circle"></i> Select multiple profiles to include services from each.</div>';
+        profileHtml += '<div class="compose-text-muted" style="margin-top:10px;font-size:0.9em;"><i class="fa fa-info-circle"></i> Default services are always included. Select multiple profiles to include profile-based services.</div>';
         profileHtml += '</div>';
 
         swal({
@@ -3734,13 +3788,14 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }, function(confirmed) {
             if (confirmed) {
                 var selectedProfiles = [];
-                if (!$('#profile_all').is(':checked')) {
+                if (!$('#profile_all_profiles').is(':checked')) {
                     $('.profile_checkbox:checked').each(function() {
                         selectedProfiles.push($(this).val());
                     });
                 }
-                // Join profiles with comma for multi-profile support
-                var profileStr = selectedProfiles.join(',');
+                // Use "*" when all profile-based services are requested.
+                // Empty profile string means default services only.
+                var profileStr = $('#profile_all_profiles').is(':checked') ? '*' : selectedProfiles.join(',');
                 switch (action) {
                     case 'up':
                         ComposeUp(path, profileStr);
@@ -3771,7 +3826,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         });
     }
 
-    // Toggle profile checkboxes when "All Services" is checked/unchecked
+    // Toggle individual profile checkboxes when all-profile scope is enabled/disabled
     function toggleAllProfiles(checkbox) {
         var disabled = checkbox.checked;
         $('.profile_checkbox').prop('disabled', disabled).prop('checked', false);
@@ -5119,8 +5174,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var runningCount = stackInfo.containers.filter(function(c) {
                 return c.isRunning;
             }).length;
-            // Use totalServices (defined services) if available, otherwise fall back to actual container count
-            var totalCount = stackInfo.totalServices || stackInfo.containers.length;
+            // Use totalServices (defined services) when available, but never
+            // show a denominator smaller than the currently discovered containers.
+            var totalCount = Math.max(stackInfo.totalServices || 0, stackInfo.containers.length);
             var anyRunning = runningCount > 0;
             var anyPaused = stackInfo.containers.some(function(c) {
                 return !c.isRunning && (c.updateStatus === 'paused' || c.updateStatus === 'paused');
