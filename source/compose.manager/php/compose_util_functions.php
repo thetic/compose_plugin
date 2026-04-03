@@ -122,7 +122,7 @@ function echoComposeCommand($action, $recreate = false, $background = false)
         $composeCommand[] = "-p" . $stackInfo->projectName;
 
         $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
-        $composeCommand[] = "-f$composeFile";
+        $composeCommand[] = "-f" . $composeFile;
 
         // Prune orphaned services from override before compose up
         if ($action === 'up') {
@@ -141,7 +141,7 @@ function echoComposeCommand($action, $recreate = false, $background = false)
             $profileList = array_map('trim', explode(',', $profile));
             foreach ($profileList as $p) {
                 if ($p) {
-                    $composeCommand[] = "-g $p";
+                    $composeCommand[] = "-g" . $p;
                 }
             }
         }
@@ -237,7 +237,7 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         $composeCommand[] = "-p" . $stackInfo->projectName;
 
         $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
-        $composeCommand[] = "-f$composeFile";
+        $composeCommand[] = "-f" . $composeFile;
 
         // Prune orphaned services from override before compose up
         if ($action === 'up') {
@@ -255,11 +255,11 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         // Add default profiles for multi-stack operations
         $defaultProfiles = $stackInfo->getDefaultProfiles();
         foreach ($defaultProfiles as $p) {
-            $composeCommand[] = "-g $p";
+            $composeCommand[] = "-g" . $p;
         }
 
         // Pass stack path for timestamp saving
-        $composeCommand[] = "-s$path";
+        $composeCommand[] = "-s" . $path;
 
         if ($debug) {
             $composeCommand[] = "--debug";
