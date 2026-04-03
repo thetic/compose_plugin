@@ -5600,6 +5600,35 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var profiles = $row.data('profiles') || [];
         var webuiUrl = $row.data('webui') || '';
         var hasBuild = $row.data('hasbuild') == "1";
+        var hasExistingContainers = false;
+        var hasKnownNetworks = false;
+
+        // Prefer the rendered row data first; this reflects current known stack containers.
+        try {
+            var rowContainers = JSON.parse($row.attr('data-containers') || '[]');
+            hasExistingContainers = Array.isArray(rowContainers) && rowContainers.length > 0;
+        } catch (e) {
+            hasExistingContainers = false;
+        }
+
+        // Fallback to cached short IDs if data-containers is empty/unavailable.
+        if (!hasExistingContainers) {
+            var ctidsAttr = ($row.attr('data-ctids') || '').trim();
+            hasExistingContainers = ctidsAttr.length > 0;
+        }
+
+        // If details were loaded, use container network attachments as an additional signal.
+        // This also keeps behavior resilient during in-page state transitions.
+        try {
+            var cachedContainers = stackContainersCache[stackId] || [];
+            hasKnownNetworks = cachedContainers.some(function(c) {
+                return Array.isArray(c.networks) && c.networks.length > 0;
+            });
+        } catch (e) {
+            hasKnownNetworks = false;
+        }
+
+        var canComposeDownStopped = hasExistingContainers || hasKnownNetworks;
 
         // Check if updates are available for this stack
         var hasUpdates = false;
@@ -5737,6 +5766,22 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     }
                 }
             });
+
+            // Compose Down (only when there are existing resources to remove)
+            if (canComposeDownStopped) {
+                opts.push({
+                    text: 'Compose Down',
+                    icon: 'fa-stop',
+                    action: function(e) {
+                        e.preventDefault();
+                        if (profiles.length > 0) {
+                            showProfileSelector('down', path, profiles);
+                        } else {
+                            ComposeDown(path);
+                        }
+                    }
+                });
+            }
 
             opts.push({ divider: true });
 
