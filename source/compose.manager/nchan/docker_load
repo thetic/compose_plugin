@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?PHP
+<?php
 /* Thin wrapper that delegates to the core docker_load publisher.
  *
  * The Unraid framework starts nchan scripts based on the declaring
@@ -12,9 +12,11 @@
  * (started by the Docker tab) and, if not, execs into it so that only
  * a single `docker stats` loop ever runs.
  */
-?>
-<?
-$docroot ??= ($_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp');
+
+$docroot = $_SERVER['DOCUMENT_ROOT'] ?? '/usr/local/emhttp';
+if ($docroot === '') {
+    $docroot = '/usr/local/emhttp';
+}
 
 $realScript = "$docroot/plugins/dynamix.docker.manager/nchan/docker_load";
 
@@ -27,7 +29,11 @@ if ($retval === 0) {
 }
 
 // Not running yet — exec into the real script (replaces this process).
-pcntl_exec('/usr/bin/php', ['-q', $realScript]);
+if (function_exists('pcntl_exec')) {
+    pcntl_exec('/usr/bin/php', ['-q', $realScript]);
+}
 
-// Fallback if pcntl_exec is unavailable.
-passthru(escapeshellarg($realScript));
+// Fallback if pcntl_exec is unavailable or fails.
+$exitCode = 1;
+passthru('/usr/bin/php -q ' . escapeshellarg($realScript), $exitCode);
+exit((int)$exitCode);
