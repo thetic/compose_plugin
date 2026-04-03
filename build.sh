@@ -97,15 +97,6 @@ rm -f "$SED_SCRIPT"
 
 echo -e "\033[1;36mGenerated temporary plugin manifest for build: $TEMP_PLG\033[0m"
 
-
-# CA bundle setup
-HOST_CA_CERT="${CA_CERT_PATH:-/tmp/cacert.pem}"
-if [[ ! -f "$HOST_CA_CERT" ]]; then
-    echo -e "\033[1;33mCA bundle not found at $HOST_CA_CERT. Downloading fresh bundle...\033[0m"
-    curl -fsSL -o "$HOST_CA_CERT" 'https://curl.se/ca/cacert.pem' || { echo "Failed to download CA bundle."; exit 1; }
-fi
-CONTAINER_CA_CERT="/etc/ssl/certs/ca-certificates.crt"
-
 # Build in Docker
 # Detect whether script is running inside a container or on the host.
 in_container=false
@@ -165,6 +156,42 @@ SOURCE_PATH="$SCRIPT_DIR/source"
 
 mkdir -p "$ARCHIVE_PATH"
 mkdir -p "$HOST_ARCHIVE_PATH"
+
+# CA bundle setup
+CONTAINER_CA_CERT="/etc/ssl/certs/ca-certificates.crt"
+DEFAULT_CA_CERT_PATH="/tmp/cacert.pem"
+
+# When this script runs inside a container, Docker bind mounts are resolved by
+# the host daemon. Stage the CA bundle in the workspace archive so the host can
+# mount the same file into the Slackware build container.
+if [[ "$in_container" == true ]]; then
+  DEFAULT_CA_CERT_PATH="$ARCHIVE_PATH/cacert.pem"
+fi
+
+SOURCE_CA_CERT="${CA_CERT_PATH:-$DEFAULT_CA_CERT_PATH}"
+HOST_CA_CERT="$SOURCE_CA_CERT"
+
+if [[ "$in_container" == true ]]; then
+  STAGED_CA_CERT="$ARCHIVE_PATH/cacert.pem"
+  HOST_CA_CERT="$HOST_ARCHIVE_PATH/cacert.pem"
+
+  if [[ -f "$SOURCE_CA_CERT" && "$SOURCE_CA_CERT" != "$STAGED_CA_CERT" ]]; then
+    cp "$SOURCE_CA_CERT" "$STAGED_CA_CERT"
+  fi
+
+  if [[ ! -f "$STAGED_CA_CERT" ]]; then
+    echo -e "\033[1;33mCA bundle not found at $SOURCE_CA_CERT. Downloading fresh bundle to $STAGED_CA_CERT...\033[0m"
+    curl -fsSL -o "$STAGED_CA_CERT" 'https://curl.se/ca/cacert.pem' || { echo "Failed to download CA bundle."; exit 1; }
+  fi
+else
+  if [[ ! -f "$HOST_CA_CERT" ]]; then
+    echo -e "\033[1;33mCA bundle not found at $HOST_CA_CERT. Downloading fresh bundle...\033[0m"
+    curl -fsSL -o "$HOST_CA_CERT" 'https://curl.se/ca/cacert.pem' || { echo "Failed to download CA bundle."; exit 1; }
+  fi
+fi
+
+echo "Using CA bundle host path: $HOST_CA_CERT"
+
 # Candidate locations for pkg_build.sh
 CANDIDATES=(
   "$SOURCE_PATH/pkg_build.sh"
