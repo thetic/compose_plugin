@@ -31,21 +31,10 @@
 >
 
 <CHANGES>
-###2026.04.02.1233
-- Bug Fixes: add file picker integration for icon url fields
-- Bug Fixes: enhance icon URL validation to support local paths and improve error messaging
-- Bug Fixes: support local paths for container icons on Compose tab
-- Bug Fixes: adjust column widths for arrow and icon to better support small screens and mobile
-- Bug Fixes: use consistent stack-level timestamp for uptime display
-- Bug Fixes (dockerload): improve handling of visibility changes and message caching
-- Bug Fixes (profiles): enhance profiles retrieval with caching and extraction from Docker Compose
-- Bug Fixes (profiles): remove unnecessary profile handling in payload; it was overwriting the good data with an empty string
-- Bug Fixes: restore 'Compose Up' option for running stacks
-- Performance: add persistent file cache to getDefinedServices()
-- Performance: add persistent file cache to hasBuildConfig()
-- Performance: remove unused docker compose ls call from compose_list.php
+###2026.04.03.1107
+- Bug Fixes: add missing jquery.switchbutton includes to compose.manager.page
 - [PR #74](https://github.com/mstrhakr/compose_plugin/pull/74)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28...v2026.04.02.1233)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.03.28...v2026.04.03.1107)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
