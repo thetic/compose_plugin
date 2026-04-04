@@ -8,9 +8,10 @@
 
 Compose Manager installs the Docker Compose CLI plugin on your unRAID server and provides a comprehensive web-based interface to create, run, update, back up, and restore Compose stacks directly from the unRAID dashboard. It includes per-stack autostart, scheduled automatic image updates, a rich context menu mirroring the native Docker tab experience, an integrated terminal for live command output, background command execution with notifications, optional UI integration to hide Compose-managed containers, and tooling for testing and CI.
 
+## Screenshots
+
 <details>
   <summary>Screenshots of Compose Manager Plus on Unraid</summary>
-## Screenshots
 
 ### Main Compose Manager Interface
 
