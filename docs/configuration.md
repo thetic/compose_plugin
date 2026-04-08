@@ -78,14 +78,16 @@ The default location stores all compose configurations on the USB flash drive, e
 ``` text
 /boot/config/plugins/compose.manager/projects/
 ├── stack-name/
-│   ├── compose.yaml
-│   ├── compose.override.yaml (optional)
+│   ├── compose.yaml | compose.yml | docker-compose.yaml | docker-compose.yml
+│   ├── compose.override.yaml | compose.override.yml | docker-compose.override.yaml | docker-compose.override.yml (optional)
 │   ├── .env (optional)
 │   ├── profiles (auto-generated)
 │   └── default_profile (optional)
 └── another-stack/
     └── ...
 ```
+
+Compose Manager supports all four standard Compose file names and preserves the filenames already present in each stack.
 
 ## Web UI Patches
 

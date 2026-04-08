@@ -163,8 +163,8 @@ class ComposeUtilTest extends TestCase
         echoComposeCommand('up');
         $output = ob_get_clean();
         
-        // Should include profile flag
-        $this->assertStringContainsString('-g dev', $output);
+        // Should include profile flag (no space between -g and value)
+        $this->assertStringContainsString('-gdev', $output);
         
         // Cleanup
         unlink("$varIniDir/var.ini");
@@ -203,9 +203,9 @@ class ComposeUtilTest extends TestCase
         echoComposeCommand('up');
         $output = ob_get_clean();
         
-        // Should include both profile flags
-        $this->assertStringContainsString('-g dev', $output);
-        $this->assertStringContainsString('-g prod', $output);
+        // Should include both profile flags (no space between -g and value)
+        $this->assertStringContainsString('-gdev', $output);
+        $this->assertStringContainsString('-gprod', $output);
         
         // Cleanup
         unlink("$varIniDir/var.ini");

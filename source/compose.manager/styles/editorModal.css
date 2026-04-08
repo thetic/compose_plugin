@@ -203,6 +203,7 @@
 
 .settings-field {
   margin-bottom: 24px;
+  position: relative;
 }
 
 .settings-field:last-child {
@@ -352,6 +353,14 @@
 .labels-field {
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+.labels-field .fileTree {
+  top: 100%;
+  width: 100% !important;
+  min-width: 300px;
+  left: 0;
 }
 
 .labels-field label {

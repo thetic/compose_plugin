@@ -302,6 +302,43 @@ class StackInfoTest extends TestCase
         $this->assertSame("$stackDir/docker-compose.yml", $info->composeFilePath);
     }
 
+    public function testComposeFilePathResolvedWithComposeYml(): void
+    {
+        $stack = 'compose-yml';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yml", "services:\n  web:\n    image: nginx\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame("$stackDir/compose.yml", $info->composeFilePath);
+    }
+
+    public function testComposeFilePathResolvedWithDockerComposeYaml(): void
+    {
+        $stack = 'docker-compose-yaml';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/docker-compose.yaml", "services:\n  web:\n    image: nginx\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame("$stackDir/docker-compose.yaml", $info->composeFilePath);
+    }
+
+    public function testComposeFilePriorityPrefersComposeYamlOverLegacyNames(): void
+    {
+        $stack = 'priority-compose-yaml';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  preferred:\n    image: nginx\n");
+        file_put_contents("$stackDir/docker-compose.yml", "services:\n  fallback:\n    image: redis\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame("$stackDir/compose.yaml", $info->composeFilePath);
+    }
+
     public function testComposeFilePathResolvedViaIndirect(): void
     {
         $stack = 'indirect-compose';

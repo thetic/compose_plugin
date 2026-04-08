@@ -48,8 +48,16 @@ When you save a compose file, Compose Manager automatically detects all defined 
 ### Interactive Profile Selection
 
 When you click **Compose Up**, **Compose Down**, or **Update Stack** on a stack that has profiles defined, a profile selector dialog appears allowing you to:
-- **All Services (Default)** - Start all services including those with profiles
-- Select a specific profile to activate only services assigned to that profile
+
+- Include **Default services (no profile)**, which are always part of the Compose model
+- Select **All profile-based services** to enable every declared profile
+- Select one or more specific profiles to include those profile-tagged services alongside the default services
+
+The selector behavior maps to Compose like this:
+
+- **Default services only** - no profile flag is passed
+- **All profile-based services** - Compose Manager passes `--profile "*"`
+- **Specific profiles selected** - Compose Manager passes one `--profile` flag per selected profile
 
 ### Default Profiles for Autostart
 
@@ -63,6 +71,7 @@ Configure default profiles in the stack editor's **Settings** tab:
 **Example:** `production,monitoring` will activate both the `production` and `monitoring` profiles.
 
 Default profiles are used for:
+
 - **Autostart** - When the array starts, only services matching the default profiles will start
 - **Start All Stacks** - Multi-stack operations use each stack's configured default profiles
 - **Stop All Stacks** - Multi-stack stop operations respect default profiles
@@ -70,12 +79,27 @@ Default profiles are used for:
 ### Profile Storage
 
 Profiles are stored in the stack's configuration directory:
+
 - `profiles` - JSON array of available profiles (auto-detected from compose file)
 - `default_profile` - Comma-separated list of default profiles for autostart/multi-stack operations
+
+## Override File Usage
+
+Compose Manager uses the stack override file to store Unraid-specific metadata such as:
+
+- WebUI URL labels
+- Icon URL/path labels
+- Compose Manager shell/label metadata
+
+Because profile-tagged services are still valid services in the Compose model, Compose Manager preserves override metadata for both:
+
+- default services with no `profiles` key
+- services assigned to one or more profiles
 
 ## Tips
 
 1. **No profile = always starts**: Services without a `profiles` key start regardless of which profiles are activated
 2. **Multiple profiles**: A service can belong to multiple profiles; it starts if any of its profiles are activated
 3. **Comma-separated**: Specify multiple default profiles separated by commas (e.g., `dev,debug`)
-4. **Empty = all**: Leave the default profile empty to start all services (equivalent to `--profile "*"` behavior)
+4. **Default-only is valid**: If no profiles are selected, only services without a `profiles` key are included
+5. **All profile-based services**: Use the all-profiles option to include every profile-tagged service in addition to the default services

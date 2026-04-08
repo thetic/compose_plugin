@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     This script runs a Slackware Docker container to build the .txz package.
-    It downloads Docker Compose, Compose Switch, and Ace Editor, then packages
+    It downloads Docker Compose and Compose Switch, then packages
     everything together.
 
 .PARAMETER Version
@@ -18,10 +18,7 @@
     Skip running tests before building. Not recommended.
 
 .PARAMETER ComposeVersion
-    Docker Compose version to include. Default: 2.40.3
-
-.PARAMETER AceVersion
-    Ace Editor version to include. Default: 1.4.14
+    Docker Compose version to include. Default: 5.0.2
 
 .EXAMPLE
     ./build.ps1
@@ -34,8 +31,7 @@ param(
     [string]$Version,
     [switch]$Dev,
     [switch]$SkipTests,
-    [string]$ComposeVersion,
-    [string]$AceVersion
+    [string]$ComposeVersion
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,11 +56,9 @@ $versionsFile = Join-Path $ScriptDir "versions.env"
 if (Test-Path $versionsFile) {
     Get-Content $versionsFile | ForEach-Object {
         if ($_ -match '^COMPOSE_VERSION=(.+)$' -and -not $ComposeVersion) { $ComposeVersion = $Matches[1].Trim() }
-        if ($_ -match '^ACE_VERSION=(.+)$' -and -not $AceVersion) { $AceVersion = $Matches[1].Trim() }
     }
 }
 if (-not $ComposeVersion) { $ComposeVersion = "5.0.2" }
-if (-not $AceVersion) { $AceVersion = "1.43.5" }
 
 # Generate dev version with timestamp if -Dev flag is used
 if ($Dev) {
@@ -126,7 +120,6 @@ Write-Host "Generated temporary plugin manifest for build: $TempPluginPath" -For
 
 Write-Host "Building compose.manager package v$Version (build $BuildNum)" -ForegroundColor Green
 Write-Host "  Docker Compose: v$ComposeVersion" -ForegroundColor Gray
-Write-Host "  Ace Editor: v$AceVersion" -ForegroundColor Gray
 Write-Host ""
 
 # Convert Windows paths to Docker-compatible paths
@@ -161,7 +154,6 @@ $dockerArgs = @(
     "-v", "${HostCACert}:${ContainerCACert}:ro"
     "-e", "TZ=America/New_York"
     "-e", "COMPOSE_VERSION=$ComposeVersion"
-    "-e", "ACE_VERSION=$AceVersion"
     "-e", "OUTPUT_FOLDER=/mnt/output"
     "-e", "PKG_VERSION=$Version"
     "-e", "PKG_BUILD=$BuildNum"

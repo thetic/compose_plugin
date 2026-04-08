@@ -1,0 +1,39 @@
+#!/usr/bin/php -q
+<?php
+/* Thin wrapper that delegates to the core docker_load publisher.
+ *
+ * The Unraid framework starts nchan scripts based on the declaring
+ * plugin's root path.  Because Compose.page lives under compose.manager
+ * but the real publisher lives under dynamix.docker.manager, the
+ * framework would fail to find the script when the Compose page is the
+ * only page loaded.
+ *
+ * This wrapper checks whether the real publisher is already running
+ * (started by the Docker tab) and, if not, execs into it so that only
+ * a single `docker stats` loop ever runs.
+ */
+
+$docroot = $_SERVER['DOCUMENT_ROOT'] ?? '/usr/local/emhttp';
+if ($docroot === '') {
+    $docroot = '/usr/local/emhttp';
+}
+
+$realScript = "$docroot/plugins/dynamix.docker.manager/nchan/docker_load";
+
+// If the real publisher is already running there is nothing to do.
+// Use pgrep scoped to our PID namespace so we only match emhttp children.
+exec('pgrep --ns $$ -f ' . escapeshellarg($realScript), $output, $retval);
+if ($retval === 0) {
+    // Already running — exit quietly so we don't double up.
+    exit(0);
+}
+
+// Not running yet — exec into the real script (replaces this process).
+if (function_exists('pcntl_exec')) {
+    pcntl_exec('/usr/bin/php', ['-q', $realScript]);
+}
+
+// Fallback if pcntl_exec is unavailable or fails.
+$exitCode = 1;
+passthru('/usr/bin/php -q ' . escapeshellarg($realScript), $exitCode);
+exit((int)$exitCode);

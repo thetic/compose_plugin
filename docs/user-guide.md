@@ -7,7 +7,7 @@
 1. Navigate to **Docker → Compose**
 2. Click **Add Stack**
 3. Enter a stack name and optional description
-4. Edit the `compose.yaml` file
+4. Edit your compose file (`compose.yaml`, `compose.yml`, `docker-compose.yaml`, or `docker-compose.yml`)
 5. Click **Compose Up**
 
 ### Stack Editor
@@ -16,7 +16,7 @@ The editor provides four tabs for managing your stack:
 
 | Tab | Purpose |
 |-----|---------|
-| **Compose File** | Edit your `compose.yaml` with syntax highlighting |
+| **Compose File** | Edit your stack compose file with syntax highlighting |
 | **Settings** | Configure autostart, profiles, and environment files |
 | **Env** | Edit environment variables for your stack |
 | **Web UI** | Add Unraid-specific labels for web UI integration |

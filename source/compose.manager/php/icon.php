@@ -62,6 +62,8 @@ if (!$iconPath) {
 
 // Serve the icon
 header("Content-Type: $mimeType");
-header("Cache-Control: public, max-age=3600");
+header("Cache-Control: public, max-age=0, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
 header("Content-Length: " . filesize($iconPath));
 readfile($iconPath);

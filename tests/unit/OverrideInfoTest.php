@@ -84,7 +84,8 @@ class OverrideInfoTest extends TestCase
         $legacyPath = $indirectTarget . '/docker-compose.override.yml';
         file_put_contents($legacyPath, '# legacy');
         $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
-        $this->assertTrue($info->mismatchIndirectLegacy);
+        $this->assertFalse($info->mismatchIndirectLegacy);
+        $this->assertTrue($info->useIndirect);
     }
 
     public function testGetOverridePathPrefersIndirect(): void
@@ -112,7 +113,7 @@ class OverrideInfoTest extends TestCase
         $this->assertEquals($overridePath, $info->getOverridePath());
     }
 
-    public function testLegacyProjectOverrideMigration(): void
+    public function testLegacyProjectOverrideIsPreserved(): void
     {
         $stack = 'stack8';
         $stackDir = $this->tempRoot . '/' . $stack;
@@ -120,11 +121,12 @@ class OverrideInfoTest extends TestCase
         $legacyPath = $stackDir . '/docker-compose.override.yml';
         file_put_contents($legacyPath, '# legacy');
         $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
-        $this->assertFileDoesNotExist($legacyPath);
-        $this->assertFileExists($info->projectOverride);
+        $this->assertFileExists($legacyPath);
+        $this->assertSame($legacyPath, $info->projectOverride);
+        $this->assertSame($legacyPath, $info->getOverridePath());
     }
 
-    public function testLegacyProjectOverrideStaleRemoval(): void
+    public function testLegacyProjectOverrideNoBakWhenComputedExists(): void
     {
         $stack = 'stack9';
         $stackDir = $this->tempRoot . '/' . $stack;
@@ -135,8 +137,26 @@ class OverrideInfoTest extends TestCase
         file_put_contents($computedPath, '# computed');
         $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
         $this->assertFileExists($computedPath);
-        $this->assertFileDoesNotExist($legacyPath);
-        $this->assertFileExists($legacyPath . '.bak');
+        $this->assertFileExists($legacyPath);
+        $this->assertSame($computedPath, $info->projectOverride);
+        $this->assertFileDoesNotExist($legacyPath . '.bak');
+    }
+
+    public function testLegacyIndirectOverrideIsPreserved(): void
+    {
+        $stack = 'stack10';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        $indirectTarget = $this->tempRoot . '/indirect_target5';
+        mkdir($indirectTarget);
+        file_put_contents($stackDir . '/indirect', $indirectTarget);
+        $legacyPath = $indirectTarget . '/docker-compose.override.yml';
+        file_put_contents($legacyPath, '# legacy indirect');
+
+        $info = \OverrideInfo::fromStack($this->tempRoot, $stack);
+
+        $this->assertTrue($info->useIndirect);
+        $this->assertSame($legacyPath, $info->getOverridePath());
     }
 
     // ===========================================

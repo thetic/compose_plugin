@@ -393,18 +393,18 @@ class OverrideInfo
         return self::resolveOverride($projectPath, $indirectPath, $composeFilePath);
     }
 
-    /**
-     * Core override resolution logic shared by both factories.
-     *
-     * Computes the override filename from the compose file, resolves project
-     * and indirect override paths, migrates/removes legacy overrides, and
-     * auto-creates a project override template if needed.
-     *
-     * @param string      $projectPath     Full path to the stack directory
-     * @param string|null $indirectPath     Indirect target directory, or null if not indirect
-     * @param string|null $composeFilePath  Resolved main compose file path, or null if none
-     * @return OverrideInfo
-     */
+     /**
+      * Core override resolution logic shared by both factories.
+      *
+      * Computes the override filename from the compose file, resolves project
+      * and indirect override paths while preserving legacy filenames as-is,
+      * and auto-creates a project override template if needed.
+      *
+      * @param string      $projectPath     Full path to the stack directory
+      * @param string|null $indirectPath     Indirect target directory, or null if not indirect
+      * @param string|null $composeFilePath  Resolved main compose file path, or null if none
+      * @return OverrideInfo
+      */
     private static function resolveOverride(string $projectPath, ?string $indirectPath, ?string $composeFilePath): self
     {
         $info = new self();
@@ -413,29 +413,30 @@ class OverrideInfo
         $composeBaseName = $composeFilePath !== null ? basename($composeFilePath) : COMPOSE_FILE_NAMES[0];
         $info->computedName = preg_replace('/(\.[^.]+)$/', '.override$1', $composeBaseName);
 
-        $info->projectOverride = $projectPath . '/' . $info->computedName;
-        $info->indirectOverride = $indirectPath !== null ? ($indirectPath . '/' . $info->computedName) : null;
+        $computedProjectOverride = $projectPath . '/' . $info->computedName;
+        $computedIndirectOverride = $indirectPath !== null ? ($indirectPath . '/' . $info->computedName) : null;
 
         $legacyProject = $projectPath . '/docker-compose.override.yml';
         $legacyIndirect = $indirectPath !== null ? ($indirectPath . '/docker-compose.override.yml') : null;
 
+        if (is_file($computedProjectOverride)) {
+            $info->projectOverride = $computedProjectOverride;
+        } elseif (is_file($legacyProject)) {
+            $info->projectOverride = $legacyProject;
+        } else {
+            $info->projectOverride = $computedProjectOverride;
+        }
+
+        if ($computedIndirectOverride !== null && is_file($computedIndirectOverride)) {
+            $info->indirectOverride = $computedIndirectOverride;
+        } elseif ($legacyIndirect !== null && is_file($legacyIndirect)) {
+            $info->indirectOverride = $legacyIndirect;
+        } else {
+            $info->indirectOverride = $computedIndirectOverride;
+        }
+
         $info->useIndirect = ($info->indirectOverride && is_file($info->indirectOverride));
-        $info->mismatchIndirectLegacy = ($indirectPath !== null && $legacyIndirect && is_file($legacyIndirect) && !($info->indirectOverride && is_file($info->indirectOverride)));
-
-        // Migrate legacy project override to computed project override (project-only migration)
-        if (!is_file($info->projectOverride) && is_file($legacyProject) && realpath($legacyProject) !== @realpath($info->projectOverride)) {
-            @rename($legacyProject, $info->projectOverride);
-            clientDebug("[override] Migrated legacy project override $legacyProject -> $info->projectOverride", null, 'daemon', 'info');
-        }
-
-        if (is_file($info->projectOverride) && is_file($legacyProject) && realpath($legacyProject) !== @realpath($info->projectOverride)) {
-            @rename($legacyProject, $legacyProject . ".bak");
-            clientDebug("[override] Removed stale legacy project override $legacyProject (mismatch with computed override)", null, 'daemon', 'info');
-        }
-
-        if ($info->mismatchIndirectLegacy) {
-            clientDebug("[override] Indirect override exists with non-matching name; using project fallback.", null, 'daemon', 'warning');
-        }
+        $info->mismatchIndirectLegacy = false;
 
         if (!is_file($info->projectOverride) && !$info->useIndirect) {
             $overrideContent = "# Override file for UI labels (icon, webui, shell)\n";
@@ -952,6 +953,14 @@ class ContainerInfo
  */
 class StackInfo
 {
+    /**
+     * Marker for the services cache semantics.
+     *
+     * `all_profiles_v1` means the cached `services` file was generated with
+     * `docker compose --profile '*' config --services`.
+     */
+    private const SERVICES_CACHE_MODE = 'all_profiles_v1';
+
     /** @var string Compose project folder basename (actual directory name on disk) */
     public string $projectFolder;
     /** @var string Sanitized Docker Compose project name (always lowercase, valid for -p flag) */
@@ -1245,9 +1254,21 @@ class StackInfo
     public function getIconUrl(): ?string
     {
         $url = $this->readMetadata('icon_url');
+        if ($url === null) {
+            return null;
+        }
+        // Accept http(s) URLs
         if (
-            $url !== null && filter_var($url, FILTER_VALIDATE_URL)
+            filter_var($url, FILTER_VALIDATE_URL)
             && (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0)
+        ) {
+            return $url;
+        }
+        // Accept local server paths under allowed prefixes
+        if (
+            strpos($url, '/') === 0
+            && strpos($url, '..') === false
+            && (strpos($url, '/mnt/') === 0 || strpos($url, '/boot/config/plugins/compose.manager/projects/') === 0)
         ) {
             return $url;
         }
@@ -1304,17 +1325,109 @@ class StackInfo
     }
 
     /**
-     * Get available profiles (from `profiles` JSON file).
-     * @return array
+     * Get available profiles (from `profiles` JSON metadata cache).
+     *
+     * Returns cached profiles if the metadata file is newer than the compose
+     * file.  When the cache is missing or stale, delegates to
+     * `docker compose config --profiles` and writes the result back.
+     *
+     * @return string[]
      */
     public function getProfiles(): array
     {
         $raw = $this->readMetadata('profiles');
-        if ($raw === null || $raw === '') {
+        if ($raw !== null && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded) && !$this->isProfilesCacheStale()) {
+                return $decoded;
+            }
+        }
+
+        return $this->extractProfilesFromCompose();
+    }
+
+    /**
+     * Check whether the cached profiles metadata file is stale.
+     *
+     * Compares filemtime of the profiles metadata file against compose inputs
+     * that can affect profile resolution (compose, override, env-file).
+     * Returns true when any input is newer than the cache or when the cache
+     * file does not exist.
+     *
+     * @return bool
+     */
+    private function isProfilesCacheStale(): bool
+    {
+        $profilesFile = $this->path . '/profiles';
+        if (!is_file($profilesFile)) {
+            return true;
+        }
+
+        $cacheMtime = filemtime($profilesFile);
+
+        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
+            return false;
+        }
+
+        if (filemtime($this->composeFilePath) > $cacheMtime) {
+            return true;
+        }
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null && is_file($overridePath) && filemtime($overridePath) > $cacheMtime) {
+            return true;
+        }
+
+        $envFilePath = $this->getEnvFilePath();
+        if ($envFilePath !== null && is_file($envFilePath) && filemtime($envFilePath) > $cacheMtime) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Extract available profiles via `docker compose config --profiles`.
+     *
+     * Mirrors the approach used by {@see getDefinedServices()}.  On success
+     * the result is written back to the profiles metadata file so subsequent
+     * reads hit the fast-path cache.
+     *
+     * @return string[]
+     */
+    private function extractProfilesFromCompose(): array
+    {
+        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
             return [];
         }
-        $decoded = json_decode($raw, true);
-        return is_array($decoded) ? $decoded : [];
+
+        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null && is_file($overridePath)) {
+            $cmd .= " -f " . escapeshellarg($overridePath);
+        }
+
+        $envFilePath = $this->getEnvFilePath();
+        if ($envFilePath !== null && is_file($envFilePath)) {
+            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        }
+        $cmd .= " config --profiles 2>/dev/null";
+
+        $output = shell_exec($cmd);
+        if (!is_string($output) || trim($output) === '') {
+            return [];
+        }
+
+        $profiles = array_values(array_filter(
+            array_map('trim', explode("\n", trim($output))),
+            fn(string $p): bool => $p !== ''
+        ));
+
+        // Write-through: persist so future reads hit the cache.
+        $this->writeMetadata('profiles', json_encode($profiles));
+
+        return $profiles;
     }
 
     // ---------------------------------------------------------------
@@ -1342,8 +1455,10 @@ class StackInfo
     /**
      * Get the list of services defined in the main compose file.
      *
-     * Uses `docker compose config --services` to accurately resolve
-     * services including extends, anchors, etc.
+     * Returns cached services from the `services` metadata file when the
+     * compose (and override) files have not changed since the cache was
+     * written.  On a cache miss delegates to `docker compose config
+     * --services` and persists the result for future calls.
      *
      * @return string[] List of service names
      */
@@ -1353,9 +1468,75 @@ class StackInfo
             return [];
         }
 
+        // Persistent file cache – use when fresh
+        $raw = $this->readMetadata('services');
+        if ($raw !== null && $raw !== '' && !$this->isServicesCacheStale()) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return $this->extractServicesFromCompose();
+    }
+
+    /**
+     * Check whether the cached `services` metadata file is stale.
+     *
+     * Compares filemtime of the cache file against the compose file (and
+     * override file when present).  Returns true when either source file
+     * is newer than the cache or when the cache file does not exist.
+     *
+     * @return bool
+     */
+    private function isServicesCacheStale(): bool
+    {
+        $cacheFile = $this->path . '/services';
+        if (!is_file($cacheFile)) {
+            return true;
+        }
+
+        // Invalidate legacy cache entries created before all-profile service
+        // extraction was introduced.
+        $modeRaw = $this->readMetadata('services_cache_mode');
+        if (!is_string($modeRaw) || trim($modeRaw) !== self::SERVICES_CACHE_MODE) {
+            return true;
+        }
+
+        $cacheMtime = filemtime($cacheFile);
+
+        if ($this->composeFilePath !== null && is_file($this->composeFilePath)) {
+            if (filemtime($this->composeFilePath) > $cacheMtime) {
+                return true;
+            }
+        }
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null && is_file($overridePath)) {
+            if (filemtime($overridePath) > $cacheMtime) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Run `docker compose config --services` and persist the result.
+     *
+     * On success the service list is written to the `services` metadata
+     * file so subsequent calls hit the fast-path file cache.
+     *
+     * @return string[]
+     */
+    private function extractServicesFromCompose(): array
+    {
+        if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
+            return [];
+        }
+
         $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
 
-        // Include override file if available
         $overridePath = $this->getOverridePath();
         if ($overridePath !== null && is_file($overridePath)) {
             $cmd .= " -f " . escapeshellarg($overridePath);
@@ -1365,16 +1546,25 @@ class StackInfo
         if ($envFilePath !== null && is_file($envFilePath)) {
             $cmd .= " --env-file " . escapeshellarg($envFilePath);
         }
-        $cmd .= " config --services 2>/dev/null";
+        // Include all profile-scoped services so stack totals reflect the
+        // full compose definition, not only default-profile services.
+        $cmd .= " --profile '*' config --services 2>/dev/null";
 
         $output = shell_exec($cmd);
         if (!is_string($output) || trim($output) === '') {
             return [];
         }
 
-        return array_values(array_filter(array_map('trim', explode("\n", trim($output))), function ($service) {
-            return $service !== '';
-        }));
+        $services = array_values(array_filter(
+            array_map('trim', explode("\n", trim($output))),
+            fn(string $s): bool => $s !== ''
+        ));
+
+        // Write-through: persist so future reads hit the cache.
+        $this->writeMetadata('services', json_encode($services));
+        $this->writeMetadata('services_cache_mode', self::SERVICES_CACHE_MODE);
+
+        return $services;
     }
 
     /**
@@ -1398,8 +1588,9 @@ class StackInfo
      * Get the list of services defined in the main compose file only (without override).
      *
      * Used internally by pruneOrphanOverrideServices() to determine which services
-     * are valid. Excludes the override file so orphaned override services are not
-     * counted as valid.
+        * are valid. Excludes the override file so orphaned override services are not
+        * counted as valid, but enables all profiles so profile-tagged services remain
+        * valid targets for Unraid label metadata stored in the override file.
      *
      * External callers should typically use getDefinedServices() which includes
      * the override file for a complete picture.
@@ -1418,7 +1609,7 @@ class StackInfo
         if ($envFilePath !== null && is_file($envFilePath)) {
             $cmd .= " --env-file " . escapeshellarg($envFilePath);
         }
-        $cmd .= " config --services 2>/dev/null";
+        $cmd .= " --profile '*' config --services 2>/dev/null";
 
         $output = shell_exec($cmd);
         if (!is_string($output) || trim($output) === '') {
@@ -1465,25 +1656,79 @@ class StackInfo
     /**
      * Check if any service in the stack has a build configuration.
      *
-     * Uses `docker compose config` to parse the compose files and checks
-     * for services with build contexts, indicating they need to be built
-     * at startup rather than pulled from a registry.
+     * Returns a cached result from the `has_build` metadata file when the
+     * compose (and override) files have not changed since the cache was
+     * written.  On a cache miss the method falls back to
+     * `docker compose config` and persists the result for future calls.
      *
      * @return bool True if any service has a build configuration
      */
     public function hasBuildConfig(): bool
     {
-        // Check cache first
+        // In-memory cache (same request)
         if (array_key_exists('has_build', $this->metadataCache)) {
             return (bool) $this->metadataCache['has_build'];
         }
 
+        // Persistent file cache – use when fresh
+        $raw = $this->readMetadata('has_build');
+        if ($raw !== null && $raw !== '' && !$this->isHasBuildCacheStale()) {
+            $val = ($raw === '1');
+            $this->metadataCache['has_build'] = $val;
+            return $val;
+        }
+
+        return $this->extractHasBuildFromCompose();
+    }
+
+    /**
+     * Check whether the cached `has_build` metadata file is stale.
+     *
+     * Compares filemtime of the cache file against the compose file (and
+     * override file when present).  Returns true when either source file
+     * is newer than the cache or when the cache file does not exist.
+     *
+     * @return bool
+     */
+    private function isHasBuildCacheStale(): bool
+    {
+        $cacheFile = $this->path . '/has_build';
+        if (!is_file($cacheFile)) {
+            return true;
+        }
+        $cacheMtime = filemtime($cacheFile);
+
+        if ($this->composeFilePath !== null && is_file($this->composeFilePath)) {
+            if (filemtime($this->composeFilePath) > $cacheMtime) {
+                return true;
+            }
+        }
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null && is_file($overridePath)) {
+            if (filemtime($overridePath) > $cacheMtime) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Run `docker compose config` and check for build directives.
+     *
+     * On success the result is written to the `has_build` metadata file so
+     * subsequent calls hit the fast-path file cache.
+     *
+     * @return bool
+     */
+    private function extractHasBuildFromCompose(): bool
+    {
         if ($this->composeFilePath === null || !is_file($this->composeFilePath)) {
             $this->metadataCache['has_build'] = false;
             return false;
         }
 
-        // Use docker compose config to get the resolved configuration
         $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
 
         $overridePath = $this->getOverridePath();
@@ -1503,11 +1748,10 @@ class StackInfo
             return false;
         }
 
-        // Parse the YAML output and check for build keys
-        // Look for "build:" at the start of a line (indented under services)
-        // This is a simple heuristic - build: can be a string (context) or object
         $hasBuild = preg_match('/^\s+build:/m', $output) === 1;
 
+        // Persist so future reads hit the cache
+        $this->writeMetadata('has_build', $hasBuild ? '1' : '0');
         $this->metadataCache['has_build'] = $hasBuild;
         return $hasBuild;
     }
@@ -1747,9 +1991,12 @@ class StackInfo
      * silently skipping folders with no compose file or invalid structure.
      *
      * @param string $composeRoot Compose projects root directory
+     * @param bool   $skipDocker  If true, skip the batch docker ps preload
+     *                            (returns stacks with empty container lists
+     *                            for fast skeleton rendering).
      * @return self[]
      */
-    public static function allFromRoot(string $composeRoot): array
+    public static function allFromRoot(string $composeRoot, bool $skipDocker = false): array
     {
         $stacks = [];
         foreach (self::listProjectFolders($composeRoot) as $project) {
@@ -1759,6 +2006,15 @@ class StackInfo
                 // skip non-stack directories (no compose file, invalid structure, etc.)
                 clientDebug("[allFromRoot] Skipped project '$project': " . $e->getMessage(), null, 'daemon', 'debug');
             }
+        }
+
+        if ($skipDocker) {
+            // Set empty container lists so getContainerList() won't trigger
+            // per-stack docker calls.
+            foreach ($stacks as $stack) {
+                $stack->setContainerList([]);
+            }
+            return $stacks;
         }
 
         // Batch-preload container data with a single docker ps call to avoid

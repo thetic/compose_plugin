@@ -18,6 +18,46 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 // Get Docker Compose CLI version
 $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') ?? '');
 
+// Host total memory in bytes for stack-level memory denominator.
+$composeSystemMemBytes = 0;
+$memKbRaw = trim(shell_exec("awk '/^MemTotal:/ {print \$2}' /proc/meminfo 2>/dev/null") ?? '');
+if (is_numeric($memKbRaw)) {
+    $composeSystemMemBytes = (int)$memKbRaw * 1024;
+}
+
+// CPU count for load normalization (matches Docker manager's cpu_list approach).
+// cpu_list() returns thread_siblings_list entries (e.g. "0-3,8-11").
+// We expand each range segment so "0-3" counts as 4, not 2 endpoints.
+function compose_manager_cpu_spec_count($cpuSpec)
+{
+    $count = 0;
+    foreach (explode(',', trim((string)$cpuSpec)) as $segment) {
+        $segment = trim($segment);
+        if ($segment === '') continue;
+        if (strpos($segment, '-') !== false) {
+            [$start, $end] = explode('-', $segment, 2);
+            $start = (int)$start;
+            $end   = (int)$end;
+            if ($end < $start) [$start, $end] = [$end, $start];
+            $count += max(0, $end - $start + 1);
+        } else {
+            $count += 1;
+        }
+    }
+    return $count;
+}
+$cpus = function_exists('cpu_list') ? cpu_list() : [];
+$cpuCount = 0;
+foreach ($cpus as $cpuSpec) {
+    $cpuCount += compose_manager_cpu_spec_count($cpuSpec);
+}
+if ($cpuCount <= 0) {
+    $cpuCount = (int)trim(shell_exec('nproc 2>/dev/null') ?: '1');
+}
+if ($cpuCount <= 0) {
+    $cpuCount = 1;
+}
+
 // Note: Stack list is now loaded asynchronously via compose_list.php
 // This improves page load time by deferring expensive docker commands
 ?>
@@ -56,12 +96,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     /* Basic-view column widths (7 visible columns)
    Arrow + Icon are fixed px (small fixed content); rest are % of table. */
     #compose_stacks thead th.col-arrow {
-        width: 1%;
+        width: 15px;
         padding: 0;
     }
 
     #compose_stacks thead th.col-icon {
-        width: 2%;
+        width: 30px;
         padding: 0;
     }
 
@@ -85,14 +125,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         width: 15%;
     }
 
-    /* Advanced-view column widths (9 visible columns)
+    /* Advanced-view column widths (10 visible columns)
    Arrow + Icon stay fixed px; Description + Path get the most %. */
     #compose_stacks.cm-advanced-view thead th.col-arrow {
-        width: 1%;
+        width: 15px;
     }
 
     #compose_stacks.cm-advanced-view thead th.col-icon {
-        width: 2%;
+        width: 30px;
     }
 
     #compose_stacks.cm-advanced-view thead th.col-name {
@@ -111,12 +151,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         width: 6%
     }
 
+    #compose_stacks.cm-advanced-view thead th.col-load {
+        width: 12%
+    }
+
     #compose_stacks.cm-advanced-view thead th.col-description {
-        width: 28%
+        width: 22%
     }
 
     #compose_stacks.cm-advanced-view thead th.col-path {
-        width: 28%
+        width: 22%
     }
 
     #compose_stacks.cm-advanced-view thead th.col-autostart {
@@ -172,17 +216,64 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         padding-right: 20px
     }
 
+    .dropdown-menu {
+        z-index: 100 !important; 
+    }
+
+    /* CPU & Memory load display (matches Docker manager usage-disk style) */
+    .compose-load-cell {
+        white-space: nowrap;
+        font-size: 0.9em;
+    }
+    .compose-load-cell .compose-load-cpu,
+    .compose-load-cell .compose-load-mem {
+        display: block;
+    }
+    .compose-load-cell .compose-load-mem {
+        margin-top: 2px;
+    }
+    .compose-load-cell .usage-disk.mm {
+        height: 3px;
+        margin: 3px 20px 0 0;
+        position: relative;
+        background-color: var(--usage-disk-background-color, #e0e0e0);
+    }
+    .compose-load-cell .usage-disk.mm > span:first-child {
+        position: absolute;
+        left: 0;
+        height: 3px;
+        background-color: var(--gray-400, #888);
+    }
+    .compose-load-cell .usage-disk.mm > span:last-child {
+        position: relative;
+        z-index: 1;
+    }
+
 </style>
 
-<script src="/plugins/compose.manager/javascript/ace/ace.js" type="text/javascript"></script>
-<script src="/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js" type="text/javascript"></script>
-<script src="/plugins/compose.manager/javascript/common.js" type="text/javascript"></script>
+<?php
+// Use Dynamix's bundled Ace if available (Unraid 7.0.0+), else fall back to our plugin-local copy
+// (downloaded during install for pre-7.0.0 Unraid via the PLG post-install script)
+$acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js')
+    ? '/webGui/javascript/ace'
+    : '/plugins/compose.manager/javascript/ace';
+?>
+<script src="<?php autov($acePath . '/ace.js'); ?>" type="text/javascript"></script>
+<script src="<?php autov('/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js'); ?>" type="text/javascript"></script>
+<script src="<?php autov('/plugins/compose.manager/javascript/common.js'); ?>" type="text/javascript"></script>
 <script>
     var compose_root = <?php echo json_encode($compose_root); ?>;
     var caURL = "/plugins/compose.manager/php/exec.php";
     var compURL = "/plugins/compose.manager/php/compose_util.php";
     var aceTheme = <?php echo (in_array($theme, ['black', 'gray']) ? json_encode('ace/theme/tomorrow_night') : json_encode('ace/theme/tomorrow')); ?>;
+    var aceBasePath = <?php echo json_encode($acePath); ?>;
     const icon_label = <?php echo json_encode($docker_label_icon); ?>;
+
+    // Configure Ace base path explicitly so it finds mode/theme files
+    // regardless of how the script URL was resolved
+    if (typeof ace !== 'undefined') {
+        ace.config.set('basePath', aceBasePath);
+    }
     const webui_label = <?php echo json_encode($docker_label_webui); ?>;
     const shell_label = <?php echo json_encode($docker_label_shell); ?>;
 
@@ -192,6 +283,67 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     var showComposeOnTop = <?php echo json_encode($showComposeOnTop); ?>;
     var hideComposeFromDocker = <?php echo json_encode($hideComposeFromDocker); ?>;
     var composeCliVersion = <?php echo json_encode($composeVersion); ?>;
+    var composeSystemMemBytes = <?php echo json_encode($composeSystemMemBytes); ?>;
+    var composeCpuCount = <?php echo json_encode($cpuCount); ?>;
+
+    // Parse a single memory value (for example "123.4MiB" or "512MB") to bytes.
+    // Supports both IEC (KiB, MiB, GiB, TiB) and SI (kB, MB, GB, TB) suffixes.
+    function parseMemValueToBytes(memVal) {
+        if (!memVal) return 0;
+        var cleaned = String(memVal).trim();
+        if (!cleaned) return 0;
+        var match = cleaned.match(/([\d.]+)\s*([kmgt]?i?b)?/i);
+        if (!match) return 0;
+
+        var num = parseFloat(match[1]);
+        if (!isFinite(num)) return 0;
+        var unit = (match[2] || 'b').toLowerCase();
+
+        switch (unit) {
+            case 'tb':  return num * 1000000000000;
+            case 'tib': return num * 1099511627776;
+            case 'gb':  return num * 1000000000;
+            case 'gib': return num * 1073741824;
+            case 'mb':  return num * 1000000;
+            case 'mib': return num * 1048576;
+            case 'kb':  return num * 1000;
+            case 'kib': return num * 1024;
+            default:    return num;
+        }
+    }
+
+    // Parse docker stats memory string "used / limit" into bytes.
+    function parseMemUsagePair(memStr) {
+        if (!memStr) return {used: 0, limit: 0};
+        var parts = String(memStr).split('/');
+        var used = parseMemValueToBytes(parts[0] || '');
+        var limit = parseMemValueToBytes(parts[1] || '');
+        return {used: used, limit: limit};
+    }
+
+    // Backward-compatible helper used by existing code paths.
+    function parseMemToBytes(memStr) {
+        return parseMemUsagePair(memStr).used;
+    }
+
+    // Format bytes to human-readable string with fixed 2 decimals.
+    function formatBytes(bytes) {
+        var val = Number(bytes) || 0;
+        if (val < 0) val = 0;
+        if (val >= 1073741824) return (val / 1073741824).toFixed(2) + 'GiB';
+        if (val >= 1048576) return (val / 1048576).toFixed(2) + 'MiB';
+        if (val >= 1024) return (val / 1024).toFixed(2) + 'KiB';
+        return val.toFixed(2) + 'B';
+    }
+
+    function formatCpuPercent(value) {
+        var num = Number(value) || 0;
+        return num.toFixed(2) + '%';
+    }
+
+    function formatMemUsageText(usedBytes, limitBytes) {
+        return formatBytes(usedBytes) + ' / ' + formatBytes(limitBytes);
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     // Standard factory functions for container and stack identity objects
@@ -335,6 +487,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 // Insert the loaded content
                 $('#compose_list').html(data);
 
+                // Signal load subscribers (e.g. dockerload cache) that the list changed
+                $(document).trigger('composeListRefreshed');
+
                 // Initialize UI components for the newly loaded content
                 initStackListUI();
 
@@ -439,7 +594,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 }, 'daemon', 'error');
                 clearTimeout(composeTimers.load);
                 hideComposeSpinner();
-                $('#compose_list').html('<tr><td colspan="9" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
+                $('#compose_list').html('<tr><td colspan="10" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
 
                 // Reject the promise so callers can handle the error
                 try { reject({xhr: xhr, status: status, error: error}); } catch (e) { reject(error); }
@@ -502,8 +657,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Load external stylesheets (non-critical styles — critical ones are inline above)
     (function() {
-        var base = '<? autov("/plugins/compose.manager/styles/comboButton.css"); ?>';
-        var editor = '<? autov("/plugins/compose.manager/styles/editorModal.css"); ?>';
+        var base = '<?php autov("/plugins/compose.manager/styles/comboButton.css"); ?>';
+        var editor = '<?php autov("/plugins/compose.manager/styles/editorModal.css"); ?>';
         if (!$('link[href="' + base + '"]').length)
             $('head').append($('<link rel="stylesheet" type="text/css" />').attr('href', base));
         if (!$('link[href="' + editor + '"]').length)
@@ -584,6 +739,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     // Initialize editor modal
     function initEditorModal() {
+        if (typeof ace === 'undefined') {
+            console.warn('Compose Manager: Ace editor not available. Editor will open without syntax highlighting.');
+            return;
+        }
         // Initialize Ace editors for compose and env tabs only
         ['compose', 'env'].forEach(function(type) {
             var editor = ace.edit('editor-' + type);
@@ -595,6 +754,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 useSoftTabs: true,
                 wrap: true
             });
+
+            // Disable workers to avoid loading worker-yaml.js / worker-sh.js —
+            // we already validate YAML client-side via js-yaml
+            editor.getSession().setUseWorker(false);
 
             // Set mode based on type
             if (type === 'env') {
@@ -648,7 +811,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             clearTimeout(settingsIconDebounce);
             settingsIconDebounce = setTimeout(function() {
                 var url = $input.val().trim();
-                if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                if (url && isValidIconSrc(url)) {
                     $('#settings-icon-preview-img').attr('src', url);
                     $('#settings-icon-preview').show();
                 } else {
@@ -1319,6 +1482,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         return lowerUrl.startsWith('http://') || lowerUrl.startsWith('https://');
     }
 
+    // Validate an icon source: http(s) URL, data URI, or local server path
+    function isValidIconSrc(src) {
+        if (!src) return false;
+        var s = src.trim();
+        return s.indexOf('http://') === 0 || s.indexOf('https://') === 0
+            || s.indexOf('data:image/') === 0 || s.indexOf('/') === 0;
+    }
+
     // Process WebUI URL placeholders for stack-level WebUI (where no container context exists)
     // For container-level WebUI, resolution is done server-side in exec.php
     function processWebUIUrl(url) {
@@ -1339,6 +1510,10 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     // When animate=true (user clicked toggle), run a simple symmetric transition.
     // When false (page load), instant class toggle.
     function applyListView(animate) {
+        // Sync the dockerload WebSocket with the view mode.
+        if (typeof window.composeDockerLoadToggle === 'function') {
+            window.composeDockerLoadToggle(isComposeAdvancedMode());
+        }
         var advanced = isComposeAdvancedMode();
         var $table = $('#compose_stacks');
         var $advanced = $table.find('.cm-advanced');
@@ -1475,9 +1650,23 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         // ebox observer removed; pending update checks are now processed from
         // refreshStackRow and processPendingComposeReloads directly.
 
+        // Gate dockerload socket start until the stack list DOM is ready.
+        var composeListReady = false;
+
         // Load the stack list asynchronously (like Docker tab)
         // This defers the expensive docker commands to after the page renders
         composeLoadlist().then(function() {
+            composeListReady = true;
+            composeClientDebug('[dockerload] composeListReady=true, rows=' + $('#compose_stacks tr.compose-sortable').length, null, 'daemon', 'debug');
+
+            // Start the dockerload socket now that the DOM has rows with data-ctids.
+            if (typeof window.composeDockerLoadToggle === 'function') {
+                composeClientDebug('[dockerload] triggering composeDockerLoadToggle, advancedMode=' + isComposeAdvancedMode(), null, 'daemon', 'debug');
+                window.composeDockerLoadToggle(isComposeAdvancedMode());
+            } else {
+                composeClientDebug('[dockerload] composeDockerLoadToggle not available yet at composeLoadlist completion', null, 'daemon', 'debug');
+            }
+
             getConfig().then(function(config) {
                 if (config['STACKS_DEFAULT_EXPANDED'] == 'true') {
                     // Expand all stacks if the default is set to expanded
@@ -1570,6 +1759,305 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 });
             }
         })();
+
+        // ── CPU & Memory load via dockerload Nchan channel ─────────────
+        // Only runs in advanced view (load column is hidden in basic view).
+        // composeDockerLoadToggle(true/false) is called from applyListView()
+        // so the socket starts/stops whenever the user switches view modes.
+        function initComposeDockerLoadSubscriber() {
+            if (typeof NchanSubscriber !== 'function') {
+                composeClientDebug('[dockerload] NchanSubscriber not available yet', null, 'daemon', 'debug');
+                return false;
+            }
+
+            // Tear down previous subscriber if page was re-navigated (Unraid
+            // AJAX navigation preserves window globals but old closures/sockets
+            // become stale).  Always create a fresh subscriber.
+            if (window._composeDockerLoad) {
+                composeClientDebug('[dockerload] tearing down previous subscriber', null, 'daemon', 'info');
+                try { window._composeDockerLoad.stop(); } catch (e) {}
+            }
+            if (window._composeDockerLoadStaleTimer) {
+                clearInterval(window._composeDockerLoadStaleTimer);
+            }
+            if (window._composeDockerLoadVisHandler) {
+                document.removeEventListener('visibilitychange', window._composeDockerLoadVisHandler);
+            }
+            if (window._composeDockerLoadPanelObserver) {
+                window._composeDockerLoadPanelObserver.disconnect();
+            }
+            $(document).off('composeListRefreshed.dockerload');
+
+            composeClientDebug('[dockerload] initializing subscriber, composeListReady=' + composeListReady, null, 'daemon', 'info');
+
+            var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket', reconnectTimeout: 5000});
+            window._composeDockerLoad = composeDockerLoad;
+            var composeDockerLoadRunning = false;
+            var composeDockerLoadDropped = 0;
+
+            // Cache of { stackId, containerIds[] } built from the DOM once after
+            // composeLoadlist() and reused until the row count changes.
+            // Avoids O(stacks) DOM traversal + string splits on every stats tick.
+            var composeStackIndex = null;
+            var composeLoadById = {};
+            var composeLoadStaleMs = 15000;
+
+            function isComposeLoadVisible() {
+                if (!isComposeAdvancedMode()) return false;
+                if (document.visibilityState === 'hidden') return false;
+                var $table = $('#compose_stacks');
+                if (!$table.length) return false;
+                var $tabPanel = $table.closest('[role="tabpanel"]');
+                if ($tabPanel.length && $tabPanel[0].style.display === 'none') return false;
+                return true;
+            }
+
+            function clearContainerLoad(shortId) {
+                $('.compose-cpu-' + shortId).addClass('compose-text-muted').text('-');
+                $('#compose-cpu-' + shortId).css('width', '0');
+                $('.compose-mem-' + shortId).hide();
+            }
+
+            function buildComposeStackIndex() {
+                composeStackIndex = [];
+                $('#compose_stacks tr.compose-sortable').each(function() {
+                    var stackId = ($(this).attr('id') || '').replace('stack-row-', '');
+                    if (!stackId) return;
+                    var ctidsAttr = $(this).attr('data-ctids') || '';
+                    composeStackIndex.push({
+                        stackId: stackId,
+                        containerIds: ctidsAttr ? ctidsAttr.split(',') : []
+                    });
+                });
+                composeClientDebug('[dockerload] buildComposeStackIndex complete, stacks=' + composeStackIndex.length, null, 'daemon', 'debug');
+            }
+
+            // Invalidate the cache when the list refreshes so that added/removed
+            // stacks are picked up on the next stats tick.
+            $(document).on('composeListRefreshed.dockerload', function() {
+                composeClientDebug('[dockerload] composeListRefreshed — invalidating stack index and load cache', null, 'daemon', 'debug');
+                composeStackIndex = null;
+                composeLoadById = {};
+            });
+
+            window.composeDockerLoadToggle = function(enable) {
+                if (enable && !composeDockerLoadRunning) {
+                    composeClientDebug('[dockerload] starting WebSocket', null, 'daemon', 'info');
+                    composeDockerLoad.start();
+                    composeDockerLoadRunning = true;
+                } else if (!enable && composeDockerLoadRunning) {
+                    composeClientDebug('[dockerload] stopping WebSocket', null, 'daemon', 'info');
+                    composeDockerLoad.stop();
+                    composeDockerLoadRunning = false;
+                }
+            };
+
+            function pruneStaleLoadEntries(now) {
+                var staleIds = [];
+                for (var knownId in composeLoadById) {
+                    if ((now - composeLoadById[knownId].ts) > composeLoadStaleMs) {
+                        staleIds.push(knownId);
+                    }
+                }
+                if (staleIds.length > 0) {
+                    composeClientDebug('[dockerload] pruning ' + staleIds.length + ' stale container(s)', { ids: staleIds }, 'daemon', 'debug');
+                }
+                staleIds.forEach(function(staleId) {
+                    delete composeLoadById[staleId];
+                    clearContainerLoad(staleId);
+                });
+                return staleIds.length > 0;
+            }
+
+            function renderStackAggregates() {
+                // Aggregate per-stack totals and update stack-level cells.
+                // Build (or reuse) the stack→container index.
+                var currentRowCount = $('#compose_stacks tr.compose-sortable').length;
+                if (!composeStackIndex || composeStackIndex.length !== currentRowCount) {
+                    buildComposeStackIndex();
+                }
+
+                composeStackIndex.forEach(function(entry) {
+                    // Primary: short IDs baked into the row by compose_list.php
+                    var idList = entry.containerIds.slice();
+
+                    // Fallback: if the detail panel was expanded, stackContainersCache
+                    // may have fresher IDs (e.g. after a compose up added a service)
+                    if (idList.length === 0) {
+                        var containers = stackContainersCache[entry.stackId];
+                        if (containers && containers.length > 0) {
+                            containers.forEach(function(ct) {
+                                var ctId = String(ct.id || '').substring(0, 12);
+                                if (ctId) idList.push(ctId);
+                            });
+                        }
+                    }
+                    if (idList.length === 0) return;
+
+                    var totalCpu = 0;
+                    var totalMemUsedBytes = 0;
+                    var totalMemLimitBytes = 0;
+                    var matched = 0;
+                    idList.forEach(function(ctId) {
+                        if (ctId && composeLoadById[ctId]) {
+                            totalCpu += composeLoadById[ctId].cpu;
+                            totalMemUsedBytes += composeLoadById[ctId].memUsedBytes || 0;
+                            totalMemLimitBytes += composeLoadById[ctId].memLimitBytes || 0;
+                            matched++;
+                        }
+                    });
+
+                    if (matched > 0) {
+                        var aggCpu = formatCpuPercent(totalCpu);
+                        var stackMemTotalBytes = 0;
+                        if (totalMemLimitBytes > 0 && composeSystemMemBytes > 0) {
+                            stackMemTotalBytes = Math.min(totalMemLimitBytes, composeSystemMemBytes);
+                        } else if (totalMemLimitBytes > 0) {
+                            stackMemTotalBytes = totalMemLimitBytes;
+                        } else if (composeSystemMemBytes > 0) {
+                            stackMemTotalBytes = composeSystemMemBytes;
+                        }
+                        var aggMem = formatMemUsageText(totalMemUsedBytes, stackMemTotalBytes);
+                        $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
+                        $('#compose-stack-cpu-' + entry.stackId).css('width', Math.min(totalCpu, 100).toFixed(2) + '%');
+                        $('.compose-stack-mem-' + entry.stackId).show().text(aggMem);
+                    } else {
+                        $('.compose-stack-cpu-' + entry.stackId).addClass('compose-text-muted').text('-');
+                        $('#compose-stack-cpu-' + entry.stackId).css('width', '0');
+                        $('.compose-stack-mem-' + entry.stackId).hide();
+                    }
+                });
+            }
+
+            composeDockerLoad.on('message', function(msg) {
+                var now = Date.now();
+                var data = msg.split('\n');
+                var i = 0;
+                var row = data[i];
+                while (row) {
+                    var parts = row.split(';');
+                    if (parts.length >= 3) {
+                        var cpuRaw = parseFloat(parts[1]) || 0;
+                        var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
+                        var memPair = parseMemUsagePair(parts[2]);
+                        composeLoadById[parts[0]] = {
+                            cpu: cpuNorm,
+                            cpuText: formatCpuPercent(cpuNorm),
+                            mem: formatMemUsageText(memPair.used, memPair.limit),
+                            memUsedBytes: memPair.used,
+                            memLimitBytes: memPair.limit,
+                            ts: now
+                        };
+                    }
+                    i++;
+                    row = data[i];
+                }
+
+                pruneStaleLoadEntries(now);
+
+                // Skip DOM updates when the page isn't visible — the cache
+                // stays warm so we can render instantly on return.
+                if (!isComposeLoadVisible()) {
+                    composeDockerLoadDropped++;
+                    return;
+                }
+
+                // Update per-container CPU & MEM elements in expanded detail tables
+                for (var shortId in composeLoadById) {
+                    var info = composeLoadById[shortId];
+                    $('.compose-cpu-' + shortId).removeClass('compose-text-muted').text(info.cpuText);
+                    $('.compose-mem-' + shortId).show().text(info.mem);
+                    $('#compose-cpu-' + shortId).css('width', info.cpuText);
+                }
+
+                renderStackAggregates();
+            });
+
+            composeDockerLoad.on('error', function(code, desc) {
+                composeClientDebug('[dockerload] WebSocket error', { code: code, desc: desc }, 'daemon', 'warn');
+            });
+
+            // If dockerload pauses/stalls, drop stale values on a timer so the UI
+            // falls back to placeholders instead of showing frozen metrics forever.
+            window._composeDockerLoadStaleTimer = setInterval(function() {
+                if (!isComposeLoadVisible()) {
+                    return;
+                }
+                if (pruneStaleLoadEntries(Date.now())) {
+                    renderStackAggregates();
+                }
+            }, 3000);
+
+            // When the browser tab becomes visible again, invalidate the
+            // stack index so the next WebSocket message rebuilds it from
+            // the current DOM.  This prevents permanently stale data when
+            // the page loaded or sat in a background tab.
+            window._composeDockerLoadVisHandler = function() {
+                if (document.visibilityState === 'visible' && composeDockerLoadRunning) {
+                    if (composeDockerLoadDropped > 0) {
+                        composeClientDebug('[dockerload] browser tab became visible — skipped ' + composeDockerLoadDropped + ' messages while hidden, rendering cached data', null, 'daemon', 'debug');
+                        composeDockerLoadDropped = 0;
+                    }
+                    composeStackIndex = null;
+
+                    // Immediately render the cached load data so the UI
+                    // shows current metrics without waiting for the next tick.
+                    for (var shortId in composeLoadById) {
+                        var info = composeLoadById[shortId];
+                        $('.compose-cpu-' + shortId).removeClass('compose-text-muted').text(info.cpuText);
+                        $('.compose-mem-' + shortId).show().text(info.mem);
+                        $('#compose-cpu-' + shortId).css('width', info.cpuText);
+                    }
+                    renderStackAggregates();
+                }
+            };
+            document.addEventListener('visibilitychange', window._composeDockerLoadVisHandler);
+
+            // In tabbed mode, also invalidate the cache when the compose
+            // panel becomes visible (user switches tabs) so stale entries
+            // don't linger from when the panel was hidden.
+            var $loadTable = $('#compose_stacks');
+            var $loadTabPanel = $loadTable.length ? $loadTable.closest('[role="tabpanel"]') : $();
+            if ($loadTabPanel.length) {
+                composeClientDebug('[dockerload] tabbed mode detected — observing panel visibility', {}, 'daemon', 'debug');
+                window._composeDockerLoadPanelObserver = new MutationObserver(function() {
+                    if ($loadTabPanel[0].style.display !== 'none' && composeDockerLoadRunning) {
+                        composeClientDebug('[dockerload] compose tab became visible — invalidating stack index', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'daemon', 'debug');
+                        composeStackIndex = null;
+                    }
+                });
+                window._composeDockerLoadPanelObserver.observe($loadTabPanel[0], { attributes: true, attributeFilter: ['style'] });
+            }
+
+            // Only auto-start the socket if the stack list is already
+            // loaded (composeListReady is true).  Otherwise the
+            // composeLoadlist().then() callback will start it.
+            if (composeListReady && isComposeAdvancedMode()) {
+                composeClientDebug('[dockerload] auto-starting socket', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'daemon', 'info');
+                composeDockerLoad.start();
+                composeDockerLoadRunning = true;
+            } else {
+                composeClientDebug('[dockerload] deferring socket start', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'daemon', 'debug');
+            }
+            return true;
+        }
+
+        // Standalone compose mode can race script load order; retry briefly
+        // so delayed NchanSubscriber availability still initializes dockerload.
+        if (!initComposeDockerLoadSubscriber()) {
+            composeClientDebug('[dockerload] subscriber init deferred — will retry every 250ms', null, 'daemon', 'debug');
+            var composeDockerLoadInitAttempts = 0;
+            var composeDockerLoadInitTimer = setInterval(function() {
+                composeDockerLoadInitAttempts++;
+                if (initComposeDockerLoadSubscriber()) {
+                    composeClientDebug('[dockerload] subscriber initialized on retry #' + composeDockerLoadInitAttempts, null, 'daemon', 'info');
+                    clearInterval(composeDockerLoadInitTimer);
+                } else if (composeDockerLoadInitAttempts >= 40) {
+                    composeClientDebug('[dockerload] subscriber init gave up after ' + composeDockerLoadInitAttempts + ' attempts', null, 'daemon', 'warn');
+                    clearInterval(composeDockerLoadInitTimer);
+                }
+            }, 250);
+        }
     });
 
     function addStack() {
@@ -2081,7 +2569,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             actionName: opts.actionName,
             title: (opts.titlePrefix ? opts.titlePrefix + ': ' : '') + stackName,
             requestUrl: opts.requestUrl,
-            payload: $.extend({}, opts.payload, { path: path, profile: opts.profile || '' }),
+            payload: opts.payload,
             background: opts.background,
             suppressBackgroundNotification: opts.suppressBackgroundNotification,
             pendingReload: opts.pendingReload,
@@ -2417,6 +2905,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         // Update cache with fresh data
                         stackContainersCache[stackId] = containers;
                         stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
+                        if (response.startedAt) stackStartedAtCache[stackId] = response.startedAt;
                         // Now update the row using the fresh cache
                         updateParentStackFromContainers(stackId, project);
                         // If details are expanded, refresh them too
@@ -2797,7 +3286,55 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             hasBuild = $stackRow.data('hasbuild') == "1";
         }
 
-        // Check if we have cached container data
+        // When profiles are selected, ask compose for the authoritative service
+        // list so the dialog shows profile-scoped services that may not be
+        // running yet.  We fetch both the profile service list and the running
+        // containers in parallel, then merge them.
+        if (profile) {
+            var cachedContainers = (stackId && stackContainersCache[stackId]) ? stackContainersCache[stackId] : [];
+            $.post(caURL, {
+                action: 'getProfileServices',
+                script: project,
+                profiles: profile
+            }, function(data) {
+                var profileServices = [];
+                try {
+                    var response = JSON.parse(data);
+                    if (response.result === 'success') {
+                        profileServices = response.services || [];
+                    }
+                } catch (e) {}
+
+                // Build a lookup of running containers by service name
+                var containersByService = {};
+                cachedContainers.forEach(function(ct) {
+                    var svc = ct.service || '';
+                    if (svc) containersByService[svc] = ct;
+                });
+
+                // Build the container list: use real container data when
+                // available, otherwise create a minimal placeholder so the
+                // service still appears in the dialog.
+                var containers = [];
+                profileServices.forEach(function(svc) {
+                    if (containersByService[svc]) {
+                        containers.push(containersByService[svc]);
+                    } else {
+                        containers.push({ service: svc, name: svc, state: 'stopped', image: '' });
+                    }
+                });
+
+                containers = mergeUpdateStatus(containers, project);
+                renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
+            }).fail(function() {
+                // Fallback: show whatever we have cached
+                var containers = mergeUpdateStatus(cachedContainers, project);
+                renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
+            });
+            return;
+        }
+
+        // No profile — use cached or fetched running containers as before
         if (stackId && stackContainersCache[stackId] && stackContainersCache[stackId].length > 0) {
             // Merge update status into cached data before rendering
             var containers = mergeUpdateStatus(stackContainersCache[stackId], project);
@@ -2941,7 +3478,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var localSha = container.localSha || '';
                 var remoteSha = container.remoteSha || '';
 
-                var iconSrc = (container.icon && (container.icon.indexOf('http://') === 0 || container.icon.indexOf('https://') === 0 || container.icon.indexOf('data:image/') === 0)) ?
+                var iconSrc = (container.icon && isValidIconSrc(container.icon)) ?
                     composeEscapeAttr(container.icon) :
                     '/plugins/dynamix.docker.manager/images/question.png';
 
@@ -3110,6 +3647,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     var expandedStacks = {};
     var stackContainersCache = {};
     var stackDefinedServicesCache = {}; // Cache for defined service counts
+    var stackStartedAtCache = {}; // Cache for stack-level started_at timestamps
     // Track stacks currently loading details to prevent concurrent reloads
     var stackDetailsLoading = {};
     // Suppress immediate refresh after a render to avoid loops
@@ -3221,17 +3759,23 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             'logs': 'Compose Logs'
         };
 
-        // Build profile selection HTML with checkboxes for multi-select
+        // Build profile selection UI:
+        // - Default services (no profile) are always included and non-toggleable.
+        // - "All profile-based services" enables every profile via "*".
+        // - Individual profiles can be multi-selected when all-profiles is off.
         var profileHtml = '<div style="text-align: left;">';
+        profileHtml += '<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--dynamix-box-inner-div-border-color);">';
+        profileHtml += '<label style="font-weight:bold;"><input type="checkbox" id="profile_default" checked disabled> Default services (no profile)</label>';
+        profileHtml += '</div>';
         profileHtml += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--dynamix-box-inner-div-border-color);">';
-        profileHtml += '<label style="font-weight:bold;"><input type="checkbox" id="profile_all" checked onchange="toggleAllProfiles(this)"> All Services (no profile filter)</label>';
+        profileHtml += '<label style="font-weight:bold;"><input type="checkbox" id="profile_all_profiles" checked onchange="toggleAllProfiles(this)"> All profile-based services (*)</label>';
         profileHtml += '</div>';
         profileHtml += '<div id="profile_list">';
         profiles.forEach(function(profile) {
             profileHtml += '<label style="display:block;margin:5px 0;"><input type="checkbox" class="profile_checkbox" value="' + composeEscapeHtml(profile) + '" disabled> ' + composeEscapeHtml(profile) + '</label>';
         });
         profileHtml += '</div>';
-        profileHtml += '<div class="compose-text-muted" style="margin-top:10px;font-size:0.9em;"><i class="fa fa-info-circle"></i> Select multiple profiles to include services from each.</div>';
+        profileHtml += '<div class="compose-text-muted" style="margin-top:10px;font-size:0.9em;"><i class="fa fa-info-circle"></i> Default services are always included. Select multiple profiles to include profile-based services.</div>';
         profileHtml += '</div>';
 
         swal({
@@ -3244,13 +3788,14 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }, function(confirmed) {
             if (confirmed) {
                 var selectedProfiles = [];
-                if (!$('#profile_all').is(':checked')) {
+                if (!$('#profile_all_profiles').is(':checked')) {
                     $('.profile_checkbox:checked').each(function() {
                         selectedProfiles.push($(this).val());
                     });
                 }
-                // Join profiles with comma for multi-profile support
-                var profileStr = selectedProfiles.join(',');
+                // Use "*" when all profile-based services are requested.
+                // Empty profile string means default services only.
+                var profileStr = $('#profile_all_profiles').is(':checked') ? '*' : selectedProfiles.join(',');
                 switch (action) {
                     case 'up':
                         ComposeUp(path, profileStr);
@@ -3281,13 +3826,22 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         });
     }
 
-    // Toggle profile checkboxes when "All Services" is checked/unchecked
+    // Toggle individual profile checkboxes when all-profile scope is enabled/disabled
     function toggleAllProfiles(checkbox) {
         var disabled = checkbox.checked;
         $('.profile_checkbox').prop('disabled', disabled).prop('checked', false);
     }
 
     function openEditorModalByProject(project, projectName, initialTab) {
+        if (typeof ace === 'undefined') {
+            swal({
+                title: 'Editor Unavailable',
+                text: 'The Ace editor library could not be loaded. Please reload the page or verify the plugin installation.',
+                type: 'error'
+            });
+            return;
+        }
+
         editorModal.currentProject = project;
         editorModal.modifiedTabs = new Set();
         editorModal.modifiedSettings = new Set();
@@ -3338,12 +3892,12 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (data) {
                     var response = jQuery.parseJSON(data);
                     editorModal.originalContent['compose'] = response.content || '';
-                    editorModal.editors['compose'].setValue(response.content || '', -1);
+                    if (editorModal.editors['compose']) editorModal.editors['compose'].setValue(response.content || '', -1);
                 }
             }).fail(function() {
                 var errorContent = '# Error loading file';
                 editorModal.originalContent['compose'] = errorContent;
-                editorModal.editors['compose'].setValue(errorContent, -1);
+                if (editorModal.editors['compose']) editorModal.editors['compose'].setValue(errorContent, -1);
             })
         );
 
@@ -3356,19 +3910,20 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 if (data) {
                     var response = jQuery.parseJSON(data);
                     editorModal.originalContent['env'] = response.content || '';
-                    editorModal.editors['env'].setValue(response.content || '', -1);
+                    if (editorModal.editors['env']) editorModal.editors['env'].setValue(response.content || '', -1);
                 }
             }).fail(function() {
                 var errorContent = '# Error loading file';
                 editorModal.originalContent['env'] = errorContent;
-                editorModal.editors['env'].setValue(errorContent, -1);
+                if (editorModal.editors['env']) editorModal.editors['env'].setValue(errorContent, -1);
             })
         );
 
         // When all files are loaded
         $.when.apply($, loadPromises).then(function() {
             // Run validation on compose file
-            validateYaml('compose', editorModal.editors['compose'].getValue());
+            var composeContent = editorModal.editors['compose'] ? editorModal.editors['compose'].getValue() : (editorModal.originalContent['compose'] || '');
+            validateYaml('compose', composeContent);
         }).fail(function() {
             $('#editor-validation-compose').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Error loading some files').removeClass('valid').addClass('error');
         });
@@ -3415,7 +3970,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     var iconUrl = response.iconUrl || '';
                     $('#settings-icon-url').val(iconUrl);
                     editorModal.originalSettings['icon-url'] = iconUrl;
-                    if (iconUrl && (iconUrl.startsWith('http://') || iconUrl.startsWith('https://'))) {
+                    if (iconUrl && isValidIconSrc(iconUrl)) {
                         $('#settings-icon-preview-img').attr('src', iconUrl);
                         $('#settings-icon-preview').show();
                     } else {
@@ -3581,8 +4136,8 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             html += '</div>';
             html += '<div class="labels-service-fields">';
             html += '<div class="labels-field">';
-            html += '<label><i class="fa fa-picture-o"></i> Icon URL</label>';
-            html += '<input type="text" id="label-' + composeEscapeAttr(serviceKey) + '-icon" value="' + composeEscapeAttr(iconValue) + '" placeholder="https://example.com/icon.png" data-service="' + composeEscapeAttr(serviceKey) + '" data-field="icon">';
+            html += '<label><i class="fa fa-picture-o"></i> Icon URL / Path</label>';
+            html += '<input type="text" id="label-' + composeEscapeAttr(serviceKey) + '-icon" value="' + composeEscapeAttr(iconValue) + '" placeholder="https://example.com/icon.png or /path/to/icon.png" data-service="' + composeEscapeAttr(serviceKey) + '" data-field="icon" data-pickroot="/" data-picktop="/boot/config/plugins/compose.manager/projects" data-pickcloseonfile="true" data-pickfilter="png,jpg,jpeg,gif,svg,ico,webp">';
             html += '</div>';
             html += '<div class="labels-field">';
             html += '<label><i class="fa fa-globe"></i> WebUI URL</label>';
@@ -3633,6 +4188,16 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
 
         $('#labels-services-container').html(html);
+
+        // Attach file tree picker to container icon inputs
+        if ($.fn.fileTreeAttach && typeof composeBindFileTreeInputs === 'function') {
+            var $iconInputs = $('#labels-services-container').find('input[data-pickroot]');
+            composeBindFileTreeInputs($iconInputs, {
+                zIndex: 100010,
+                minWidth: 320,
+                addClass: true
+            });
+        }
 
         // Attach change handlers to label inputs
         $('#labels-services-container').find('input[data-service]').on('input', function() {
@@ -3761,7 +4326,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 // Brief feedback in validation panel
                 $('#editor-validation-' + currentTab).html('<i class="fa fa-check editor-validation-icon"></i> Saved!').removeClass('error warning').addClass('valid');
                 setTimeout(function() {
-                    validateYaml(currentTab, editorModal.editors[currentTab].getValue());
+                    if (editorModal.editors[currentTab]) validateYaml(currentTab, editorModal.editors[currentTab].getValue());
                 }, 1500);
             } else {
                 $('#editor-validation-' + currentTab).html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Save failed').removeClass('valid warning').addClass('error');
@@ -3772,6 +4337,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     }
 
     function saveTab(tabName, saveErrors) {
+        if (!editorModal.editors[tabName]) return Promise.reject('Editor not available');
         var content = editorModal.editors[tabName].getValue();
         var project = editorModal.currentProject;
         var actionStr = null;
@@ -4251,6 +4817,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                         stackContainersCache[stackId] = containers;
                         stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
+                        if (response.startedAt) stackStartedAtCache[stackId] = response.startedAt;
                         composeClientDebug('[loadStackContainerDetails] success', {
                             stackId: stackId,
                             project: project,
@@ -4316,6 +4883,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         html += '<th class="cm-advanced ct-col-tag">Tag</th>';
         html += '<th class="cm-advanced ct-col-net">Network</th>';
         html += '<th class="cm-advanced ct-col-ip">Container IP</th>';
+        html += '<th class="cm-advanced ct-col-load">CPU &amp; Memory load</th>';
         html += '<th class="ct-col-cport">Container Port</th>';
         html += '<th class="ct-col-lport">LAN IP:Port</th>';
         html += '</tr></thead>';
@@ -4403,7 +4971,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             var containerShell = container.shell || '/bin/sh';
             html += '<span id="' + uniqueId + '" class="hand" data-name="' + composeEscapeAttr(containerName) + '" data-state="' + composeEscapeAttr(state) + '" data-webui="' + composeEscapeAttr(webui) + '" data-stackid="' + composeEscapeAttr(stackId) + '" data-shell="' + composeEscapeAttr(containerShell) + '">';
             // Use actual image like Docker tab - either container icon or default question.png
-            var iconSrc = (container.icon && (isValidWebUIUrl(container.icon) || container.icon.startsWith('data:image/'))) ?
+            var iconSrc = (container.icon && isValidIconSrc(container.icon)) ?
                 container.icon :
                 '/plugins/dynamix.docker.manager/images/question.png';
             html += '<img src="' + composeEscapeAttr(iconSrc) + '" class="img" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
@@ -4465,6 +5033,18 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
             // Container IP
             html += '<td class="cm-advanced" style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(composeEscapeHtml).join('<br>') + '</span></td>';
+
+            // CPU & Memory load (advanced only) — populated by dockerload WebSocket
+            html += '<td class="cm-advanced compose-load-cell">';
+            if (state === 'running') {
+                html += '<span class="compose-cpu-' + containerId + '">0%</span>';
+                html += '<div class="usage-disk mm"><span id="compose-cpu-' + containerId + '" style="width:0"></span><span></span></div>';
+                html += '<br><span class="compose-mem-' + containerId + ' compose-text-muted">0B / 0B</span>';
+            } else {
+                html += '<span class="compose-cpu-' + containerId + ' compose-text-muted">-</span>';
+                html += '<span class="compose-mem-' + containerId + '" style="display:none"></span>';
+            }
+            html += '</td>';
 
             // Container Port
             html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.map(composeEscapeHtml).join('<br>') + '</span></td>';
@@ -4594,8 +5174,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             var runningCount = stackInfo.containers.filter(function(c) {
                 return c.isRunning;
             }).length;
-            // Use totalServices (defined services) if available, otherwise fall back to actual container count
-            var totalCount = stackInfo.totalServices || stackInfo.containers.length;
+            // Use totalServices (defined services) when available, but never
+            // show a denominator smaller than the currently discovered containers.
+            var totalCount = Math.max(stackInfo.totalServices || 0, stackInfo.containers.length);
             var anyRunning = runningCount > 0;
             var anyPaused = stackInfo.containers.some(function(c) {
                 return !c.isRunning && (c.updateStatus === 'paused' || c.updateStatus === 'paused');
@@ -4656,29 +5237,33 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 addComposeStackContext(stackElementId);
             }
 
-            // Update the uptime column
+            // Update the uptime column using stack-level started_at (same
+            // source as the initial PHP render in compose_list.php) so the
+            // displayed value doesn't jump when details are expanded.
             try {
                 var $uptimeCell = $stackRow.find('td.col-uptime');
                 var uptimeText = 'stopped';
                 var uptimeClass = 'grey-text';
                 if (anyRunning) {
-                    // Find the earliest startedAt among running containers
-                    var earliest = null;
-                    stackInfo.containers.forEach(function(c) {
-                        if (c.isRunning && c.startedAt) {
-                            // Docker timestamps have nanosecond precision e.g. "2026-03-11T12:34:56.789012345Z"
-                            // JS Date only handles milliseconds — trim excess fractional digits
-                            var ts = c.startedAt.replace(/(\.\d{3})\d+(Z|[+-]\d{2}:\d{2})$/, '$1$2');
-                            var t = new Date(ts).getTime();
-                            if (!isNaN(t) && (earliest === null || t < earliest)) earliest = t;
+                    var stackStarted = stackStartedAtCache[stackId] || null;
+                    if (stackStarted) {
+                        var t = new Date(stackStarted).getTime();
+                        if (!isNaN(t)) {
+                            var secs = Math.max(0, Math.floor((Date.now() - t) / 1000));
+                            var mins = Math.floor(secs / 60);
+                            var hours = Math.floor(secs / 3600);
+                            var days = Math.floor(secs / 86400);
+                            var weeks = Math.floor(days / 7);
+                            var months = Math.floor(days / 30);
+                            if (mins < 120) uptimeText = mins + ' min' + (mins !== 1 ? 's' : '');
+                            else if (hours < 48) uptimeText = hours + ' hour' + (hours !== 1 ? 's' : '');
+                            else if (days < 14) uptimeText = days + ' day' + (days !== 1 ? 's' : '');
+                            else if (weeks < 8) uptimeText = weeks + ' week' + (weeks !== 1 ? 's' : '');
+                            else if (months < 24) uptimeText = months + ' month' + (months !== 1 ? 's' : '');
+                            else { var years = Math.floor(days / 365); uptimeText = years + ' year' + (years !== 1 ? 's' : ''); }
+                        } else {
+                            uptimeText = 'running';
                         }
-                    });
-                    if (earliest !== null) {
-                        var secs = Math.max(0, Math.floor((Date.now() - earliest) / 1000));
-                        if (secs < 60) uptimeText = '< 1 min';
-                        else if (secs < 3600) uptimeText = Math.floor(secs / 60) + ' min' + (Math.floor(secs / 60) !== 1 ? 's' : '');
-                        else if (secs < 86400) uptimeText = Math.floor(secs / 3600) + ' hour' + (Math.floor(secs / 3600) !== 1 ? 's' : '');
-                        else uptimeText = Math.floor(secs / 86400) + ' day' + (Math.floor(secs / 86400) !== 1 ? 's' : '');
                     } else {
                         uptimeText = 'running';
                     }
@@ -5046,6 +5631,20 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 opts.push({ divider: true });
             }
 
+            // Compose Up (allows starting additional profile-scoped services)
+            opts.push({
+                text: 'Compose Up',
+                icon: 'fa-play',
+                action: function(e) {
+                    e.preventDefault();
+                    if (profiles.length > 0) {
+                        showProfileSelector('up', path, profiles);
+                    } else {
+                        ComposeUp(path);
+                    }
+                }
+            });
+
             // Compose Down (stop and remove containers)
             opts.push({
                 text: 'Compose Down',
@@ -5274,6 +5873,24 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
         }
     });
 
+    // Right-click anywhere on a stack row opens the stack context menu
+    $(document).on('contextmenu', 'tr.compose-sortable[id^="stack-row-"]', function(e) {
+        var $icon = $(this).find('[data-stackid]').first();
+        if ($icon.length) {
+            e.preventDefault();
+            $icon.trigger($.Event('click', { pageX: e.pageX, pageY: e.pageY }));
+        }
+    });
+
+    // Right-click anywhere on a container detail row opens the container context menu
+    $(document).on('contextmenu', '#compose_stacks tr[data-container][data-stackid]', function(e) {
+        var $icon = $(this).find('.hand[id^="ct-"]').first();
+        if ($icon.length) {
+            e.preventDefault();
+            $icon.trigger($.Event('click', { pageX: e.pageX, pageY: e.pageY }));
+        }
+    });
+
     // Close actions menu when clicking outside
     $(document).on('click', function(e) {
         if (!$(e.target).closest('#stack-actions-modal, .stack-kebab-btn').length) {
@@ -5325,6 +5942,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                     <th class="col-update">Update</th>
                     <th class="col-containers">Containers</th>
                     <th class="col-uptime">Uptime</th>
+                    <th class="cm-advanced col-load">CPU &amp; Memory load</th>
                     <th class="cm-advanced col-description">Description</th>
                     <th class="cm-advanced col-path">Path</th>
                     <th class="nine col-autostart">Autostart</th>
@@ -5332,7 +5950,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
             </thead>
             <tbody id="compose_list">
                 <tr>
-                    <td colspan='9'></td>
+                    <td colspan='10'></td>
                 </tr>
             </tbody>
         </table>
@@ -5498,9 +6116,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                         <div class="settings-section-title"><i class="fa fa-picture-o"></i> Appearance</div>
 
                         <div class="settings-field">
-                            <label for="settings-icon-url">Icon URL</label>
-                            <input type="url" id="settings-icon-url" placeholder="https://example.com/icon.png">
-                            <div class="settings-field-help">URL to a custom icon for this stack. Leave empty to use the default icon.</div>
+                            <label for="settings-icon-url">Icon URL / Path</label>
+                            <input type="text" id="settings-icon-url" placeholder="https://example.com/icon.png or /path/to/icon.png" data-pickroot="/" data-picktop="/boot/config/plugins/compose.manager/projects" data-pickcloseonfile="true" data-pickfilter="png,jpg,jpeg,gif,svg,ico,webp">
+                            <div class="settings-field-help">URL or local path to a custom icon for this stack. Use the file picker or enter a URL. Leave empty to use the default icon.</div>
                             <div class="settings-field-icon-preview" id="settings-icon-preview" style="display:none;">
                                 <span>Preview:</span>
                                 <img id="settings-icon-preview-img" src="" alt="Icon preview" onerror="this.parentElement.style.display='none';">

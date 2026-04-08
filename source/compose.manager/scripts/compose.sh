@@ -48,7 +48,7 @@ acquire_lock() {
     # Try to acquire lock with timeout
     local waited=0
     while ! flock -n 9 2>/dev/null; do
-        if [ $waited -ge $LOCK_TIMEOUT ]; then
+        if [ "$waited" -ge "$LOCK_TIMEOUT" ]; then
             log_msg "ERROR" "Could not acquire lock for $lock_name after ${LOCK_TIMEOUT}s - another operation may be in progress"
             echo "✗ Another operation is already in progress for this stack. Please wait and try again."
             return 1
@@ -121,9 +121,9 @@ do
       ;;
     -d | --project_dir )
       if [ -d "$2" ]; then
-        for file in $( find "$2" -maxdepth 1 -type f \( -name '*compose*.yml' -o -name '*compose*.yaml' \) ); do
+        while IFS= read -r -d '' file; do
           file_args+=("-f" "$file")
-        done
+        done < <(find "$2" -maxdepth 1 -type f \( -name '*compose*.yml' -o -name '*compose*.yaml' \) -print0)
       fi
       shift 2
       ;;
@@ -246,9 +246,9 @@ case $command in
 
     # Capture current images for cleanup later
     images=()
-    images+=( $("${compose_base[@]}" -p "$name" images -q 2>/dev/null) )
+    mapfile -t images < <("${compose_base[@]}" -p "$name" images -q 2>/dev/null)
 
-    if [ ${#images[@]} -eq 0 ]; then
+    if [ "${#images[@]}" -eq 0 ]; then
       # Fallback: extract image names from compose files directly
       local_files=()
       for (( i=0; i<${#file_args[@]}; i++ )); do
@@ -257,13 +257,14 @@ case $command in
         fi
       done
       if (( ${#local_files[@]} )); then
-        services=( $(cat "${local_files[@]}" | sed -n 's/image:\(.*\)/\1/p') )
+        mapfile -t services < <(sed -n 's/image:\(.*\)/\1/p' "${local_files[@]}")
         for image in "${services[@]}"; do
-          images+=( $(docker images -q --no-trunc "${image}" 2>/dev/null) )
+          mapfile -t temp_images < <(docker images -q --no-trunc "${image}" 2>/dev/null)
+          images+=( "${temp_images[@]}" )
         done
       fi
 
-      images=( ${images[*]##sha256:} )
+      images=( "${images[@]##sha256:}" )
     fi
     
     # Pull latest images
@@ -287,10 +288,10 @@ case $command in
 
     if [ $up_exit -eq 0 ]; then
       # Clean up old images
-      new_images=( $("${compose_base[@]}" -p "$name" images -q 2>/dev/null) )
+      mapfile -t new_images < <("${compose_base[@]}" -p "$name" images -q 2>/dev/null)
       for target in "${new_images[@]}"; do
         for i in "${!images[@]}"; do
-          if [[ ${images[i]} = $target ]]; then
+          if [[ ${images[i]} = "$target" ]]; then
             unset 'images[i]'
           fi
         done
