@@ -75,6 +75,20 @@ function reattachComposeDetailsRow($item) {
     }
 }
 
+function normalizeComposeDetailsRowOrder($tbody) {
+    if (!$tbody || !$tbody.length) {
+        return;
+    }
+
+    $tbody.children('tr.compose-sortable').each(function() {
+        var $stackRow = $(this);
+        var $detailsRow = getComposeDetailsRowForItem($stackRow);
+        if ($detailsRow.length) {
+            $detailsRow.insertAfter($stackRow);
+        }
+    });
+}
+
 // ── jQuery UI Sortable initialisation ──────────────────────────────
 
 function initComposeSortable() {
@@ -115,6 +129,7 @@ function initComposeSortable() {
         },
         stop: function(event, ui) {
             reattachComposeDetailsRow(ui.item);
+            normalizeComposeDetailsRowOrder($tbody);
         }
     });
 }
