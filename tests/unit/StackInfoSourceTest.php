@@ -14,7 +14,7 @@ class StackInfoSourceTest extends TestCase
     {
         parent::setUp();
         $this->utilPath = __DIR__ . '/../../source/compose.manager/include/Util.php';
-        $this->assertFileExists($this->utilPath, 'util.php must exist');
+        $this->assertFileExists($this->utilPath, 'Util.php must exist');
     }
 
     private function getSource(): string

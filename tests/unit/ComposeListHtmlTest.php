@@ -3,7 +3,7 @@
 /**
  * Unit Tests for Compose List HTML Structure
  * 
- * Tests the HTML output structure in compose_list.php, verifying column classes,
+ * Tests the HTML output structure in ComposeList.php, verifying column classes,
  * update column selector, expand arrow spacing, and autostart cell class.
  * These are source-level tests that verify the PHP template markup.
  */
