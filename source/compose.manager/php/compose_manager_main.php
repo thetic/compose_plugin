@@ -278,6 +278,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 <script src="<?php autov($acePath . '/ace.js'); ?>" type="text/javascript"></script>
 <script src="<?php autov('/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js'); ?>" type="text/javascript"></script>
 <script src="<?php autov('/plugins/compose.manager/javascript/common.js'); ?>" type="text/javascript"></script>
+<script src="<?php autov('/plugins/compose.manager/javascript/composeSortable.js'); ?>" type="text/javascript"></script>
 <script>
     var compose_root = <?php echo json_encode($compose_root); ?>;
     var caURL = "/plugins/compose.manager/php/exec.php";
@@ -619,129 +620,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         });
     }
 
-    function isComposeSortModeEnabled() {
-        return $.cookie('lockbutton') != null;
-    }
-
-    function updateComposeLockButtonUI() {
-        var unlocked = isComposeSortModeEnabled();
-        var $button = $('div.nav-item.LockButton');
-        if (!$button.length) {
-            return;
-        }
-
-        if (unlocked) {
-            $button.find('a').prop('title', 'Lock sortable items');
-            $button.find('b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
-            $button.find('span').text('Lock sortable items');
-        } else {
-            $button.find('a').prop('title', 'Unlock sortable items');
-            $button.find('b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
-            $button.find('span').text('Unlock sortable items');
-        }
-    }
-
-    function saveComposeSortOrder() {
-        var projects = $('#compose_list > tr.compose-sortable').map(function() {
-            return $(this).data('project');
-        }).get();
-
-        return $.post(caURL, {
-            action: 'saveStackOrder',
-            projects: projects
-        }).fail(function(xhr) {
-            composeClientDebug('[saveComposeSortOrder] failed', {
-                status: xhr.status,
-                response: xhr.responseText
-            }, 'daemon', 'error');
-        });
-    }
-
-    function getComposeDetailsRowForItem($item) {
-        if (!$item || !$item.length) {
-            return $();
-        }
-
-        var rowId = $item.attr('id') || '';
-        if (rowId.indexOf('stack-row-') !== 0) {
-            return $();
-        }
-
-        return $('#details-row-' + rowId.replace('stack-row-', ''));
-    }
-
-    function reattachComposeDetailsRow($item) {
-        var $detailsRow = $item.data('compose-details-row');
-        if ($detailsRow && $detailsRow.length) {
-            $detailsRow.insertAfter($item);
-            $item.removeData('compose-details-row');
-        }
-    }
-
-    function initComposeSortable() {
-        var $tbody = $('#compose_list');
-        if (!$tbody.length) {
-            return;
-        }
-
-        if ($tbody.hasClass('ui-sortable')) {
-            $tbody.sortable('destroy');
-        }
-
-        if (!isComposeSortModeEnabled()) {
-            $tbody.removeClass('compose-sort-enabled');
-            return;
-        }
-
-        $tbody.addClass('compose-sort-enabled');
-        $tbody.sortable({
-            helper: 'clone',
-            items: '> tr.compose-sortable',
-            cursor: 'grab',
-            axis: 'y',
-            containment: 'parent',
-            cancel: '[data-stackid], .compose-updatecolumn a, .compose-updatecolumn .exec, .auto_start, .switchButton, a, button, input',
-            delay: 100,
-            opacity: 0.5,
-            zIndex: 9999,
-            forcePlaceholderSize: true,
-            start: function(event, ui) {
-                var $detailsRow = getComposeDetailsRowForItem(ui.item);
-                if ($detailsRow.length) {
-                    ui.item.data('compose-details-row', $detailsRow.detach());
-                }
-            },
-            update: function() {
-                saveComposeSortOrder();
-            },
-            stop: function(event, ui) {
-                reattachComposeDetailsRow(ui.item);
-            }
-        });
-    }
-
-    function syncComposeSortModeUI() {
-        var unlocked = isComposeSortModeEnabled();
-        $('#compose_stacks tr.compose-sortable').each(function() {
-            var $row = $(this);
-            $row.find('.expand-icon').toggle(!unlocked);
-            $row.find('.mover').toggle(unlocked);
-        });
-
-        $('#compose_list').toggleClass('compose-sort-enabled', unlocked);
-        updateComposeLockButtonUI();
-        initComposeSortable();
-    }
-
-    function LockButton() {
-        if (isComposeSortModeEnabled()) {
-            $.removeCookie('lockbutton');
-        } else {
-            $.cookie('lockbutton', 'lockbutton');
-        }
-
-        syncComposeSortModeUI();
-    }
+    // Sortable functions loaded from composeSortable.js
 
     // Initialize UI components after stack list is loaded
     function initStackListUI() {
