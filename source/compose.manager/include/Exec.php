@@ -4,6 +4,7 @@ require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/include/ExecHelpers.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
+require_once('/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php');
 
 /**
  * Safely retrieve the 'script' POST parameter (stack directory name).
@@ -568,25 +569,9 @@ switch ($_POST['action']) {
         // Get container details in JSON format (all states)
         $rows = $stackInfo->getContainerList();
 
-        // Cache network drivers for resolving network types (bridge vs macvlan/ipvlan)
-        $networkDrivers = [];
-        $netListOutput = shell_exec("docker network ls --format '{{.Name}}\t{{.Driver}}' 2>/dev/null");
-        if ($netListOutput) {
-            foreach (explode("\n", trim($netListOutput)) as $netLine) {
-                $parts = explode("\t", $netLine);
-                if (count($parts) === 2) {
-                    $networkDrivers[$parts[0]] = $parts[1];
-                }
-            }
-        }
-
-        // Get host IP for WebUI resolution (same approach as Unraid's DockerUtil::host())
-        $hostIP = '';
-        foreach (['br0', 'bond0', 'eth0'] as $iface) {
-            $hostIP = trim(shell_exec("ip -br -4 addr show $iface scope global 2>/dev/null | sed -r 's/\/[0-9]+//g' | awk '{print \$3;exit}'"));
-            if ($hostIP)
-                break;
-        }
+        // Hard dependency on Docker manager: use shared helpers directly.
+        $networkDrivers = DockerUtil::driver();
+        $hostIP = trim((string) DockerUtil::host());
 
         $containers = [];
         // Load update status once before the loop (static data, doesn't change per-container)
@@ -674,10 +659,15 @@ switch ($_POST['action']) {
                             isset($networkDrivers[$networkMode]) &&
                             in_array($networkDrivers[$networkMode], ['macvlan', 'ipvlan'])
                         ) {
-                            $firstNet = reset($networkSettings);
-                            $containerIP = $firstNet['IPAddress'] ?? '';
-                            if ($containerIP)
+                            $modeNetwork = $networkSettings[$networkMode] ?? null;
+                            $containerIP = $modeNetwork['IPAddress'] ?? '';
+                            if (!$containerIP && !empty($networkSettings)) {
+                                $firstNet = reset($networkSettings);
+                                $containerIP = $firstNet['IPAddress'] ?? '';
+                            }
+                            if ($containerIP) {
                                 $resolvedIP = $containerIP;
+                            }
                         }
 
                         $portStrings = [];
@@ -687,8 +677,9 @@ switch ($_POST['action']) {
                         }
                         $rawContainer['Ports'] = $portStrings;
 
-                        if (!empty($webUITemplate) && $hostIP) {
-                            $resolvedURL = preg_replace('%\[IP\]%i', $resolvedIP, $webUITemplate);
+                        $webUiIp = $resolvedIP ?: $hostIP;
+                        if (!empty($webUITemplate) && $webUiIp) {
+                            $resolvedURL = preg_replace('%\[IP\]%i', $webUiIp, $webUITemplate);
                             if (preg_match('%\[PORT:(\d+)\]%i', $resolvedURL, $portMatch)) {
                                 $configPort = $portMatch[1];
                                 foreach ($portBindings as $ctPort => $bindings) {
