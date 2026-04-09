@@ -2312,9 +2312,16 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         return jsyaml.DEFAULT_SCHEMA.extend(types);
     }
 
-    function stripUnsupportedYamlTags(content) {
+    function hasComposeCustomYamlTag(content) {
+        if (!content) return false;
+        return /!(?:override|reset|merge)\b/.test(content) || /!<(?:override|reset|merge)>/.test(content);
+    }
+
+    function stripComposeCustomYamlTags(content) {
         if (!content) return content;
-        return content.replace(/!<[^>\n]+>|![A-Za-z_][A-Za-z0-9_.-]*/g, '');
+        return content
+            .replace(/!<(?:override|reset|merge)>/g, '')
+            .replace(/!(?:override|reset|merge)\b/g, '');
     }
 
     function loadComposeYaml(content) {
@@ -2332,8 +2339,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             }
             return jsyaml.load(input);
         } catch (e) {
-            if (e && /unknown tag/i.test(String(e.message || ''))) {
-                return jsyaml.load(stripUnsupportedYamlTags(input));
+            var message = String((e && e.message) || '');
+            if (/unknown tag/i.test(message) && hasComposeCustomYamlTag(input)) {
+                return jsyaml.load(stripComposeCustomYamlTags(input));
             }
             throw e;
         }

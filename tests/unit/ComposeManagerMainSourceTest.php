@@ -66,4 +66,20 @@ class ComposeManagerMainSourceTest extends TestCase
         $this->assertStringContainsString('var memPair = parseMemUsagePair(parts[2]);', $source);
         $this->assertStringContainsString('memLimitBytes: memPair.limit,', $source);
     }
+
+    public function testComposeCustomTagSchemaSupportIsDeclared(): void
+    {
+        $source = $this->getPageSource();
+        $this->assertStringContainsString("var customTags = ['!override', '!reset', '!merge'];", $source);
+        $this->assertStringContainsString('function hasComposeCustomYamlTag(content)', $source);
+    }
+
+    public function testUnknownTagFallbackIsScopedToComposeTags(): void
+    {
+        $source = $this->getPageSource();
+        $this->assertStringContainsString('function stripComposeCustomYamlTags(content)', $source);
+        $this->assertStringContainsString('.replace(/!<(?:override|reset|merge)>/g, \'\')', $source);
+        $this->assertStringContainsString('.replace(/!(?:override|reset|merge)\\b/g, \'\')', $source);
+        $this->assertStringContainsString('if (/unknown tag/i.test(message) && hasComposeCustomYamlTag(input)) {', $source);
+    }
 }
