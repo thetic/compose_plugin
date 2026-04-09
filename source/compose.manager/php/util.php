@@ -56,6 +56,56 @@ function sanitizeLogText(string $text): string
     return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function getComposeStackOrderKey(string $composeRoot): string
+{
+    $normalized = realpath($composeRoot);
+    if ($normalized === false || $normalized === null) {
+        $normalized = rtrim($composeRoot, '/');
+    }
+    return (string) $normalized;
+}
+
+function getComposeStackOrderMap(): array
+{
+    if (!is_file(COMPOSE_STACK_ORDER_FILE)) {
+        return [];
+    }
+
+    $json = @file_get_contents(COMPOSE_STACK_ORDER_FILE);
+    if ($json === false || $json === '') {
+        return [];
+    }
+
+    $decoded = json_decode($json, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function getComposeStackOrder(string $composeRoot): array
+{
+    $map = getComposeStackOrderMap();
+    $key = getComposeStackOrderKey($composeRoot);
+    $order = $map[$key] ?? [];
+    return is_array($order) ? array_values(array_filter($order, 'is_string')) : [];
+}
+
+function saveComposeStackOrder(string $composeRoot, array $projects): bool
+{
+    $map = getComposeStackOrderMap();
+    $map[getComposeStackOrderKey($composeRoot)] = array_values($projects);
+
+    $dir = dirname(COMPOSE_STACK_ORDER_FILE);
+    if (!is_dir($dir) && !@mkdir($dir, 0777, true) && !is_dir($dir)) {
+        return false;
+    }
+
+    $json = json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+
+    return @file_put_contents(COMPOSE_STACK_ORDER_FILE, $json . "\n", LOCK_EX) !== false;
+}
+
 /**
  * Find the first compose file in a directory using Docker Compose spec priority.
  *
@@ -1981,6 +2031,20 @@ class StackInfo
                 $result[] = $entry;
             }
         }
+
+        $savedOrder = getComposeStackOrder($composeRoot);
+        if ($savedOrder) {
+            $positions = array_flip($savedOrder);
+            usort($result, function ($left, $right) use ($positions) {
+                $leftPos = $positions[$left] ?? PHP_INT_MAX;
+                $rightPos = $positions[$right] ?? PHP_INT_MAX;
+                if ($leftPos === $rightPos) {
+                    return strnatcasecmp($left, $right);
+                }
+                return $leftPos <=> $rightPos;
+            });
+        }
+
         return $result;
     }
 

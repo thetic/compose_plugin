@@ -3,6 +3,7 @@ Type="xmenu"
 Title="Docker Compose"
 Tag="fa-cubes"
 Code="f1b3"
+Lock="true"
 Nchan="docker_load"
 Cond="$var['fsState'] == 'Started' && exec('/etc/rc.d/rc.docker status | grep -v \"not\"') && exec(\"grep '^SHOW_COMPOSE_IN_HEADER_MENU=' /boot/config/plugins/compose.manager/compose.manager.cfg 2>/dev/null | grep 'true'\")"
 ---

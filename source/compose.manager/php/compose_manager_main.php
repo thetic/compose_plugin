@@ -100,6 +100,19 @@ if ($cpuCount <= 0) {
         padding: 0;
     }
 
+    #compose_stacks td.col-arrow {
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    #compose_stacks td.col-arrow i {
+        vertical-align: middle;
+    }
+
+    #compose_list.compose-sort-enabled tr.compose-sortable {
+        cursor: move;
+    }
+
     #compose_stacks thead th.col-icon {
         width: 30px;
         padding: 0;
@@ -261,6 +274,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 <script src="<?php autov($acePath . '/ace.js'); ?>" type="text/javascript"></script>
 <script src="<?php autov('/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js'); ?>" type="text/javascript"></script>
 <script src="<?php autov('/plugins/compose.manager/javascript/common.js'); ?>" type="text/javascript"></script>
+<script src="<?php autov('/plugins/compose.manager/javascript/composeSortable.js'); ?>" type="text/javascript"></script>
 <script>
     var compose_root = <?php echo json_encode($compose_root); ?>;
     var caURL = "/plugins/compose.manager/php/exec.php";
@@ -602,6 +616,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         });
     }
 
+    // Sortable functions loaded from composeSortable.js
+
     // Initialize UI components after stack list is loaded
     function initStackListUI() {
         // Initialize autostart switches - scope to compose_list to avoid conflict with Docker tab
@@ -653,6 +669,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         // Load saved update status after list is loaded
         loadSavedUpdateStatus();
+
+        syncComposeSortModeUI();
     }
 
     // Load external stylesheets (non-critical styles — critical ones are inline above)
@@ -5600,6 +5618,35 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var profiles = $row.data('profiles') || [];
         var webuiUrl = $row.data('webui') || '';
         var hasBuild = $row.data('hasbuild') == "1";
+        var hasExistingContainers = false;
+        var hasKnownNetworks = false;
+
+        // Prefer the rendered row data first; this reflects current known stack containers.
+        try {
+            var rowContainers = JSON.parse($row.attr('data-containers') || '[]');
+            hasExistingContainers = Array.isArray(rowContainers) && rowContainers.length > 0;
+        } catch (e) {
+            hasExistingContainers = false;
+        }
+
+        // Fallback to cached short IDs if data-containers is empty/unavailable.
+        if (!hasExistingContainers) {
+            var ctidsAttr = ($row.attr('data-ctids') || '').trim();
+            hasExistingContainers = ctidsAttr.length > 0;
+        }
+
+        // If details were loaded, use container network attachments as an additional signal.
+        // This also keeps behavior resilient during in-page state transitions.
+        try {
+            var cachedContainers = stackContainersCache[stackId] || [];
+            hasKnownNetworks = cachedContainers.some(function(c) {
+                return Array.isArray(c.networks) && c.networks.length > 0;
+            });
+        } catch (e) {
+            hasKnownNetworks = false;
+        }
+
+        var canComposeDownStopped = hasExistingContainers || hasKnownNetworks;
 
         // Check if updates are available for this stack
         var hasUpdates = false;
@@ -5738,6 +5785,22 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 }
             });
 
+            // Compose Down (only when there are existing resources to remove)
+            if (canComposeDownStopped) {
+                opts.push({
+                    text: 'Compose Down',
+                    icon: 'fa-stop',
+                    action: function(e) {
+                        e.preventDefault();
+                        if (profiles.length > 0) {
+                            showProfileSelector('down', path, profiles);
+                        } else {
+                            ComposeDown(path);
+                        }
+                    }
+                });
+            }
+
             opts.push({ divider: true });
 
             // Pull/Build only (without starting)
@@ -5852,6 +5915,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
     // Row click handler - expand/collapse stack details
     $(document).on('click', 'tr.compose-sortable[id^="stack-row-"]', function(e) {
+        if (isComposeSortModeEnabled()) {
+            return;
+        }
+
         var $target = $(e.target);
 
         // Don't expand if clicking on interactive elements
@@ -5875,6 +5942,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
     // Right-click anywhere on a stack row opens the stack context menu
     $(document).on('contextmenu', 'tr.compose-sortable[id^="stack-row-"]', function(e) {
+        if (isComposeSortModeEnabled()) {
+            return;
+        }
+
         var $icon = $(this).find('[data-stackid]').first();
         if ($icon.length) {
             e.preventDefault();
