@@ -494,6 +494,20 @@ class StackInfoTest extends TestCase
         $this->assertNull($info->getIconUrl());
     }
 
+    public function testGetIconUrlAcceptsExactSvgDataUrl(): void
+    {
+        $stack = 'data-icon';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        $iconDataUrl = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='20 10 90 90'><text y='1em' font-size='90'>%F0%9F%94%A7</text></svg>";
+        file_put_contents("$stackDir/icon_url", $iconDataUrl);
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame($iconDataUrl, $info->getIconUrl());
+    }
+
     public function testGetWebUIUrl(): void
     {
         $stack = 'webui-stack';

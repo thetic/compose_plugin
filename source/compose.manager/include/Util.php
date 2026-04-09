@@ -1314,6 +1314,10 @@ class StackInfo
         ) {
             return $url;
         }
+        // Accept image data URLs used by custom inline SVG/PNG icons
+        if (preg_match('/^data:image\/[a-z0-9.+-]+(?:;[a-z0-9.+-]+=[^;,]+)*(?:;base64)?,.+$/i', $url) === 1) {
+            return $url;
+        }
         // Accept local server paths under allowed prefixes
         if (
             strpos($url, '/') === 0

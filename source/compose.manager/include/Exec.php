@@ -434,11 +434,12 @@ switch ($_POST['action']) {
         $iconUrl = isset($_POST['iconUrl']) ? trim($_POST['iconUrl']) : "";
         if (!empty($iconUrl)) {
             $isUrl = filter_var($iconUrl, FILTER_VALIDATE_URL) && (strpos($iconUrl, 'http://') === 0 || strpos($iconUrl, 'https://') === 0);
+            $isDataImageUrl = preg_match('/^data:image\/[a-z0-9.+-]+(?:;[a-z0-9.+-]+=[^;,]+)*(?:;base64)?,.+$/i', $iconUrl) === 1;
             $isLocalPath = strpos($iconUrl, '/') === 0
                 && strpos($iconUrl, '..') === false
                 && (strpos($iconUrl, '/mnt/') === 0 || strpos($iconUrl, '/boot/config/plugins/compose.manager/projects/') === 0);
-            if (!$isUrl && !$isLocalPath) {
-                echo json_encode(['result' => 'error', 'message' => 'Invalid icon. Must be http(s) URL or a local path under /mnt/ or /boot/config/plugins/compose.manager/projects/.']);
+            if (!$isUrl && !$isDataImageUrl && !$isLocalPath) {
+                echo json_encode(['result' => 'error', 'message' => 'Invalid icon. Must be http(s) URL, data:image URL, or a local path under /mnt/ or /boot/config/plugins/compose.manager/projects/.']);
                 break;
             }
         }

@@ -611,6 +611,126 @@ class ExecActionsTest extends TestCase
         $this->assertEquals('success', $result['result']);
     }
 
+    /**
+     * Test setStackSettings accepts exact SVG data URL icon
+     */
+    public function testSetStackSettingsAcceptsExactSvgDataUrlIcon(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $iconDataUrl = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='20 10 90 90'><text y='1em' font-size='90'>%F0%9F%94%A7</text></svg>";
+
+        $output = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'iconUrl' => $iconDataUrl,
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertFileExists($stackPath . '/icon_url');
+        $this->assertSame($iconDataUrl, file_get_contents($stackPath . '/icon_url'));
+
+        $getOutput = $this->executeAction('getStackSettings', [
+            'script' => 'test-stack',
+        ]);
+        $getResult = json_decode($getOutput, true);
+        $this->assertEquals('success', $getResult['result']);
+        $this->assertSame($iconDataUrl, $getResult['iconUrl']);
+    }
+
+    /**
+     * Test setStackSettings accepts HTTP and HTTPS icon URLs
+     */
+    public function testSetStackSettingsAcceptsHttpAndHttpsIconUrls(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+
+        $httpsIconUrl = 'https://example.com/icon.svg';
+        $httpsOutput = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'iconUrl' => $httpsIconUrl,
+        ]);
+        $httpsResult = json_decode($httpsOutput, true);
+        $this->assertEquals('success', $httpsResult['result']);
+        $this->assertSame($httpsIconUrl, file_get_contents($stackPath . '/icon_url'));
+
+        $httpIconUrl = 'http://example.com/icon.png';
+        $httpOutput = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'iconUrl' => $httpIconUrl,
+        ]);
+        $httpResult = json_decode($httpOutput, true);
+        $this->assertEquals('success', $httpResult['result']);
+        $this->assertSame($httpIconUrl, file_get_contents($stackPath . '/icon_url'));
+    }
+
+    /**
+     * Test setStackSettings accepts local icon paths under allowed roots
+     */
+    public function testSetStackSettingsAcceptsAllowedLocalIconPaths(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+
+        $mntPath = '/mnt/user/icons/custom.png';
+        $mntOutput = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'iconUrl' => $mntPath,
+        ]);
+        $mntResult = json_decode($mntOutput, true);
+        $this->assertEquals('success', $mntResult['result']);
+        $this->assertSame($mntPath, file_get_contents($stackPath . '/icon_url'));
+
+        $projectPath = '/boot/config/plugins/compose.manager/projects/test-stack/icon.svg';
+        $projectOutput = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'iconUrl' => $projectPath,
+        ]);
+        $projectResult = json_decode($projectOutput, true);
+        $this->assertEquals('success', $projectResult['result']);
+        $this->assertSame($projectPath, file_get_contents($stackPath . '/icon_url'));
+    }
+
+    /**
+     * Test setStackSettings accepts base64 encoded image data URL icon
+     */
+    public function testSetStackSettingsAcceptsBase64ImageDataUrlIcon(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $iconDataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+
+        $output = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'iconUrl' => $iconDataUrl,
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertSame($iconDataUrl, file_get_contents($stackPath . '/icon_url'));
+    }
+
+    /**
+     * Test setStackSettings rejects unsupported icon URL types
+     */
+    public function testSetStackSettingsRejectsUnsupportedIconUrlTypes(): void
+    {
+        $this->createTestStack('test-stack');
+
+        $badCases = [
+            'ftp://example.com/icon.png',
+            '/etc/passwd',
+            'data:text/plain;base64,SGVsbG8=',
+        ];
+
+        foreach ($badCases as $iconUrl) {
+            $output = $this->executeAction('setStackSettings', [
+                'script' => 'test-stack',
+                'iconUrl' => $iconUrl,
+            ]);
+            $result = json_decode($output, true);
+            $this->assertEquals('error', $result['result']);
+            $this->assertStringContainsString('Invalid icon', $result['message']);
+        }
+    }
+
     // ===========================================
     // checkStackLock Action Tests
     // ===========================================
