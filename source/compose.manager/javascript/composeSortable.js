@@ -138,10 +138,13 @@ function syncComposeSortModeUI() {
 // When embedded in the Docker tab, DockerContainers.page defines its own
 // LockButton().  We save the previous implementation (if any) and chain
 // to it so both Docker containers AND Compose stacks react to the button.
+// IMPORTANT: We use window.LockButton assignment (not a function declaration)
+// to avoid hoisting — a hoisted function declaration would overwrite the
+// global LockButton before we can capture it.
 
-var _composePrevLockButton = typeof LockButton === 'function' ? LockButton : null;
+var _composePrevLockButton = window.LockButton || null;
 
-function LockButton() {
+window.LockButton = function LockButton() {
     if (_composePrevLockButton) {
         // Let the Docker (or other) handler run first — it toggles the
         // cookie and manages its own sortable / UI state.
@@ -156,4 +159,4 @@ function LockButton() {
     }
 
     syncComposeSortModeUI();
-}
+};
