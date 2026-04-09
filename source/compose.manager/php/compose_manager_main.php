@@ -109,10 +109,6 @@ if ($cpuCount <= 0) {
         vertical-align: middle;
     }
 
-    #compose_stacks td.col-arrow .mover {
-        color: var(--link-color);
-    }
-
     #compose_list.compose-sort-enabled tr.compose-sortable {
         cursor: move;
     }

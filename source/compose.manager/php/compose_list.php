@@ -192,7 +192,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 // Arrow column
     $o .= "<td class='col-arrow'>";
     $o .= "<i class='fa fa-chevron-right expand-icon' id='expand-icon-$id' onclick='toggleStackDetails(\"$id\");event.stopPropagation();' style='cursor:pointer;'></i>";
-    $o .= "<i class='fa fa-arrows-v mover' aria-hidden='true' style='display:none;cursor:move;'></i>";
+    $o .= "<i class='fa fa-arrows-v mover orange-text' aria-hidden='true' style='display:none;cursor:move;'></i>";
     $o .= "</td>";
 
     // Icon column
