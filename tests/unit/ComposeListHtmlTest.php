@@ -3,7 +3,7 @@
 /**
  * Unit Tests for Compose List HTML Structure
  * 
- * Tests the HTML output structure in compose_list.php, verifying column classes,
+ * Tests the HTML output structure in ComposeList.php, verifying column classes,
  * update column selector, expand arrow spacing, and autostart cell class.
  * These are source-level tests that verify the PHP template markup.
  */
@@ -21,8 +21,8 @@ class ComposeListHtmlTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->listPagePath = __DIR__ . '/../../source/compose.manager/php/compose_list.php';
-        $this->assertFileExists($this->listPagePath, 'compose_list.php must exist');
+        $this->listPagePath = __DIR__ . '/../../source/compose.manager/include/ComposeList.php';
+        $this->assertFileExists($this->listPagePath, 'ComposeList.php must exist');
     }
 
     private function getPageSource(): string
