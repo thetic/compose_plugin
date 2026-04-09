@@ -13,7 +13,7 @@ class StackInfoSourceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->utilPath = __DIR__ . '/../../source/compose.manager/php/util.php';
+        $this->utilPath = __DIR__ . '/../../source/compose.manager/include/Util.php';
         $this->assertFileExists($this->utilPath, 'util.php must exist');
     }
 
