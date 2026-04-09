@@ -3,6 +3,7 @@ Icon="cubes"
 Author="mstrhakr"
 Title="Compose Manager Plus"
 Type="xmenu"
+Lock="true"
 ---
 <?php
 include "/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php";
@@ -1520,6 +1521,68 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }
     }
 
+    function updateLockButtonUI() {
+        var unlocked = $.cookie('lockbutton') != null;
+        var $lockNav = $('div.nav-item.LockButton');
+
+        if (!$lockNav.length) return;
+
+        if (unlocked) {
+            $lockNav.find('a').prop('title', "_(Lock sortable items)_");
+            $lockNav.find('b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
+            $lockNav.find('span').text("_(Lock sortable items)_");
+        } else {
+            $lockNav.find('a').prop('title', "_(Unlock sortable items)_");
+            $lockNav.find('b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
+            $lockNav.find('span').text("_(Unlock sortable items)_");
+        }
+    }
+
+    function initUpdatesSortable() {
+        var $tbody = $('#updates-tbody');
+        if (!$tbody.length || typeof $.fn.sortable !== 'function') return;
+
+        if ($tbody.hasClass('ui-sortable')) {
+            $tbody.sortable('destroy');
+        }
+
+        var unlocked = $.cookie('lockbutton') != null;
+        if (!unlocked) {
+            $tbody.find('tr.sortable').css({
+                cursor: 'default'
+            });
+            return;
+        }
+
+        $tbody.find('tr.sortable').css({
+            cursor: 'move'
+        });
+
+        $tbody.sortable({
+            helper: 'clone',
+            items: 'tr.sortable',
+            cursor: 'grab',
+            axis: 'y',
+            containment: 'parent',
+            cancel: 'input,select,button,a,label,.switch-button-background',
+            delay: 100,
+            opacity: 0.5,
+            zIndex: 9999,
+            forcePlaceholderSize: true
+        });
+    }
+
+    function LockButton() {
+        if ($.cookie('lockbutton') == null) {
+            $.cookie('lockbutton', 'lockbutton');
+        } else {
+            $.removeCookie('lockbutton');
+        }
+
+        updateLockButtonUI();
+        initUpdatesSortable();
+    }
+
     function loadUpdatesUI() {
         $('#updates-tbody').html('<tr><td colspan="5" class="compose-text-muted" style="text-align:center;padding:12px;">_(Loading stacks...)_</td></tr>');
         $.post('/plugins/compose.manager/php/exec.php', {
@@ -1574,6 +1637,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         off_label: ''
                     });
                 });
+
+                initUpdatesSortable();
                 // Sync toggle-all state
                 updateToggleAllState();
             }, 'json').fail(function() {
@@ -1641,6 +1706,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
     // Initialize Updates tab when it's shown
     $(function() {
+        updateLockButtonUI();
+
         // Apply default schedule/time to all rows
         $('#apply-default').on('click', function() {
             var s = $('#default-schedule').val();

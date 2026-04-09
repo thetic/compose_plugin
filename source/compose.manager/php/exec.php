@@ -227,6 +227,44 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => '']);
         break;
 
+    case 'saveStackOrder':
+        $projects = $_POST['projects'] ?? [];
+        if (!is_array($projects)) {
+            echo json_encode(['result' => 'error', 'message' => 'Invalid projects payload']);
+            break;
+        }
+
+        $availableProjects = StackInfo::listProjectFolders($compose_root);
+        $availableLookup = array_fill_keys($availableProjects, true);
+        $orderedProjects = [];
+
+        foreach ($projects as $project) {
+            if (!is_string($project)) {
+                continue;
+            }
+
+            $project = basename($project);
+            if (!isset($availableLookup[$project]) || in_array($project, $orderedProjects, true)) {
+                continue;
+            }
+
+            $orderedProjects[] = $project;
+        }
+
+        foreach ($availableProjects as $project) {
+            if (!in_array($project, $orderedProjects, true)) {
+                $orderedProjects[] = $project;
+            }
+        }
+
+        if (!saveComposeStackOrder($compose_root, $orderedProjects)) {
+            echo json_encode(['result' => 'error', 'message' => 'Failed to save stack order']);
+            break;
+        }
+
+        echo json_encode(['result' => 'success']);
+        break;
+
     case 'runPatch':
         $cmd = isset($_POST['cmd']) ? $_POST['cmd'] : 'apply';
         if (!in_array($cmd, ['apply', 'remove'])) {

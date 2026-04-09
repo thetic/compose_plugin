@@ -100,6 +100,23 @@ if ($cpuCount <= 0) {
         padding: 0;
     }
 
+    #compose_stacks td.col-arrow {
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    #compose_stacks td.col-arrow i {
+        vertical-align: middle;
+    }
+
+    #compose_stacks td.col-arrow .mover {
+        color: var(--link-color);
+    }
+
+    #compose_list.compose-sort-enabled tr.compose-sortable {
+        cursor: move;
+    }
+
     #compose_stacks thead th.col-icon {
         width: 30px;
         padding: 0;
@@ -602,6 +619,130 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         });
     }
 
+    function isComposeSortModeEnabled() {
+        return $.cookie('lockbutton') != null;
+    }
+
+    function updateComposeLockButtonUI() {
+        var unlocked = isComposeSortModeEnabled();
+        var $button = $('div.nav-item.LockButton');
+        if (!$button.length) {
+            return;
+        }
+
+        if (unlocked) {
+            $button.find('a').prop('title', 'Lock sortable items');
+            $button.find('b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
+            $button.find('span').text('Lock sortable items');
+        } else {
+            $button.find('a').prop('title', 'Unlock sortable items');
+            $button.find('b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
+            $button.find('span').text('Unlock sortable items');
+        }
+    }
+
+    function saveComposeSortOrder() {
+        var projects = $('#compose_list > tr.compose-sortable').map(function() {
+            return $(this).data('project');
+        }).get();
+
+        return $.post(caURL, {
+            action: 'saveStackOrder',
+            projects: projects
+        }).fail(function(xhr) {
+            composeClientDebug('[saveComposeSortOrder] failed', {
+                status: xhr.status,
+                response: xhr.responseText
+            }, 'daemon', 'error');
+        });
+    }
+
+    function getComposeDetailsRowForItem($item) {
+        if (!$item || !$item.length) {
+            return $();
+        }
+
+        var rowId = $item.attr('id') || '';
+        if (rowId.indexOf('stack-row-') !== 0) {
+            return $();
+        }
+
+        return $('#details-row-' + rowId.replace('stack-row-', ''));
+    }
+
+    function reattachComposeDetailsRow($item) {
+        var $detailsRow = $item.data('compose-details-row');
+        if ($detailsRow && $detailsRow.length) {
+            $detailsRow.insertAfter($item);
+            $item.removeData('compose-details-row');
+        }
+    }
+
+    function initComposeSortable() {
+        var $tbody = $('#compose_list');
+        if (!$tbody.length) {
+            return;
+        }
+
+        if ($tbody.hasClass('ui-sortable')) {
+            $tbody.sortable('destroy');
+        }
+
+        if (!isComposeSortModeEnabled()) {
+            $tbody.removeClass('compose-sort-enabled');
+            return;
+        }
+
+        $tbody.addClass('compose-sort-enabled');
+        $tbody.sortable({
+            helper: 'clone',
+            items: '> tr.compose-sortable',
+            cursor: 'grab',
+            axis: 'y',
+            containment: 'parent',
+            cancel: '[data-stackid], .compose-updatecolumn a, .compose-updatecolumn .exec, .auto_start, .switchButton, a, button, input',
+            delay: 100,
+            opacity: 0.5,
+            zIndex: 9999,
+            forcePlaceholderSize: true,
+            start: function(event, ui) {
+                var $detailsRow = getComposeDetailsRowForItem(ui.item);
+                if ($detailsRow.length) {
+                    ui.item.data('compose-details-row', $detailsRow.detach());
+                }
+            },
+            update: function() {
+                saveComposeSortOrder();
+            },
+            stop: function(event, ui) {
+                reattachComposeDetailsRow(ui.item);
+            }
+        });
+    }
+
+    function syncComposeSortModeUI() {
+        var unlocked = isComposeSortModeEnabled();
+        $('#compose_stacks tr.compose-sortable').each(function() {
+            var $row = $(this);
+            $row.find('.expand-icon').toggle(!unlocked);
+            $row.find('.mover').toggle(unlocked);
+        });
+
+        $('#compose_list').toggleClass('compose-sort-enabled', unlocked);
+        updateComposeLockButtonUI();
+        initComposeSortable();
+    }
+
+    function LockButton() {
+        if (isComposeSortModeEnabled()) {
+            $.removeCookie('lockbutton');
+        } else {
+            $.cookie('lockbutton', 'lockbutton');
+        }
+
+        syncComposeSortModeUI();
+    }
+
     // Initialize UI components after stack list is loaded
     function initStackListUI() {
         // Initialize autostart switches - scope to compose_list to avoid conflict with Docker tab
@@ -653,6 +794,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         // Load saved update status after list is loaded
         loadSavedUpdateStatus();
+
+        syncComposeSortModeUI();
     }
 
     // Load external stylesheets (non-critical styles — critical ones are inline above)
@@ -5897,6 +6040,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
     // Row click handler - expand/collapse stack details
     $(document).on('click', 'tr.compose-sortable[id^="stack-row-"]', function(e) {
+        if (isComposeSortModeEnabled()) {
+            return;
+        }
+
         var $target = $(e.target);
 
         // Don't expand if clicking on interactive elements
@@ -5920,6 +6067,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
     // Right-click anywhere on a stack row opens the stack context menu
     $(document).on('contextmenu', 'tr.compose-sortable[id^="stack-row-"]', function(e) {
+        if (isComposeSortModeEnabled()) {
+            return;
+        }
+
         var $icon = $(this).find('[data-stackid]').first();
         if ($icon.length) {
             e.preventDefault();
