@@ -252,9 +252,10 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
             $composeCommand[] = "-e" . $envFilePath;
         }
 
-        // Add default profiles for multi-stack operations
-        $defaultProfiles = $stackInfo->getDefaultProfiles();
-        foreach ($defaultProfiles as $p) {
+        // Add effective profiles (union of running + default) so updates
+        // target every service that is currently active.
+        $effectiveProfiles = $stackInfo->getEffectiveProfiles();
+        foreach ($effectiveProfiles as $p) {
             $composeCommand[] = "-g" . $p;
         }
 

@@ -557,6 +557,81 @@ class StackInfoTest extends TestCase
         $this->assertSame([], $info->getDefaultProfiles());
     }
 
+    public function testGetRunningProfiles(): void
+    {
+        $stack = 'running-profiles-stack';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/running_profiles", "debug,monitoring");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame(['debug', 'monitoring'], $info->getRunningProfiles());
+    }
+
+    public function testGetRunningProfilesEmptyWhenNoFile(): void
+    {
+        $stack = 'no-running-profiles';
+        mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame([], $info->getRunningProfiles());
+    }
+
+    public function testGetEffectiveProfilesMergesRunningAndDefault(): void
+    {
+        $stack = 'effective-profiles';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/default_profile", "dev,monitoring");
+        file_put_contents("$stackDir/running_profiles", "debug,monitoring");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $effective = $info->getEffectiveProfiles();
+        sort($effective);
+        $this->assertSame(['debug', 'dev', 'monitoring'], $effective);
+    }
+
+    public function testGetEffectiveProfilesFallsBackToDefault(): void
+    {
+        $stack = 'effective-default-only';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/default_profile", "production");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame(['production'], $info->getEffectiveProfiles());
+    }
+
+    public function testGetEffectiveProfilesUsesRunningWhenNoDefault(): void
+    {
+        $stack = 'effective-running-only';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/running_profiles", "debug");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame(['debug'], $info->getEffectiveProfiles());
+    }
+
+    public function testGetEffectiveProfilesEmptyWhenNeitherExists(): void
+    {
+        $stack = 'effective-none';
+        mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame([], $info->getEffectiveProfiles());
+    }
+
     public function testGetAutostartTrue(): void
     {
         $stack = 'autostart-stack';

@@ -1359,6 +1359,40 @@ class StackInfo
     }
 
     /**
+     * Get the profiles that were active when the stack was last started/updated.
+     *
+     * Reads the `running_profiles` metadata file written by compose.sh on
+     * successful `up` or `update` operations.
+     *
+     * @return string[]
+     */
+    public function getRunningProfiles(): array
+    {
+        $raw = $this->readMetadata('running_profiles');
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        return array_values(array_filter(array_map('trim', explode(',', $raw))));
+    }
+
+    /**
+     * Get the effective profiles for compose operations.
+     *
+     * Returns the union of running profiles (from last up/update) and default
+     * profiles (from user settings).  This ensures update operations target
+     * every service that is currently running, even when the user-configured
+     * defaults don't cover all active profiles.
+     *
+     * @return string[]
+     */
+    public function getEffectiveProfiles(): array
+    {
+        $running = $this->getRunningProfiles();
+        $default = $this->getDefaultProfiles();
+        return array_values(array_unique(array_merge($running, $default)));
+    }
+
+    /**
      * Get autostart flag (from `autostart` file).
      * @return bool
      */
