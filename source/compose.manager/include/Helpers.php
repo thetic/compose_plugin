@@ -252,10 +252,18 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
             $composeCommand[] = "-e" . $envFilePath;
         }
 
-        // Add effective profiles (union of running + default) so updates
-        // target every service that is currently active.
-        $effectiveProfiles = $stackInfo->getEffectiveProfiles();
-        foreach ($effectiveProfiles as $p) {
+        // For actions that can start services, prefer the previously running
+        // profiles and only fall back to defaults if none were recorded.
+        if (in_array($action, array('up', 'update'), true)) {
+            $profiles = $stackInfo->getRunningProfiles();
+            if (empty($profiles)) {
+                $profiles = $stackInfo->getDefaultProfiles();
+            }
+        } else {
+            $profiles = $stackInfo->getEffectiveProfiles();
+        }
+
+        foreach ($profiles as $p) {
             $composeCommand[] = "-g" . $p;
         }
 
