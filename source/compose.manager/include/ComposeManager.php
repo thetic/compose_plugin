@@ -1323,13 +1323,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var stackId = $stackRow.attr('id').replace('stack-row-', '');
         var $updateCell = $stackRow.find('.compose-updatecolumn');
 
-        // Check if the stack is running - use server response or DOM state
-        var isRunning = stackInfo.isRunning;
-        if (isRunning === undefined) {
-            // Fallback to DOM state check
-            var stateText = $stackRow.find('.state').text();
-            isRunning = stateText.indexOf('started') !== -1 || stateText.indexOf('partial') !== -1;
-        }
+        // Always derive running state from the current DOM rather than the
+        // stackInfo payload.  The saved update-status file may contain a stale
+        // isRunning value from when the check originally ran (e.g. the stack
+        // was stopped then but has since been started).
+        var stateText = $stackRow.find('.state').text();
+        var isRunning = stateText.indexOf('started') !== -1 || stateText.indexOf('partial') !== -1;
 
         // If the stack is stopped and we have no previously-checked update
         // data, show "stopped".  But if a prior update check produced valid
