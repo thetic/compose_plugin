@@ -2279,6 +2279,76 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         $("#" + myID).tooltipster("close");
     }
 
+    var composeYamlSchemaCache = null;
+    var composeYamlCustomTagPattern = /(^|[\s:[{,\-])!(override|reset|merge)\b/m;
+
+    function getComposeYamlLibrary() {
+        if (typeof jsyaml !== 'undefined') {
+            return jsyaml;
+        }
+
+        if (typeof window !== 'undefined' && window.jsyaml) {
+            return window.jsyaml;
+        }
+
+        return null;
+    }
+
+    function composeYamlContainsCustomTags(content) {
+        return composeYamlCustomTagPattern.test(content || '');
+    }
+
+    function buildComposeYamlSchema() {
+        var yamlLib = getComposeYamlLibrary();
+        if (!yamlLib || typeof yamlLib.Type !== 'function' || !yamlLib.DEFAULT_SCHEMA || typeof yamlLib.DEFAULT_SCHEMA.extend !== 'function') {
+            return null;
+        }
+
+        var customTags = ['!override', '!reset', '!merge'];
+        var kinds = ['scalar', 'sequence', 'mapping'];
+        var types = [];
+
+        customTags.forEach(function(tag) {
+            kinds.forEach(function(kind) {
+                types.push(new yamlLib.Type(tag, {
+                    kind: kind,
+                    resolve: function() {
+                        return true;
+                    },
+                    construct: function(data) {
+                        if (data === null || data === undefined) {
+                            if (kind === 'sequence') return [];
+                            if (kind === 'mapping') return {};
+                            return '';
+                        }
+                        return data;
+                    }
+                }));
+            });
+        });
+
+        return yamlLib.DEFAULT_SCHEMA.extend(types);
+    }
+
+    function loadComposeYaml(content) {
+        var input = content || '';
+        var yamlLib = getComposeYamlLibrary();
+
+        if (!yamlLib || typeof yamlLib.load !== 'function') {
+            throw new Error('YAML parser is unavailable. Please reload the page and try again.');
+        }
+
+        if (!composeYamlSchemaCache) {
+            composeYamlSchemaCache = buildComposeYamlSchema();
+        }
+
+        if (composeYamlSchemaCache) {
+            return yamlLib.load(input, {
+                schema: composeYamlSchemaCache
+            });
+        }
+        return yamlLib.load(input);
+    }
     function applyDesc(myID) {
         var newDesc = $("#newDesc" + myID).val();
         var project = $("#" + myID).attr("data-scriptname");
@@ -2315,7 +2385,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 var rawComposefile = JSON.parse(rawComposefile);
 
                 if ((rawComposefile.result == 'success')) {
-                    var main_doc = jsyaml.load(rawComposefile.content);
+                    var main_doc = loadComposeYaml(rawComposefile.content);
 
                     for (var service_key in main_doc.services) {
                         var service = main_doc.services[service_key];
@@ -4085,10 +4155,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     throw new Error('Failed to load compose file');
                 }
 
-                var mainDoc = jsyaml.load(composeData.content) || {
+                var mainDoc = loadComposeYaml(composeData.content) || {
                     services: {}
                 };
-                var overrideDoc = jsyaml.load(overrideData.content || '') || {
+                var overrideDoc = loadComposeYaml(overrideData.content || '') || {
                     services: {}
                 };
 
@@ -4099,7 +4169,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                 editorModal.labelsData = {
                     mainDoc: mainDoc,
-                    overrideDoc: overrideDoc
+                    overrideDoc: overrideDoc,
+                    overrideContent: overrideData.content || '',
+                    overrideHasCustomTags: composeYamlContainsCustomTags(overrideData.content || '')
                 };
 
                 renderLabelsUI(mainDoc, overrideDoc);
@@ -4279,7 +4351,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         try {
             if (content.trim()) {
-                jsyaml.load(content);
+                loadComposeYaml(content);
             }
             updateValidation(type, content, true);
         } catch (e) {
@@ -4422,7 +4494,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         // Save labels if modified
         if (editorModal.modifiedLabels.size > 0) {
-            savePromises.push(saveLabels());
+            savePromises.push(saveLabels(saveErrors));
         }
 
         $.when.apply($, savePromises).then(function() {
@@ -4576,11 +4648,18 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     }
 
     // Save labels to override file
-    function saveLabels() {
+    function saveLabels(saveErrors) {
         var project = editorModal.currentProject;
 
         if (!editorModal.labelsData) {
             return $.Deferred().reject().promise();
+        }
+
+        if (editorModal.labelsData.overrideHasCustomTags) {
+            if (saveErrors) {
+                saveErrors.push('WebUI labels cannot be saved because compose.override.yaml uses !override, !reset, or !merge tags. Edit the override file directly to preserve those tags.');
+            }
+            return $.Deferred().resolve(false).promise();
         }
 
         var mainDoc = editorModal.labelsData.mainDoc;
@@ -4634,6 +4713,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     editorModal.originalLabels[serviceKey + '_webui'] = $('#label-' + serviceKey + '-webui').val() || '';
                     editorModal.originalLabels[serviceKey + '_shell'] = $('#label-' + serviceKey + '-shell').val() || '';
                 }
+                editorModal.labelsData.overrideContent = rawOverride;
+                editorModal.labelsData.overrideHasCustomTags = false;
                 editorModal.modifiedLabels.clear();
                 updateTabModifiedState();
                 updateSaveButtonState();

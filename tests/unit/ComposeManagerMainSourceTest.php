@@ -66,4 +66,21 @@ class ComposeManagerMainSourceTest extends TestCase
         $this->assertStringContainsString('var memPair = parseMemUsagePair(parts[2]);', $source);
         $this->assertStringContainsString('memLimitBytes: memPair.limit,', $source);
     }
+
+    public function testComposeCustomTagSchemaSupportIsDeclared(): void
+    {
+        $source = $this->getPageSource();
+        $this->assertStringContainsString("var customTags = ['!override', '!reset', '!merge'];", $source);
+        $this->assertStringContainsString('function buildComposeYamlSchema()', $source);
+        $this->assertStringContainsString("if (typeof jsyaml !== 'undefined') {", $source);
+        $this->assertStringContainsString("throw new Error('YAML parser is unavailable. Please reload the page and try again.');", $source);
+    }
+
+    public function testLabelSaveBlocksTaggedOverrideRewrite(): void
+    {
+        $source = $this->getPageSource();
+        $this->assertStringContainsString('overrideHasCustomTags: composeYamlContainsCustomTags(overrideData.content || \'\')', $source);
+        $this->assertStringContainsString('WebUI labels cannot be saved because compose.override.yaml uses !override, !reset, or !merge tags.', $source);
+    }
+
 }
