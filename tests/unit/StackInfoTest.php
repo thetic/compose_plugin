@@ -1030,6 +1030,22 @@ class StackInfoTest extends TestCase
         $this->assertSame(4, $counts['total']);
     }
 
+    public function testGetContainerCountsTreatsUnknownNonRunningAsStopped(): void
+    {
+        $info = $this->createStackWithContainers([
+            ['State' => 'created'],
+            ['State' => 'dead'],
+            ['State' => 'removing'],
+        ]);
+        $counts = $info->getContainerCounts();
+
+        $this->assertSame(0, $counts['running']);
+        $this->assertSame(3, $counts['stopped']);
+        $this->assertSame(0, $counts['paused']);
+        $this->assertSame(0, $counts['restarting']);
+        $this->assertSame(3, $counts['total']);
+    }
+
     public function testGetStackStateStartedWhenAllRunning(): void
     {
         $info = $this->createStackWithContainers([

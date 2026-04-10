@@ -2215,12 +2215,14 @@ class StackInfo
             $state = $ct['State'] ?? '';
             if ($state === 'running') {
                 $counts['running']++;
-            } elseif ($state === 'exited') {
-                $counts['stopped']++;
             } elseif ($state === 'paused') {
                 $counts['paused']++;
             } elseif ($state === 'restarting') {
                 $counts['restarting']++;
+            } else {
+                // Any created but non-running/non-paused/non-restarting
+                // container state is treated as stopped.
+                $counts['stopped']++;
             }
         }
 
