@@ -163,4 +163,22 @@ class ComposeListHtmlTest extends TestCase
         $this->assertStringContainsString("data-status='", $source);
         $this->assertStringContainsString('compose-status-icon', $source);
     }
+
+    // ===========================================
+    // Regression Tests
+    // ===========================================
+
+    /**
+     * Regression: Container ID/name collection must use $stackInfo->getContainerList(),
+     * not an undefined $projectContainers variable. Without this, data-ctids is empty
+     * and CPU/memory stats don't display on page load.
+     */
+    public function testContainerIterationUsesStackInfoGetContainerList(): void
+    {
+        $source = $this->getPageSource();
+        $this->assertStringContainsString('$stackInfo->getContainerList()', $source,
+            'Container loop must use $stackInfo->getContainerList(), not $projectContainers');
+        $this->assertStringNotContainsString('$projectContainers', $source,
+            '$projectContainers is undefined in ComposeList.php — use $stackInfo->getContainerList()');
+    }
 }

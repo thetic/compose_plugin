@@ -83,4 +83,38 @@ class ComposeManagerMainSourceTest extends TestCase
         $this->assertStringContainsString('WebUI labels cannot be saved because compose.override.yaml uses !override, !reset, or !merge tags.', $source);
     }
 
+    // ===========================================
+    // Regression Tests
+    // ===========================================
+
+    /**
+     * Regression: Running stacks with no update data must show "check for updates"
+     * (triggers checkStackUpdates) not "pull updates" (triggers showUpdateWarning).
+     */
+    public function testUncheckedRunningStackShowsCheckForUpdates(): void
+    {
+        $source = $this->getPageSource();
+        // The else branch for no containers must call checkStackUpdates
+        $this->assertStringContainsString(
+            "onclick=\"checkStackUpdates('\" + composeEscapeAttr(stackName) + \"');\"",
+            $source,
+            'Unchecked running stacks must trigger checkStackUpdates, not showUpdateWarning'
+        );
+        $this->assertStringContainsString('check for updates</a>', $source);
+    }
+
+    /**
+     * Regression: Stopped stacks must always show "stopped" in the update column,
+     * regardless of whether prior update check data exists. The early return
+     * must be unconditional on !isRunning.
+     */
+    public function testStoppedStacksReturnEarlyUnconditionally(): void
+    {
+        $source = $this->getPageSource();
+        // The stopped check should NOT reference hasCheckedData — it must be
+        // a simple !isRunning guard.
+        $this->assertStringNotContainsString('!isRunning && !hasCheckedData', $source,
+            'Stopped stack early return must be unconditional (!isRunning only, not gated on hasCheckedData)');
+    }
+
 }

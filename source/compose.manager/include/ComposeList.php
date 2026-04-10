@@ -39,7 +39,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $containerNamesList = [];
     // Collect short container IDs for CPU/MEM load mapping (docker stats uses 12-char short IDs)
     $containerIdsList = [];
-    foreach ($projectContainers as $ct) {
+    foreach ($stackInfo->getContainerList() as $ct) {
         $n = $ct['Names'] ?? '';
         if ($n) $containerNamesList[] = $n;
         $ctId = $ct['ID'] ?? '';
