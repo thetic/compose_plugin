@@ -24,32 +24,16 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
     $overridePath = $stackInfo->getOverridePath();
 
-    // Use StackInfo's getDefinedServices for accurate service count
-    $definedServicesList = $stackInfo->getDefinedServices();
-    $definedServices = count($definedServicesList);
+    // Centralized container counts and stack state
+    $counts = $stackInfo->getContainerCounts();
+    $stackState = $stackInfo->getStackState();
 
-    $projectContainers = $stackInfo->getContainerList();
-    $runningCount = 0;
-    $stoppedCount = 0;
-    $pausedCount = 0;
-    $restartingCount = 0;
-
-    foreach ($projectContainers as $ct) {
-        $ctState = $ct['State'] ?? '';
-        if ($ctState === 'running') {
-            $runningCount++;
-        } elseif ($ctState === 'exited') {
-            $stoppedCount++;
-        } elseif ($ctState === 'paused') {
-            $pausedCount++;
-        } elseif ($ctState === 'restarting') {
-            $restartingCount++;
-        }
-    }
-
-    // Container counts
-    $actualContainerCount = count($projectContainers);
-    $containerCount = $definedServices > 0 ? $definedServices : $actualContainerCount;
+    $runningCount = $counts['running'];
+    $stoppedCount = $counts['stopped'];
+    $pausedCount = $counts['paused'];
+    $restartingCount = $counts['restarting'];
+    $actualContainerCount = $counts['total'];
+    $containerCount = $counts['total'];
 
     // Collect container names for the hide-from-docker feature (data attribute)
     $containerNamesList = [];
@@ -124,24 +108,12 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $hasInvalidIndirect = ($invalidIndirectPath !== null && trim($invalidIndirectPath) !== '');
     $invalidIndirectPathHtml = htmlspecialchars($invalidIndirectPath ?? '', ENT_QUOTES, 'UTF-8');
 
-    // Status like Docker tab (started/stopped with icon)
-    $status = $isrunning ? ($runningCount == $containerCount ? 'started' : 'partial') : 'stopped';
-    // Use exclamation icon for partial state so it looks like a warning
-    if ($status === 'partial') {
-        $shape = 'exclamation-circle';
-    } elseif ($isrunning) {
-        $shape = 'play';
-    } else {
-        $shape = 'square';
-    }
-    $color = $status == 'started' ? 'green-text' : ($status == 'partial' ? 'orange-text' : 'grey-text');
-    // Use 'partial' outer class for partial state to allow correct styling
-    $outerClass = $isrunning ? ($runningCount == $containerCount ? 'started' : 'partial') : 'stopped';
-
-    $statusLabel = $status;
-    if ($status == 'partial') {
-        $statusLabel = "partial ($runningCount/$containerCount)";
-    }
+    // Status icon, label, color — derived from centralized getStackState()
+    $status = $stackState['state'];
+    $shape = $stackState['shape'];
+    $color = $stackState['color'];
+    $outerClass = $status;
+    $statusLabel = $stackState['label'];
 
     // Get stack started_at timestamp via StackInfo
     $stackStartedAt = $stackInfo->getStartedAt();

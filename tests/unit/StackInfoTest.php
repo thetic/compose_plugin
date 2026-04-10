@@ -892,4 +892,168 @@ class StackInfoTest extends TestCase
         // The suffix should be a dash followed by digits (from collision avoidance)
         $this->assertMatchesRegularExpression('/^-\d+$/', $suffix);
     }
+
+    // ===========================================
+    // Container Counts & Stack State Tests
+    // ===========================================
+
+    /**
+     * Helper: create a StackInfo and inject mock container data.
+     *
+     * @param array[] $containers Raw docker ps rows (each must have at least 'State')
+     */
+    private function createStackWithContainers(array $containers): \StackInfo
+    {
+        $stack = 'state-test';
+        mkdir($this->tempRoot . '/' . $stack);
+        file_put_contents($this->tempRoot . '/' . $stack . '/compose.yaml', "services:\n");
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+        $info->setContainerList($containers);
+        return $info;
+    }
+
+    public function testGetContainerCountsEmpty(): void
+    {
+        $info = $this->createStackWithContainers([]);
+        $counts = $info->getContainerCounts();
+
+        $this->assertSame(0, $counts['running']);
+        $this->assertSame(0, $counts['stopped']);
+        $this->assertSame(0, $counts['paused']);
+        $this->assertSame(0, $counts['restarting']);
+        $this->assertSame(0, $counts['total']);
+    }
+
+    public function testGetContainerCountsAllRunning(): void
+    {
+        $info = $this->createStackWithContainers([
+            ['State' => 'running'],
+            ['State' => 'running'],
+            ['State' => 'running'],
+        ]);
+        $counts = $info->getContainerCounts();
+
+        $this->assertSame(3, $counts['running']);
+        $this->assertSame(0, $counts['stopped']);
+        $this->assertSame(3, $counts['total']);
+    }
+
+    public function testGetContainerCountsMixedStates(): void
+    {
+        $info = $this->createStackWithContainers([
+            ['State' => 'running'],
+            ['State' => 'exited'],
+            ['State' => 'paused'],
+            ['State' => 'restarting'],
+        ]);
+        $counts = $info->getContainerCounts();
+
+        $this->assertSame(1, $counts['running']);
+        $this->assertSame(1, $counts['stopped']);
+        $this->assertSame(1, $counts['paused']);
+        $this->assertSame(1, $counts['restarting']);
+        $this->assertSame(4, $counts['total']);
+    }
+
+    public function testGetStackStateStartedWhenAllRunning(): void
+    {
+        $info = $this->createStackWithContainers([
+            ['State' => 'running'],
+            ['State' => 'running'],
+        ]);
+        $state = $info->getStackState();
+
+        $this->assertSame('started', $state['state']);
+        $this->assertSame('started', $state['label']);
+        $this->assertSame('play', $state['shape']);
+        $this->assertSame('green-text', $state['color']);
+        $this->assertSame(2, $state['running']);
+        $this->assertSame(2, $state['total']);
+    }
+
+    public function testGetStackStatePartialWhenSomeRunning(): void
+    {
+        $info = $this->createStackWithContainers([
+            ['State' => 'running'],
+            ['State' => 'exited'],
+            ['State' => 'exited'],
+        ]);
+        $state = $info->getStackState();
+
+        $this->assertSame('partial', $state['state']);
+        $this->assertSame('partial (1/3)', $state['label']);
+        $this->assertSame('exclamation-circle', $state['shape']);
+        $this->assertSame('orange-text', $state['color']);
+        $this->assertSame(1, $state['running']);
+        $this->assertSame(3, $state['total']);
+    }
+
+    public function testGetStackStateStoppedWhenNoneRunning(): void
+    {
+        $info = $this->createStackWithContainers([
+            ['State' => 'exited'],
+            ['State' => 'exited'],
+        ]);
+        $state = $info->getStackState();
+
+        $this->assertSame('stopped', $state['state']);
+        $this->assertSame('stopped', $state['label']);
+        $this->assertSame('square', $state['shape']);
+        $this->assertSame('grey-text', $state['color']);
+        $this->assertSame(0, $state['running']);
+        $this->assertSame(2, $state['total']);
+    }
+
+    public function testGetStackStateStoppedWhenEmpty(): void
+    {
+        $info = $this->createStackWithContainers([]);
+        $state = $info->getStackState();
+
+        $this->assertSame('stopped', $state['state']);
+        $this->assertSame(0, $state['running']);
+        $this->assertSame(0, $state['total']);
+    }
+
+    public function testGetStackStatePausedWhenAllPausedNoneRunning(): void
+    {
+        $info = $this->createStackWithContainers([
+            ['State' => 'paused'],
+            ['State' => 'paused'],
+        ]);
+        $state = $info->getStackState();
+
+        $this->assertSame('paused', $state['state']);
+        $this->assertSame('paused', $state['label']);
+        $this->assertSame('pause', $state['shape']);
+        $this->assertSame('orange-text', $state['color']);
+    }
+
+    public function testGetStackStatePartialTrumpsRestarting(): void
+    {
+        // If some containers are running and one is restarting, it's partial
+        $info = $this->createStackWithContainers([
+            ['State' => 'running'],
+            ['State' => 'restarting'],
+        ]);
+        $state = $info->getStackState();
+
+        $this->assertSame('partial', $state['state']);
+        $this->assertSame('partial (1/2)', $state['label']);
+    }
+
+    public function testGetStackStateCountsOnlyCreatedContainers(): void
+    {
+        // This is the core bug fix: total should be created containers (3),
+        // not services defined in compose file (which could be higher with profiles).
+        $info = $this->createStackWithContainers([
+            ['State' => 'running'],
+            ['State' => 'running'],
+            ['State' => 'exited'],
+        ]);
+        $state = $info->getStackState();
+
+        $this->assertSame(3, $state['total']);
+        $this->assertSame(2, $state['running']);
+        $this->assertSame('partial (2/3)', $state['label']);
+    }
 }

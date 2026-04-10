@@ -275,6 +275,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 <script src="<?php autov('/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js'); ?>" type="text/javascript"></script>
 <script src="<?php autov('/plugins/compose.manager/javascript/common.js'); ?>" type="text/javascript"></script>
 <script src="<?php autov('/plugins/compose.manager/javascript/composeSortable.js'); ?>" type="text/javascript"></script>
+<script src="<?php autov('/plugins/compose.manager/javascript/composeStackUtils.js'); ?>" type="text/javascript"></script>
 <script>
     var compose_root = <?php echo json_encode($compose_root); ?>;
     var caURL = "/plugins/compose.manager/include/Exec.php";
@@ -2992,7 +2993,6 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         mergeUpdateStatus(containers, project);
                         // Update cache with fresh data
                         stackContainersCache[stackId] = containers;
-                        stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
                         if (response.startedAt) stackStartedAtCache[stackId] = response.startedAt;
                         // Now update the row using the fresh cache
                         updateParentStackFromContainers(stackId, project);
@@ -3734,7 +3734,6 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     var currentStackId = null;
     var expandedStacks = {};
     var stackContainersCache = {};
-    var stackDefinedServicesCache = {}; // Cache for defined service counts
     var stackStartedAtCache = {}; // Cache for stack-level started_at timestamps
     // Track stacks currently loading details to prevent concurrent reloads
     var stackDetailsLoading = {};
@@ -4915,7 +4914,6 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         mergeUpdateStatus(containers, project);
 
                         stackContainersCache[stackId] = containers;
-                        stackDefinedServicesCache[stackId] = response.definedServices || containers.length;
                         if (response.startedAt) stackStartedAtCache[stackId] = response.startedAt;
                         composeClientDebug('[loadStackContainerDetails] success', {
                             stackId: stackId,
@@ -5227,8 +5225,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     // Build a condensed stackInfo object from the stackContainersCache for a stack
     function buildStackInfoFromCache(stackId, project) {
         var containers = stackContainersCache[stackId] || [];
-        var definedServices = stackDefinedServicesCache[stackId] || containers.length;
-        return createStackInfo(project, containers, { totalServices: definedServices });
+        return createStackInfo(project, containers);
     }
 
     // Update only the parent stack row using cached container details
@@ -5269,39 +5266,26 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // Update the stack row status icon and state text based on container states
             var $stateEl = $stackRow.find('.state');
             var origText = $stateEl.data('orig-text') || $stateEl.text();
-            // Determine aggregated state
-            var runningCount = stackInfo.containers.filter(function(c) {
-                return c.isRunning;
-            }).length;
-            // Use totalServices (defined services) when available, but never
-            // show a denominator smaller than the currently discovered containers.
-            var totalCount = Math.max(stackInfo.totalServices || 0, stackInfo.containers.length);
+            // Derive state from containers using centralized helper
+            var stateInfo = deriveStackState(stackInfo.containers);
+            var runningCount = stateInfo.runningCount;
+            var totalCount = stateInfo.totalCount;
             var anyRunning = runningCount > 0;
-            var anyPaused = stackInfo.containers.some(function(c) {
-                return !c.isRunning && (c.updateStatus === 'paused' || c.updateStatus === 'paused');
-            });
-            var newState;
-            // If some containers are running but not all, show 'partial' and include counts
-            if (anyRunning && runningCount < totalCount) {
-                newState = 'partial';
-                $stateEl.text('partial (' + runningCount + '/' + totalCount + ')');
-            } else {
-                newState = anyRunning ? 'started' : (anyPaused ? 'paused' : 'stopped');
-                $stateEl.text(newState);
-            }
+            var newState = stateInfo.state;
+            $stateEl.text(stateInfo.label);
 
             // Update the containers count cell to reflect cached values
             try {
                 var $containersCell = $stackRow.find('td.col-containers');
-                var containersClass = (runningCount == totalCount && runningCount > 0) ? 'green-text' : (runningCount > 0 ? 'orange-text' : 'grey-text');
+                var containersClass = stateInfo.colorClass;
                 $containersCell.html('<span class="' + containersClass + '">' + runningCount + ' / ' + totalCount + '</span>');
             } catch (e) {}
 
             // Update the status icon to match the new state and color
             var $icon = $stackRow.find('.compose-status-icon');
             if ($icon.length) {
-                var shape = newState === 'started' ? 'play' : (newState === 'paused' ? 'pause' : (newState === 'partial' ? 'exclamation-circle' : 'square'));
-                var colorClass = newState === 'started' ? 'green-text' : (newState === 'paused' || newState === 'partial' ? 'orange-text' : 'grey-text');
+                var shape = stateInfo.shape;
+                var colorClass = stateInfo.colorClass;
 
                 // Remove spinner / temporary classes and any previous fa-<name> classes
                 $icon.removeClass('fa-refresh fa-spin compose-status-spinner');

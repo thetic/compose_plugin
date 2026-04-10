@@ -2164,6 +2164,94 @@ class StackInfo
     }
 
     /**
+     * Get aggregate container state counts for this stack.
+     *
+     * Counts are based on actually created containers (from docker ps),
+     * not on the services defined in the compose file. This means
+     * services in inactive profiles are excluded from the total.
+     *
+     * @return array{running: int, stopped: int, paused: int, restarting: int, total: int}
+     */
+    public function getContainerCounts(): array
+    {
+        $counts = ['running' => 0, 'stopped' => 0, 'paused' => 0, 'restarting' => 0, 'total' => 0];
+
+        foreach ($this->getContainerList() as $ct) {
+            $counts['total']++;
+            $state = $ct['State'] ?? '';
+            if ($state === 'running') {
+                $counts['running']++;
+            } elseif ($state === 'exited') {
+                $counts['stopped']++;
+            } elseif ($state === 'paused') {
+                $counts['paused']++;
+            } elseif ($state === 'restarting') {
+                $counts['restarting']++;
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Derive the display state of this stack from its container counts.
+     *
+     * Returns everything needed to render the status icon, label, and
+     * colour class in both the stack list and the dashboard tile.
+     *
+     * @return array{state: string, label: string, shape: string, color: string, running: int, total: int}
+     */
+    public function getStackState(): array
+    {
+        $counts = $this->getContainerCounts();
+        $running = $counts['running'];
+        $total   = $counts['total'];
+
+        if ($running > 0 && $running < $total) {
+            $state = 'partial';
+        } elseif ($running > 0) {
+            $state = 'started';
+        } elseif ($counts['paused'] > 0 && $total > 0) {
+            $state = 'paused';
+        } else {
+            $state = 'stopped';
+        }
+
+        $label = $state;
+        if ($state === 'partial') {
+            $label = "partial ($running/$total)";
+        }
+
+        switch ($state) {
+            case 'started':
+                $shape = 'play';
+                $color = 'green-text';
+                break;
+            case 'partial':
+                $shape = 'exclamation-circle';
+                $color = 'orange-text';
+                break;
+            case 'paused':
+                $shape = 'pause';
+                $color = 'orange-text';
+                break;
+            default: // stopped
+                $shape = 'square';
+                $color = 'grey-text';
+                break;
+        }
+
+        return [
+            'state'   => $state,
+            'label'   => $label,
+            'shape'   => $shape,
+            'color'   => $color,
+            'running' => $running,
+            'total'   => $total,
+        ];
+    }
+
+    /**
      * Find a StackInfo by its compose source path.
      *
      * Searches all projects to find one whose composeSource matches the given path.
