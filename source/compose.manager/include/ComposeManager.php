@@ -420,7 +420,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         return {
             projectName: opts.projectName || project,
             containers: normalized,
-            isRunning: (opts.isRunning !== undefined) ? opts.isRunning : isRunning,
+            isRunning: isRunning,
             hasUpdate: (opts.hasUpdate !== undefined) ? opts.hasUpdate : hasUpdate,
             totalServices: opts.totalServices || normalized.length,
             lastChecked: opts.lastChecked || null
@@ -1180,9 +1180,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var stacksWithUpdates = 0;
         for (var stackName in stackUpdateStatus) {
             var stackInfo = stackUpdateStatus[stackName];
-            if (stackInfo.hasUpdate && stackInfo.isRunning) {
-                stacksWithUpdates++;
-            }
+            if (!stackInfo.hasUpdate) continue;
+            // Derive running state from DOM — saved status may be stale
+            var $row = $('#compose_stacks tr.compose-sortable[data-project="' + stackName + '"]');
+            if ($row.length === 0) continue;
+            var stateText = $row.find('.state').text();
+            var isRunning = stateText.indexOf('started') !== -1 || stateText.indexOf('partial') !== -1;
+            if (isRunning) stacksWithUpdates++;
         }
         $('#updateAllBtn').prop('disabled', stacksWithUpdates === 0);
     }
@@ -1195,24 +1199,26 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // Collect all stacks with updates
         for (var stackName in stackUpdateStatus) {
             var stackInfo = stackUpdateStatus[stackName];
-            if (stackInfo.hasUpdate && stackInfo.isRunning) {
-                var $stackRow = $('#compose_stacks tr.compose-sortable[data-project="' + stackName + '"]');
-                if ($stackRow.length === 0) continue;
+            if (!stackInfo.hasUpdate) continue;
+            var $stackRow = $('#compose_stacks tr.compose-sortable[data-project="' + stackName + '"]');
+            if ($stackRow.length === 0) continue;
+            // Derive running state from DOM — saved status may be stale
+            var rowStateText = $stackRow.find('.state').text();
+            if (rowStateText.indexOf('started') === -1 && rowStateText.indexOf('partial') === -1) continue;
 
-                var autostart = $stackRow.find('.auto_start').is(':checked');
+            var autostart = $stackRow.find('.auto_start').is(':checked');
 
-                // Skip if autostart only mode and autostart is not enabled
-                if (autostartOnly && !autostart) continue;
+            // Skip if autostart only mode and autostart is not enabled
+            if (autostartOnly && !autostart) continue;
 
-                var path = $stackRow.data('path');
-                var projectName = $stackRow.data('projectname');
+            var path = $stackRow.data('path');
+            var projectName = $stackRow.data('projectname');
 
-                stacks.push({
-                    project: stackName,
-                    projectName: projectName,
-                    path: path
-                });
-            }
+            stacks.push({
+                project: stackName,
+                projectName: projectName,
+                path: path
+            });
         }
 
         if (stacks.length === 0) {
@@ -1472,8 +1478,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     var response = JSON.parse(data);
                     if (response.result === 'success') {
                         var stackInfo = createStackInfo(stackName, response.updates, {
-                            projectName: response.projectName,
-                            isRunning: true
+                            projectName: response.projectName
                         });
                         stackUpdateStatus[stackName] = stackInfo;
                         updateStackUpdateUI(stackName, stackInfo);

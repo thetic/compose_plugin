@@ -916,7 +916,6 @@ switch ($_POST['action']) {
 
             $stackUpdates = [];
             $hasStackUpdate = false;
-            $isRunning = false;
 
             if ($rows) {
                 // Load once, batch-clear local SHAs, save once (avoid per-container I/O)
@@ -927,7 +926,6 @@ switch ($_POST['action']) {
                 foreach ($rows as $container) {
                     $state = $container['State'] ?? '';
                     if ($state === 'running') {
-                        $isRunning = true;
                         $image = $container['Image'] ?? '';
                         if ($image) {
                             $image = normalizeImageForUpdateCheck($image);
@@ -994,7 +992,6 @@ switch ($_POST['action']) {
             $allUpdates[$stackName] = [
                 'projectName' => $projectName,
                 'hasUpdate' => $hasStackUpdate,
-                'isRunning' => $isRunning,
                 'containers' => $stackUpdates
             ];
         }
