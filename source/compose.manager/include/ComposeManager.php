@@ -2280,9 +2280,27 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     }
 
     var composeYamlSchemaCache = null;
+    var composeYamlCustomTagPattern = /(^|[\s:[{,\-])!(override|reset|merge)\b/m;
+
+    function getComposeYamlLibrary() {
+        if (typeof jsyaml !== 'undefined') {
+            return jsyaml;
+        }
+
+        if (typeof window !== 'undefined' && window.jsyaml) {
+            return window.jsyaml;
+        }
+
+        return null;
+    }
+
+    function composeYamlContainsCustomTags(content) {
+        return composeYamlCustomTagPattern.test(content || '');
+    }
 
     function buildComposeYamlSchema() {
-        if (!jsyaml || typeof jsyaml.Type !== 'function' || !jsyaml.DEFAULT_SCHEMA || typeof jsyaml.DEFAULT_SCHEMA.extend !== 'function') {
+        var yamlLib = getComposeYamlLibrary();
+        if (!yamlLib || typeof yamlLib.Type !== 'function' || !yamlLib.DEFAULT_SCHEMA || typeof yamlLib.DEFAULT_SCHEMA.extend !== 'function') {
             return null;
         }
 
@@ -2292,7 +2310,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         customTags.forEach(function(tag) {
             kinds.forEach(function(kind) {
-                types.push(new jsyaml.Type(tag, {
+                types.push(new yamlLib.Type(tag, {
                     kind: kind,
                     resolve: function() {
                         return true;
@@ -2309,22 +2327,27 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             });
         });
 
-        return jsyaml.DEFAULT_SCHEMA.extend(types);
+        return yamlLib.DEFAULT_SCHEMA.extend(types);
     }
 
     function loadComposeYaml(content) {
         var input = content || '';
+        var yamlLib = getComposeYamlLibrary();
+
+        if (!yamlLib || typeof yamlLib.load !== 'function') {
+            throw new Error('YAML parser is unavailable. Please reload the page and try again.');
+        }
 
         if (!composeYamlSchemaCache) {
             composeYamlSchemaCache = buildComposeYamlSchema();
         }
 
         if (composeYamlSchemaCache) {
-            return jsyaml.load(input, {
+            return yamlLib.load(input, {
                 schema: composeYamlSchemaCache
             });
         }
-        return jsyaml.load(input);
+        return yamlLib.load(input);
     }
     function applyDesc(myID) {
         var newDesc = $("#newDesc" + myID).val();
@@ -4146,7 +4169,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                 editorModal.labelsData = {
                     mainDoc: mainDoc,
-                    overrideDoc: overrideDoc
+                    overrideDoc: overrideDoc,
+                    overrideContent: overrideData.content || '',
+                    overrideHasCustomTags: composeYamlContainsCustomTags(overrideData.content || '')
                 };
 
                 renderLabelsUI(mainDoc, overrideDoc);
@@ -4469,7 +4494,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         // Save labels if modified
         if (editorModal.modifiedLabels.size > 0) {
-            savePromises.push(saveLabels());
+            savePromises.push(saveLabels(saveErrors));
         }
 
         $.when.apply($, savePromises).then(function() {
@@ -4623,11 +4648,18 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     }
 
     // Save labels to override file
-    function saveLabels() {
+    function saveLabels(saveErrors) {
         var project = editorModal.currentProject;
 
         if (!editorModal.labelsData) {
             return $.Deferred().reject().promise();
+        }
+
+        if (editorModal.labelsData.overrideHasCustomTags) {
+            if (saveErrors) {
+                saveErrors.push('WebUI labels cannot be saved because compose.override.yaml uses !override, !reset, or !merge tags. Edit the override file directly to preserve those tags.');
+            }
+            return $.Deferred().resolve(false).promise();
         }
 
         var mainDoc = editorModal.labelsData.mainDoc;
@@ -4681,6 +4713,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     editorModal.originalLabels[serviceKey + '_webui'] = $('#label-' + serviceKey + '-webui').val() || '';
                     editorModal.originalLabels[serviceKey + '_shell'] = $('#label-' + serviceKey + '-shell').val() || '';
                 }
+                editorModal.labelsData.overrideContent = rawOverride;
+                editorModal.labelsData.overrideHasCustomTags = false;
                 editorModal.modifiedLabels.clear();
                 updateTabModifiedState();
                 updateSaveButtonState();
