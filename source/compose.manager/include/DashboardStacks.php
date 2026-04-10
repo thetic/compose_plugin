@@ -53,7 +53,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 
     if ($state === 'started') {
         $summary['started']++;
-    } elseif ($state === 'partial') {
+    } elseif ($state === 'partial' || $state === 'paused') {
         $summary['partial']++;
     } else {
         $summary['stopped']++;

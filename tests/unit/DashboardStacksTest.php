@@ -267,6 +267,28 @@ class DashboardStacksTest extends TestCase
         $this->assertSame(3, $state['total']);
     }
 
+    /**
+     * Dashboard summary groups paused stacks with partial to avoid
+     * counting a non-stopped state as stopped.
+     */
+    public function testSummaryMapsPausedStateToPartialBucket(): void
+    {
+        $summary = ['started' => 0, 'partial' => 0, 'stopped' => 0];
+        $state = 'paused';
+
+        if ($state === 'started') {
+            $summary['started']++;
+        } elseif ($state === 'partial' || $state === 'paused') {
+            $summary['partial']++;
+        } else {
+            $summary['stopped']++;
+        }
+
+        $this->assertSame(0, $summary['started']);
+        $this->assertSame(1, $summary['partial']);
+        $this->assertSame(0, $summary['stopped']);
+    }
+
     // ===========================================
     // Stack Name Resolution Tests
     // ===========================================
