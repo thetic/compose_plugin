@@ -123,6 +123,67 @@ function findComposeFile($dir)
 }
 
 /**
+ * Resolve the shell command used to launch auto-update scripts.
+ *
+ * Tests may provide COMPOSE_MANAGER_SH as a PHP binary plus a plugin-mapped
+ * wrapper script path. Child processes cannot always execute those virtual
+ * paths directly, so copy the wrapper to a real temporary file first.
+ *
+ * @return array{command: string, cleanup: string|null}
+ */
+function resolveAutoUpdateShellCommand(): array
+{
+    $override = getenv('COMPOSE_MANAGER_SH');
+    if ($override === false || trim($override) === '') {
+        return ['command' => 'sh', 'cleanup' => null];
+    }
+
+    $override = trim($override);
+    if (strpos($override, PHP_BINARY) !== 0) {
+        return ['command' => $override, 'cleanup' => null];
+    }
+
+    $tail = trim(substr($override, strlen(PHP_BINARY)));
+    if ($tail === '') {
+        return ['command' => $override, 'cleanup' => null];
+    }
+
+    $quote = substr($tail, 0, 1);
+    if (($quote === "'" || $quote === '"') && substr($tail, -1) === $quote) {
+        $wrapperPath = substr($tail, 1, -1);
+    } else {
+        $parts = preg_split('/\s+/', $tail, 2);
+        $wrapperPath = $parts[0] ?? '';
+    }
+
+    if ($wrapperPath === '' || !is_file($wrapperPath) || realpath($wrapperPath) !== false) {
+        return ['command' => $override, 'cleanup' => null];
+    }
+
+    $wrapperContent = @file_get_contents($wrapperPath);
+    if ($wrapperContent === false) {
+        return ['command' => $override, 'cleanup' => null];
+    }
+
+    $tempWrapper = tempnam(sys_get_temp_dir(), 'compose_mgr_autoupdate_');
+    if ($tempWrapper === false) {
+        return ['command' => $override, 'cleanup' => null];
+    }
+
+    if (@file_put_contents($tempWrapper, $wrapperContent) === false) {
+        @unlink($tempWrapper);
+        return ['command' => $override, 'cleanup' => null];
+    }
+
+    @chmod($tempWrapper, 0700);
+
+    return [
+        'command' => escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($tempWrapper),
+        'cleanup' => $tempWrapper,
+    ];
+}
+
+/**
  * Check whether a stack directory has a compose file (any of the supported names).
  *
  * @param string $dir The directory to check

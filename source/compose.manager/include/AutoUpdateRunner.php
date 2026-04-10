@@ -112,9 +112,8 @@ foreach ($data as $path => $entry) {
         clientDebug("[autoupdate] Scheduled auto-update triggered for: $projectName ($schedule)", null, 'daemon', 'info');
 
         $script = $plugin_root . "scripts/compose_autoupdate.sh";
-        // Allow overriding the shell command via environment for tests; default to sh
-        $shCmd = getenv('COMPOSE_MANAGER_SH') ? getenv('COMPOSE_MANAGER_SH') : 'sh';
-        $cmd = $shCmd . ' ' . escapeshellarg($script) . " " . escapeshellarg($composeFile) . " " . escapeshellarg($projectName) . " >/dev/null 2>&1 &";
+        $shellCommand = resolveAutoUpdateShellCommand();
+        $cmd = $shellCommand['command'] . ' ' . escapeshellarg($script) . " " . escapeshellarg($composeFile) . " " . escapeshellarg($projectName) . " >/dev/null 2>&1 &";
         exec($cmd);
     }
 }

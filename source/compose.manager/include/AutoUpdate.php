@@ -13,7 +13,9 @@ if ($autofile !== $legacyAutofile && !is_file($autofile) && is_file($legacyAutof
     }
 }
 
-header('Content-Type: application/json');
+if (!headers_sent()) {
+    header('Content-Type: application/json');
+}
 
 switch ($action) {
     case 'getConfig':
@@ -179,10 +181,12 @@ switch ($action) {
         clientDebug("[autoupdate] Running manual auto-update for: $projectName", null, 'daemon', 'info');
 
         $script = $plugin_root . "scripts/compose_autoupdate.sh";
-        // Allow overriding the shell command via environment for tests; default to sh
-        $shCmd = getenv('COMPOSE_MANAGER_SH') ? getenv('COMPOSE_MANAGER_SH') : 'sh';
-        $cmd = $shCmd . ' ' . escapeshellarg($script) . " " . escapeshellarg($composeFile) . " " . escapeshellarg($projectName) . " 2>&1";
+        $shellCommand = resolveAutoUpdateShellCommand();
+        $cmd = $shellCommand['command'] . ' ' . escapeshellarg($script) . " " . escapeshellarg($composeFile) . " " . escapeshellarg($projectName) . " 2>&1";
         exec($cmd, $output, $rc);
+        if ($shellCommand['cleanup'] !== null) {
+            @unlink($shellCommand['cleanup']);
+        }
         echo json_encode(array('rc' => $rc, 'output' => $output));
         break;
     default:
