@@ -29,6 +29,8 @@ test_setup() {
 
 @test "log_msg function logs to logger" {
     # Source just the log_msg function
+    # shellcheck disable=SC1090
+    # shellcheck source=/dev/null
     source <(sed -n '/^log_msg()/,/^}/p' "$COMPOSE_SCRIPT")
     
     log_msg "INFO" "Test message"
@@ -37,7 +39,10 @@ test_setup() {
 }
 
 @test "log_msg with debug mode echoes output" {
+    # shellcheck disable=SC1090
+    # shellcheck source=/dev/null
     source <(sed -n '/^log_msg()/,/^}/p' "$COMPOSE_SCRIPT")
+    # shellcheck disable=SC2034
     debug=true
     
     run log_msg "DEBUG" "Debug message"

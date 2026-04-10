@@ -7,10 +7,21 @@
         "files.eol": "\n"
     },
     
-    // PHPUnit Test Explorer settings
-    "phpunit.php": "php",
-    "phpunit.phpunit": "vendor/bin/phpunit",
-    "phpunit.args": ["--testdox"],
+    // Plugin Tests extension settings
+    // Restrict test discovery to this folder in multi-root workspaces.
+    "pluginTests.workspaceFolders": ["compose_plugin"],
+
+    // PHPUnit settings
+    "pluginTests.phpunit.enabled": true,
+    "pluginTests.phpunit.pattern": "tests/**/*Test.php",
+    "pluginTests.phpunit.exclude": "**/vendor/**,**/node_modules/**,tests/framework/**",
+    "pluginTests.phpunit.executable": "vendor/bin/phpunit",
+
+    // BATS settings
+    "pluginTests.bats.enabled": true,
+    "pluginTests.bats.pattern": "tests/**/*.bats",
+    "pluginTests.bats.exclude": "**/vendor/**,**/node_modules/**,tests/framework/**",
+    "pluginTests.bats.useDocker": false,
     
     // PHP settings
     "php.validate.enable": true,
@@ -28,7 +39,6 @@
         "*.cfg": "ini"
     },
     
-    // BATS - use framework's Docker wrapper for cross-platform consistency
-    "bats-test-runner.testPattern": "**/*.bats",
-    "bats-test-runner.batsExecutable": "${workspaceFolder}/tests/framework/bin/run-bats.cmd"
+    // Optional test timeout (ms)
+    "pluginTests.timeout": 30000
 }
