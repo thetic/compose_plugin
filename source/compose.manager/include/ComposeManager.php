@@ -1336,17 +1336,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var stateText = $stackRow.find('.state').text();
         var isRunning = stateText.indexOf('started') !== -1 || stateText.indexOf('partial') !== -1;
 
-        // If the stack is stopped and we have no previously-checked update
-        // data, show "stopped".  But if a prior update check produced valid
-        // container info (images are still on disk), display it — the SHA
-        // comparison is still accurate even when the stack isn't running.
-        var hasCheckedData = stackInfo.containers && stackInfo.containers.length > 0 &&
-            stackInfo.containers.some(function(ct) {
-                return ct.hasUpdate !== undefined || ct.localSha || ct.updateStatus;
-            });
-
-        if (!isRunning && !hasCheckedData) {
-            // Stack is not running and no prior update info - show stopped
+        if (!isRunning) {
+            // Stack is not running - show stopped
             $updateCell.html('<span class="grey-text" style="white-space:nowrap;"><i class="fa fa-stop fa-fw"></i> stopped</span>');
             return;
         }
@@ -1415,8 +1406,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 $updateCell.html(html);
             }
         } else {
-            // No containers found - show pull updates as clickable (for stacks that aren't running)
-            $updateCell.html('<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + composeEscapeAttr(stackName) + '\', \'' + composeEscapeAttr(stackId) + '\');"><i class="fa fa-cloud-download fa-fw"></i> pull updates</a>');
+            // No containers found in update data — stack is running but
+            // hasn't been checked yet.  Prompt a check rather than an
+            // update so the SHA metadata gets populated first.
+            $updateCell.html('<a class="exec" style="cursor:pointer;" onclick="checkStackUpdates(\'' + composeEscapeAttr(stackName) + '\');"><i class="fa fa-cloud-download fa-fw"></i> check for updates</a>');
         }
 
         // Apply current view mode — cm-advanced elements are controlled by
