@@ -96,7 +96,7 @@ class ComposeManagerMainSourceTest extends TestCase
         $source = $this->getPageSource();
         // The else branch for no containers must call checkStackUpdates
         $this->assertStringContainsString(
-            "onclick=\"checkStackUpdates('\" + composeEscapeAttr(stackName) + \"');\"",
+            "onclick=\"checkStackUpdates(\\'' + composeEscapeAttr(stackName) + '\\');\"",
             $source,
             'Unchecked running stacks must trigger checkStackUpdates, not showUpdateWarning'
         );
