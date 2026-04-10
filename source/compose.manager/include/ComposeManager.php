@@ -2312,18 +2312,6 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         return jsyaml.DEFAULT_SCHEMA.extend(types);
     }
 
-    function hasComposeCustomYamlTag(content) {
-        if (!content) return false;
-        return /!(?:override|reset|merge)\b/.test(content) || /!<(?:override|reset|merge)>/.test(content);
-    }
-
-    function stripComposeCustomYamlTags(content) {
-        if (!content) return content;
-        return content
-            .replace(/!<(?:override|reset|merge)>/g, '')
-            .replace(/!(?:override|reset|merge)\b/g, '');
-    }
-
     function loadComposeYaml(content) {
         var input = content || '';
 
@@ -2331,20 +2319,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             composeYamlSchemaCache = buildComposeYamlSchema();
         }
 
-        try {
-            if (composeYamlSchemaCache) {
-                return jsyaml.load(input, {
-                    schema: composeYamlSchemaCache
-                });
-            }
-            return jsyaml.load(input);
-        } catch (e) {
-            var message = String((e && e.message) || '');
-            if (/unknown tag/i.test(message) && hasComposeCustomYamlTag(input)) {
-                return jsyaml.load(stripComposeCustomYamlTags(input));
-            }
-            throw e;
+        if (composeYamlSchemaCache) {
+            return jsyaml.load(input, {
+                schema: composeYamlSchemaCache
+            });
         }
+        return jsyaml.load(input);
     }
     function applyDesc(myID) {
         var newDesc = $("#newDesc" + myID).val();

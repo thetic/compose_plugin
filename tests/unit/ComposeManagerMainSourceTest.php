@@ -71,15 +71,7 @@ class ComposeManagerMainSourceTest extends TestCase
     {
         $source = $this->getPageSource();
         $this->assertStringContainsString("var customTags = ['!override', '!reset', '!merge'];", $source);
-        $this->assertStringContainsString('function hasComposeCustomYamlTag(content)', $source);
+        $this->assertStringContainsString('function buildComposeYamlSchema()', $source);
     }
 
-    public function testUnknownTagFallbackIsScopedToComposeTags(): void
-    {
-        $source = $this->getPageSource();
-        $this->assertStringContainsString('function stripComposeCustomYamlTags(content)', $source);
-        $this->assertStringContainsString('.replace(/!<(?:override|reset|merge)>/g, \'\')', $source);
-        $this->assertStringContainsString('.replace(/!(?:override|reset|merge)\\b/g, \'\')', $source);
-        $this->assertStringContainsString('if (/unknown tag/i.test(message) && hasComposeCustomYamlTag(input)) {', $source);
-    }
 }
