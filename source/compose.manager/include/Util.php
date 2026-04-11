@@ -1376,23 +1376,6 @@ class StackInfo
     }
 
     /**
-     * Get the effective profiles for compose operations.
-     *
-     * Returns the union of running profiles (from last up/update) and default
-     * profiles (from user settings).  This ensures update operations target
-     * every service that is currently running, even when the user-configured
-     * defaults don't cover all active profiles.
-     *
-     * @return string[]
-     */
-    public function getEffectiveProfiles(): array
-    {
-        $running = $this->getRunningProfiles();
-        $default = $this->getDefaultProfiles();
-        return array_values(array_unique(array_merge($running, $default)));
-    }
-
-    /**
      * Get autostart flag (from `autostart` file).
      * @return bool
      */

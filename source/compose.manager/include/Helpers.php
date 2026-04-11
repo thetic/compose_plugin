@@ -252,19 +252,28 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
             $composeCommand[] = "-e" . $envFilePath;
         }
 
-        // For actions that can start services, prefer the previously running
-        // profiles and only fall back to defaults if none were recorded.
-        if (in_array($action, array('up', 'update'), true)) {
+        // Profile selection per action:
+        //  - up:     use user-configured default profiles (running_profiles
+        //            is stale/absent when the stack isn't running).
+        //  - update: preserve the currently active profile set so the same
+        //            services are recreated; fall back to defaults on first run.
+        //  - down:   wildcard * ensures every profiled service is torn down,
+        //            regardless of what was recorded or configured.
+        if ($action === 'down') {
+            $composeCommand[] = "-g*";
+        } elseif ($action === 'update') {
             $profiles = $stackInfo->getRunningProfiles();
             if (empty($profiles)) {
                 $profiles = $stackInfo->getDefaultProfiles();
             }
+            foreach ($profiles as $p) {
+                $composeCommand[] = "-g" . $p;
+            }
         } else {
-            $profiles = $stackInfo->getEffectiveProfiles();
-        }
-
-        foreach ($profiles as $p) {
-            $composeCommand[] = "-g" . $p;
+            // 'up' and any future actions
+            foreach ($stackInfo->getDefaultProfiles() as $p) {
+                $composeCommand[] = "-g" . $p;
+            }
         }
 
         // Pass stack path for timestamp saving
