@@ -182,9 +182,20 @@ case $command in
     exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
-      # Save stack started timestamp
+      # Save stack started timestamp and running profiles
       if [ -n "$stack_path" ] && [ -d "$stack_path" ]; then
         date -Iseconds > "$stack_path/started_at"
+        # Persist which profiles were used for this run so update operations
+        # can target the same set of services.
+        running_names=()
+        for (( i=0; i<${#profile_args[@]}; i+=2 )); do
+          running_names+=("${profile_args[$((i+1))]}")
+        done
+        if [ ${#running_names[@]} -gt 0 ]; then
+          printf '%s\n' "$(IFS=,; echo "${running_names[*]}")" > "$stack_path/running_profiles"
+        else
+          rm -f "$stack_path/running_profiles"
+        fi
       fi
       save_result "success" $exit_code "up"
       echo ""
@@ -206,6 +217,10 @@ case $command in
     exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
+      # Clear running profiles on successful down
+      if [ -n "$stack_path" ] && [ -d "$stack_path" ]; then
+        rm -f "$stack_path/running_profiles"
+      fi
       save_result "success" $exit_code "down"
       echo ""
       echo "✓ Stack $name stopped successfully"
@@ -306,9 +321,18 @@ case $command in
         docker rmi "${images[@]}" 2>/dev/null || true
       fi
       
-      # Save stack started timestamp after update
+      # Save stack started timestamp and running profiles after update
       if [ -n "$stack_path" ] && [ -d "$stack_path" ]; then
         date -Iseconds > "$stack_path/started_at"
+        running_names=()
+        for (( i=0; i<${#profile_args[@]}; i+=2 )); do
+          running_names+=("${profile_args[$((i+1))]}")
+        done
+        if [ ${#running_names[@]} -gt 0 ]; then
+          printf '%s\n' "$(IFS=,; echo "${running_names[*]}")" > "$stack_path/running_profiles"
+        else
+          rm -f "$stack_path/running_profiles"
+        fi
       fi
       save_result "success" 0 "update"
       echo ""

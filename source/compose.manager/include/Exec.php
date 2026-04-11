@@ -582,9 +582,8 @@ switch ($_POST['action']) {
             $updateStatusData = json_decode(file_get_contents($updateStatusFile), true) ?: [];
         }
 
-        // Get defined service count via StackInfo
-        $definedServicesList = $stackInfo->getDefinedServices();
-        $definedServices = count($definedServicesList);
+        // Get stack state via centralized StackInfo method
+        $stackState = $stackInfo->getStackState();
 
         foreach ($rows as $rawContainer) {
             // Get additional details using docker inspect
@@ -731,7 +730,7 @@ switch ($_POST['action']) {
             $containers[] = ContainerInfo::fromDockerInspect($rawContainer)->toArray();
         }
 
-        echo json_encode(['result' => 'success', 'containers' => $containers, 'definedServices' => $definedServices, 'projectName' => $stackInfo->projectFolder, 'startedAt' => $stackInfo->getStartedAt()]);
+        echo json_encode(['result' => 'success', 'containers' => $containers, 'stackState' => $stackState, 'projectName' => $stackInfo->projectFolder, 'startedAt' => $stackInfo->getStartedAt()]);
         break;
     case 'getProfileServices':
         // Returns the list of services that docker compose would act on for the
@@ -917,7 +916,6 @@ switch ($_POST['action']) {
 
             $stackUpdates = [];
             $hasStackUpdate = false;
-            $isRunning = false;
 
             if ($rows) {
                 // Load once, batch-clear local SHAs, save once (avoid per-container I/O)
@@ -928,7 +926,6 @@ switch ($_POST['action']) {
                 foreach ($rows as $container) {
                     $state = $container['State'] ?? '';
                     if ($state === 'running') {
-                        $isRunning = true;
                         $image = $container['Image'] ?? '';
                         if ($image) {
                             $image = normalizeImageForUpdateCheck($image);
@@ -995,7 +992,6 @@ switch ($_POST['action']) {
             $allUpdates[$stackName] = [
                 'projectName' => $projectName,
                 'hasUpdate' => $hasStackUpdate,
-                'isRunning' => $isRunning,
                 'containers' => $stackUpdates
             ];
         }

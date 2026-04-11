@@ -9,6 +9,8 @@ use PluginTests\TestCase;
 
 class AutoupdateTest extends TestCase
 {
+    private ?string $wrapperPath = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -19,16 +21,16 @@ class AutoupdateTest extends TestCase
         if (is_file($plugin_root . 'autoupdate.json')) unlink($plugin_root . 'autoupdate.json');
         // Ensure scripts path exists
         if (!is_dir($plugin_root . 'scripts')) mkdir($plugin_root . 'scripts', 0755, true);
-        // Ensure php helper path exists for test shim
-        if (!is_dir($plugin_root . 'php')) mkdir($plugin_root . 'php', 0755, true);
-        // create a simple PHP shim that will be invoked instead of a real `sh` during tests
+
+        // Use a real temp file for the shell wrapper so child processes can execute it in CI.
+        $this->wrapperPath = sys_get_temp_dir() . '/autoupdate_test_wrapper_' . getmypid() . '_' . uniqid('', true) . '.php';
         $shim = <<<'PHP'
     <?php
     $marker = getenv('AUTOTEST_MARKER');
     if ($marker) file_put_contents($marker, "OK\n");
     exit(0);
     PHP;
-        file_put_contents($plugin_root . 'php/sh_wrapper.php', $shim);
+        file_put_contents($this->wrapperPath, $shim);
         // redirect cron writes to plugin root in tests
         putenv('COMPOSE_MANAGER_CRON_DIR=' . $plugin_root);
     }
@@ -39,6 +41,10 @@ class AutoupdateTest extends TestCase
         putenv('COMPOSE_MANAGER_SH');
         putenv('AUTOTEST_MARKER');
         putenv('COMPOSE_MANAGER_AUTOUPDATE_FILE');
+        if ($this->wrapperPath !== null && is_file($this->wrapperPath)) {
+            unlink($this->wrapperPath);
+        }
+        $this->wrapperPath = null;
         $_POST = [];
         parent::tearDown();
     }
@@ -82,8 +88,7 @@ class AutoupdateTest extends TestCase
 
         // configure test shim so the autoupdate code executes our PHP wrapper instead of a system sh
         putenv('AUTOTEST_MARKER=' . $marker);
-        $wrapper = $plugin_root . 'php/sh_wrapper.php';
-        putenv('COMPOSE_MANAGER_SH=' . PHP_BINARY . ' ' . escapeshellarg($wrapper));
+        putenv('COMPOSE_MANAGER_SH=' . PHP_BINARY . ' ' . escapeshellarg((string)$this->wrapperPath));
 
         $_POST = ['action' => 'runNow', 'path' => $tmp];
         ob_start(); include '/usr/local/emhttp/plugins/compose.manager/include/AutoUpdate.php'; $out = ob_get_clean();

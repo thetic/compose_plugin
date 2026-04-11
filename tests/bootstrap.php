@@ -49,6 +49,30 @@ PluginBootstrap::init(
     ]
 );
 
+// Map compose.manager writable support paths to a temp-backed plugin root.
+// The framework auto-maps PHP source files under include/, but tests that
+// create helper scripts or cron files under plugin_root need explicit file
+// mappings in CI where /usr/local/emhttp/... does not exist on disk.
+$pluginTempRoot = sys_get_temp_dir() . '/compose_manager_plugin_testfs';
+$pluginTempScripts = $pluginTempRoot . '/scripts';
+$pluginTempPhp = $pluginTempRoot . '/php';
+
+foreach ([$pluginTempRoot, $pluginTempScripts, $pluginTempPhp] as $dir) {
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+}
+
+UnraidStreamWrapper::addMappings([
+    '/usr/local/emhttp/plugins/compose.manager' => $pluginTempRoot,
+    '/usr/local/emhttp/plugins/compose.manager/scripts' => $pluginTempScripts,
+    '/usr/local/emhttp/plugins/compose.manager/php' => $pluginTempPhp,
+    '/usr/local/emhttp/plugins/compose.manager/autoupdate.json' => $pluginTempRoot . '/autoupdate.json',
+    '/usr/local/emhttp/plugins/compose.manager/compose_manager_autoupdate' => $pluginTempRoot . '/compose_manager_autoupdate',
+    '/usr/local/emhttp/plugins/compose.manager/scripts/compose_autoupdate.sh' => $pluginTempScripts . '/compose_autoupdate.sh',
+    '/usr/local/emhttp/plugins/compose.manager/php/sh_wrapper.php' => $pluginTempPhp . '/sh_wrapper.php',
+]);
+
 // Set up test compose projects directory
 $testComposeRoot = sys_get_temp_dir() . '/compose_test_projects';
 if (!is_dir($testComposeRoot)) {

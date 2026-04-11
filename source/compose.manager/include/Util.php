@@ -1044,6 +1044,9 @@ class StackInfo
     /** @var array[]|null Per-instance lazy cache of docker compose ps rows (null = not yet fetched) */
     private ?array $cachedContainerList = null;
 
+    /** @var array|null Cached aggregate container state counts */
+    private ?array $cachedContainerCounts = null;
+
     /**
      * Pre-populate the container list cache for this stack.
      *
@@ -1055,6 +1058,7 @@ class StackInfo
     public function setContainerList(array $containers): void
     {
         $this->cachedContainerList = $containers;
+        $this->cachedContainerCounts = null; // invalidate derived cache
     }
 
     /**
@@ -1352,6 +1356,23 @@ class StackInfo
     public function getDefaultProfiles(): array
     {
         $raw = $this->readMetadata('default_profile');
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        return array_values(array_filter(array_map('trim', explode(',', $raw))));
+    }
+
+    /**
+     * Get the profiles that were active when the stack was last started/updated.
+     *
+     * Reads the `running_profiles` metadata file written by compose.sh on
+     * successful `up` or `update` operations.
+     *
+     * @return string[]
+     */
+    public function getRunningProfiles(): array
+    {
+        $raw = $this->readMetadata('running_profiles');
         if ($raw === null || $raw === '') {
             return [];
         }
@@ -2161,6 +2182,101 @@ class StackInfo
             fn($raw) => ContainerInfo::fromDockerPs($raw),
             $this->getContainerList()
         );
+    }
+
+    /**
+     * Get aggregate container state counts for this stack.
+     *
+     * Counts are based on actually created containers (from docker ps),
+     * not on the services defined in the compose file. This means
+     * services in inactive profiles are excluded from the total.
+     *
+     * @return array{running: int, stopped: int, paused: int, restarting: int, total: int}
+     */
+    public function getContainerCounts(): array
+    {
+        if ($this->cachedContainerCounts !== null) {
+            return $this->cachedContainerCounts;
+        }
+
+        $counts = ['running' => 0, 'stopped' => 0, 'paused' => 0, 'restarting' => 0, 'total' => 0];
+
+        foreach ($this->getContainerList() as $ct) {
+            $counts['total']++;
+            $state = $ct['State'] ?? '';
+            if ($state === 'running') {
+                $counts['running']++;
+            } elseif ($state === 'paused') {
+                $counts['paused']++;
+            } elseif ($state === 'restarting') {
+                $counts['restarting']++;
+            } else {
+                // Any created but non-running/non-paused/non-restarting
+                // container state is treated as stopped.
+                $counts['stopped']++;
+            }
+        }
+
+        $this->cachedContainerCounts = $counts;
+        return $counts;
+    }
+
+    /**
+     * Derive the display state of this stack from its container counts.
+     *
+     * Returns everything needed to render the status icon, label, and
+     * colour class in both the stack list and the dashboard tile.
+     *
+     * @return array{state: string, label: string, shape: string, color: string, running: int, total: int}
+     */
+    public function getStackState(): array
+    {
+        $counts = $this->getContainerCounts();
+        $running = $counts['running'];
+        $total   = $counts['total'];
+
+        if ($running > 0 && $running < $total) {
+            $state = 'partial';
+        } elseif ($running > 0) {
+            $state = 'started';
+        } elseif ($counts['paused'] > 0 && $total > 0) {
+            $state = 'paused';
+        } else {
+            $state = 'stopped';
+        }
+
+        $label = $state;
+        if ($state === 'partial') {
+            $label = "partial ($running/$total)";
+        }
+
+        switch ($state) {
+            case 'started':
+                $shape = 'play';
+                $color = 'green-text';
+                break;
+            case 'partial':
+                $shape = 'exclamation-circle';
+                $color = 'orange-text';
+                break;
+            case 'paused':
+                $shape = 'pause';
+                $color = 'orange-text';
+                break;
+            default: // stopped
+                $shape = 'square';
+                $color = 'grey-text';
+                break;
+        }
+
+        return [
+            'state'   => $state,
+            'label'   => $label,
+            'shape'   => $shape,
+            'color'   => $color,
+            'running' => $running,
+            'total'   => $total,
+        ];
     }
 
     /**
