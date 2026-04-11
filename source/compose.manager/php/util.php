@@ -1913,11 +1913,15 @@ class StackInfo
      */
     private static function writeDefaultComposeFile(string $dir): string
     {
+        // Check for any existing compose file before creating a new one
+        $existing = self::getComposeFilePath($dir);
+        if ($existing !== null) {
+            return $existing;
+        }
+
         $filePath = "$dir/" . COMPOSE_FILE_NAMES[0];
-        if (!file_exists($filePath)) {
-            if (file_put_contents($filePath, "services:\n") === false) {
-                throw new \RuntimeException("Failed to create default compose file: $filePath");
-            }
+        if (file_put_contents($filePath, "services:\n") === false) {
+            throw new \RuntimeException("Failed to create default compose file: $filePath");
         }
         return $filePath;
     }
