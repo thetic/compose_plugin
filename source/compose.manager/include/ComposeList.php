@@ -24,9 +24,10 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
     $overridePath = $stackInfo->getOverridePath();
 
-    // Centralized container counts and stack state
-    $counts = $stackInfo->getContainerCounts();
+    // getStackState() internally calls getContainerCounts(), which caches
+    // the result.  Calling getContainerCounts() afterwards is free.
     $stackState = $stackInfo->getStackState();
+    $counts = $stackInfo->getContainerCounts();
 
     $runningCount = $counts['running'];
     $stoppedCount = $counts['stopped'];

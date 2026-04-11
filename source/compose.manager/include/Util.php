@@ -1044,6 +1044,9 @@ class StackInfo
     /** @var array[]|null Per-instance lazy cache of docker compose ps rows (null = not yet fetched) */
     private ?array $cachedContainerList = null;
 
+    /** @var array|null Cached aggregate container state counts */
+    private ?array $cachedContainerCounts = null;
+
     /**
      * Pre-populate the container list cache for this stack.
      *
@@ -1055,6 +1058,7 @@ class StackInfo
     public function setContainerList(array $containers): void
     {
         $this->cachedContainerList = $containers;
+        $this->cachedContainerCounts = null; // invalidate derived cache
     }
 
     /**
@@ -2191,6 +2195,10 @@ class StackInfo
      */
     public function getContainerCounts(): array
     {
+        if ($this->cachedContainerCounts !== null) {
+            return $this->cachedContainerCounts;
+        }
+
         $counts = ['running' => 0, 'stopped' => 0, 'paused' => 0, 'restarting' => 0, 'total' => 0];
 
         foreach ($this->getContainerList() as $ct) {
@@ -2209,6 +2217,7 @@ class StackInfo
             }
         }
 
+        $this->cachedContainerCounts = $counts;
         return $counts;
     }
 
