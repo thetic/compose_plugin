@@ -115,14 +115,14 @@ fi
 </INLINE>
 </FILE>
 
-<FILE Run="/bin/bash">
+<FILE Run="/bin/bash" max="6.11.99">
 <INLINE>
 # Use the new patch utility during install to cleanup and optionally apply patches
-patch_script=/usr/local/emhttp/plugins/compose.manager/scripts/patch.sh
-config_file=/boot/config/plugins/compose.manager/compose.manager.cfg
+patch_script=&emhttpLOC;/scripts/patch.sh
+config_file=&pluginLOC;/compose.manager.cfg
 if [ -f "$patch_script" ]; then
     if [ -f "$config_file" ]; then
-        #Grab the contents of our config file.
+        # Grab the contents of our config file.
         source &lt;(grep = $config_file)
         patch_ui=${PATCH_UI:='false'}
         # Parse /etc/unraid-version into numeric form: M*10000 + m*100 + p
@@ -132,19 +132,19 @@ if [ -f "$patch_script" ]; then
         major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
         unraid_version=$((major*10000 + minor*100 + patch))
 
-        if [ $unraid_version -ge 61000 ] &amp;&amp; [ $unraid_version -le 69999 ] &amp;&amp; [ $patch_ui == 'true' ]; then
+        if [ $unraid_version -ge 60900 ] &amp;&amp; [ $unraid_version -le 61199 ] &amp;&amp; [ $patch_ui == 'true' ]; then
             echo ""
             echo "----------------------------------------------------"
             echo " Applying WebUI Patches because PATCH_UI=true"
             echo "----------------------------------------------------"
             echo ""
-            #Remove patchs if already applied
+            # Remove patchs if already applied
             $patch_script -r
 
-            #Apply Patches
+            # Apply Patches
             $patch_script apply || true
         fi
-        if [ $unraid_version -ge 61000 ] &amp;&amp; [ $unraid_version -le 69999 ] &amp;&amp; [ $patch_ui != 'true' ]; then
+        if [ $unraid_version -ge 60900 ] &amp;&amp; [ $unraid_version -le 61199 ] &amp;&amp; [ $patch_ui != 'true' ]; then
             echo ""
             echo "----------------------------------------------------"
             echo " Removing WebUI Patches because PATCH_UI=false"
@@ -170,14 +170,14 @@ echo ""
 </INLINE>
 </FILE>
 
-<FILE Run="/bin/bash" Method="remove">
+<FILE Run="/bin/bash" Method="remove" max="6.11.99">
 <INLINE>
-# Use the new patch utility during install to cleanup and optionally apply patches
-patch_script=/usr/local/emhttp/plugins/compose.manager/scripts/patch.sh
-config_file=/boot/config/plugins/compose.manager/compose.manager.cfg
+# Use the new patch utility during uninstall to cleanup and remove patches
+patch_script=&emhttpLOC;/scripts/patch.sh
+config_file=&pluginLOC;/compose.manager.cfg
 if [ -f "$patch_script" ]; then
     if [ -f "$config_file" ]; then
-        #Grab the contents of our config file.
+        # Grab the contents of our config file.
         source &lt;(grep = $config_file)
         patch_ui=${PATCH_UI:='false'}
         # Parse /etc/unraid-version into numeric form: M*10000 + m*100 + p
@@ -187,13 +187,13 @@ if [ -f "$patch_script" ]; then
         major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
         unraid_version=$((major*10000 + minor*100 + patch))
 
-        if [ $unraid_version -ge 61000 ] &amp;&amp; [ $unraid_version -le 69999 ] &amp;&amp; [ $patch_ui == 'true' ]; then
+        if [ $unraid_version -ge 60900 ] &amp;&amp; [ $unraid_version -le 61199 ] &amp;&amp; [ $patch_ui == 'true' ]; then
             echo ""
             echo "----------------------------------------------------"
             echo " Removing WebUI Patches because plugin is being removed"
             echo "----------------------------------------------------"
             echo ""
-            #Remove patchs if already applied
+            # Remove patchs if already applied
             $patch_script -r
         fi
     fi
