@@ -759,7 +759,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     // Initialize editor modal
     function initEditorModal() {
         if (typeof ace === 'undefined') {
-            console.warn('Compose Manager: Ace editor not available. Editor will open without syntax highlighting.');
+            console.warn('Compose Manager: Ace editor not available. Stack editor is unavailable.');
             return;
         }
         // Initialize Ace editors for compose and env tabs only

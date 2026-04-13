@@ -19,6 +19,8 @@
 <!ENTITY pluginsInstalledPATH "/var/log/packages">
 <!ENTITY aceVER    "1.43.5">
 <!ENTITY aceURL    "https://github.com/ajaxorg/ace-builds/archive/refs/tags/v&aceVER;.zip">
+<!ENTITY aceZIP    "ace-v&aceVER;.zip">
+<!ENTITY aceSHA256 "40169719746a5f83dcfb6e73a838221d34b91b75a939569217d62fb7d8175562">
 ]>
 
 <PLUGIN  name="&name;"
@@ -53,8 +55,9 @@
 <!-- The 'pre-install' script. -->
 <FILE Run="/bin/bash">
 <INLINE>
-# Remove old 'source' files
+# Remove all but current package file and ace zip from plugin root
 rm -f $(ls &pluginLOC;/&name;*.txz 2>/dev/null|grep -v '&packageVER;')
+rm -f $(ls &pluginLOC;/ace-v*.zip 2>/dev/null|grep -v '&aceZIP;')
 
 # Clean up legacy package entries (compose.manager-package-*) left by older builds
 # that used non-standard Slackware naming and weren't removed by upgradepkg
@@ -73,93 +76,30 @@ mkdir -p &pluginLOC;/projects
 <MD5>&packageMD5;</MD5>
 </FILE>
 
-<FILE Run="/bin/bash" max="6.99.99">
-<INLINE>
-# Download Ace editor if not already provided by Unraid (Unraid 7.0.0+ includes it via Dynamix)
-ACE_DYNAMIX_PATH="&emhttpPATH;/dynamix/javascript/ace/ace.js"
-ACE_PLUGIN_DIR="&emhttpLOC;/javascript/ace"
+<!-- Ace editor fallback for pre-7.0: download zip to flash cache -->
+<FILE Name="&pluginLOC;/&aceZIP;" Max="6.11.99">
+<URL>&aceURL;</URL>
+<SHA256>&aceSHA256;</SHA256>
+</FILE>
 
-if [ -f "$ACE_DYNAMIX_PATH" ]; then
-    echo "Ace editor found at $ACE_DYNAMIX_PATH (Unraid 7.0.0+), skipping download."
-else
-    echo "Ace editor not found in Dynamix (pre-7.0.0 Unraid), downloading v&aceVER;..."
-    mkdir -p "$ACE_PLUGIN_DIR"
-    TMPDIR_ACE="/tmp/ace-install-$$"
-    mkdir -p "$TMPDIR_ACE"
-    WGET_CERT_OPTS=""
-    if [ ! -f /etc/ssl/certs/ca-certificates.crt ] &amp;&amp; [ ! -d /etc/ssl/certs ]; then
-        echo "WARNING: No system CA bundle found; downloading Ace with TLS verification disabled."
-        WGET_CERT_OPTS="--no-check-certificate"
-    fi
-    if wget $WGET_CERT_OPTS -q -O "$TMPDIR_ACE/ace.zip" "&aceURL;"; then
-        if unzip -q "$TMPDIR_ACE/ace.zip" \
-            "ace-builds-&aceVER;/src-min-noconflict/ace.js" \
-            "ace-builds-&aceVER;/src-min-noconflict/mode-yaml.js" \
-            "ace-builds-&aceVER;/src-min-noconflict/mode-sh.js" \
-            "ace-builds-&aceVER;/src-min-noconflict/theme-tomorrow.js" \
-            "ace-builds-&aceVER;/src-min-noconflict/theme-tomorrow_night.js" \
-            -d "$TMPDIR_ACE/extracted"; then
-            if cp "$TMPDIR_ACE/extracted/ace-builds-&aceVER;/src-min-noconflict/"*.js "$ACE_PLUGIN_DIR/"; then
-                if [ -f "$ACE_PLUGIN_DIR/ace.js" ]; then
-                    echo "Ace editor v&aceVER; installed to $ACE_PLUGIN_DIR"
-                else
-                    echo "WARNING: Ace editor files not found in $ACE_PLUGIN_DIR after install. Editor will lack syntax highlighting."
-                fi
-            else
-                echo "WARNING: Failed to copy Ace editor files. Editor will lack syntax highlighting."
-            fi
-        else
-            echo "WARNING: Failed to extract Ace editor archive. Editor will lack syntax highlighting."
-        fi
-    else
-        echo "WARNING: Failed to download Ace editor. The YAML/env editor will not have syntax highlighting."
-    fi
-    rm -rf "$TMPDIR_ACE"
-fi
+<!-- Ace editor fallback for pre-7.0: copy cached zip to /tmp for extraction -->
+<FILE Name="/tmp/cache-&aceZIP;" Max="6.11.99">
+<LOCAL>&pluginLOC;/&aceZIP;</LOCAL>
+<SHA256>&aceSHA256;</SHA256>
+</FILE>
+
+<!-- Ace editor fallback for pre-7.0: extract needed JS files into plugin dir -->
+<FILE Name="/tmp/ace-editor-install.sh" Run="/bin/bash" Max="6.11.99">
+<INLINE>
+&emhttpLOC;/scripts/install-ace.sh /tmp/cache-&aceZIP; &emhttpLOC; &aceVER;
+rm -f /tmp/ace-editor-install.sh
 </INLINE>
 </FILE>
 
-<FILE Run="/bin/bash" max="6.11.99">
+<FILE Name="/tmp/patch-util-install.sh" Run="/bin/bash" Max="6.11.99">
 <INLINE>
-# Use the new patch utility during install to cleanup and optionally apply patches
-patch_script=&emhttpLOC;/scripts/patch.sh
-config_file=&pluginLOC;/compose.manager.cfg
-if [ -f "$patch_script" ]; then
-    if [ -f "$config_file" ]; then
-        # Grab the contents of our config file.
-        source &lt;(grep = $config_file)
-        patch_ui=${PATCH_UI:='false'}
-        # Parse /etc/unraid-version into numeric form: M*10000 + m*100 + p
-        # Handles formats like: 6.10.2 or "7.2.3" by extracting the first X.Y.Z
-        ver=$(grep -oE '[0-9]+(\.[0-9]+){0,2}' /etc/unraid-version | head -n1)
-        IFS=. read -r major minor patch &lt;&lt;&lt; "$ver"
-        major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
-        unraid_version=$((major*10000 + minor*100 + patch))
-
-        if [ $unraid_version -ge 60900 ] &amp;&amp; [ $unraid_version -le 61199 ] &amp;&amp; [ $patch_ui == 'true' ]; then
-            echo ""
-            echo "----------------------------------------------------"
-            echo " Applying WebUI Patches because PATCH_UI=true"
-            echo "----------------------------------------------------"
-            echo ""
-            # Remove patchs if already applied
-            $patch_script -r
-
-            # Apply Patches
-            $patch_script apply || true
-        fi
-        if [ $unraid_version -ge 60900 ] &amp;&amp; [ $unraid_version -le 61199 ] &amp;&amp; [ $patch_ui != 'true' ]; then
-            echo ""
-            echo "----------------------------------------------------"
-            echo " Removing WebUI Patches because PATCH_UI=false"
-            echo " To enable the WebUI, set PATCH_UI=true in &name;.cfg"
-            echo " and apply patches from the plugin settings page."
-            echo "----------------------------------------------------"
-            echo ""
-            $patch_script -r
-        fi
-    fi
-fi
+&emhttpLOC;/scripts/install-patch.sh install &emhttpLOC; &pluginLOC;
+rm -f /tmp/patch-util-install.sh
 </INLINE>
 </FILE>
 
@@ -175,35 +115,15 @@ echo ""
 </FILE>
 
 <!-- The 'remove' script. -->
-<FILE Run="/bin/bash" Method="remove" max="6.11.99">
+<FILE Name="/tmp/patch-util-remove.sh" Run="/bin/bash" Method="remove" Max="6.11.99">
 <INLINE>
-# Use the new patch utility during uninstall to cleanup and remove patches
-patch_script=&emhttpLOC;/scripts/patch.sh
-config_file=&pluginLOC;/compose.manager.cfg
-if [ -f "$patch_script" ]; then
-    if [ -f "$config_file" ]; then
-        # Grab the contents of our config file.
-        source &lt;(grep = $config_file)
-        patch_ui=${PATCH_UI:='false'}
-        # Parse /etc/unraid-version into numeric form: M*10000 + m*100 + p
-        # Handles formats like: 6.10.2 or "7.2.3" by extracting the first X.Y.Z
-        ver=$(grep -oE '[0-9]+(\.[0-9]+){0,2}' /etc/unraid-version | head -n1)
-        IFS=. read -r major minor patch &lt;&lt;&lt; "$ver"
-        major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
-        unraid_version=$((major*10000 + minor*100 + patch))
+&emhttpLOC;/scripts/install-patch.sh remove &emhttpLOC; &pluginLOC;
+rm -f /tmp/patch-util-remove.sh
+</INLINE>
+</FILE>
 
-        if [ $unraid_version -ge 60900 ] &amp;&amp; [ $unraid_version -le 61199 ] &amp;&amp; [ $patch_ui == 'true' ]; then
-            echo ""
-            echo "----------------------------------------------------"
-            echo " Removing WebUI Patches because plugin is being removed"
-            echo "----------------------------------------------------"
-            echo ""
-            # Remove patchs if already applied
-            $patch_script -r
-        fi
-    fi
-fi
-
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
 # Remove all Slackware package entries for this plugin.
 # Handles both new naming (compose.manager-VERSION-noarch-1) and
 # legacy naming (compose.manager-package-VERSION) left by older builds.
