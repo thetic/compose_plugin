@@ -65,17 +65,18 @@ switch ($_POST['action']) {
             // Sanitise container name for use as socket filename
             $safeName = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $containerName);
             $socketName = "compose_ct_" . $safeName;
+            $socketFile = rtrim(COMPOSE_TTYD_SOCKET_DIR, '/') . "/$socketName.sock";
 
             // Kill any existing ttyd on this socket (pkill -f is more robust
             // than pgrep|awk — ensures stale read-only instances are gone)
             exec("pkill -f " . escapeshellarg($socketName . ".sock") . " 2>/dev/null");
             usleep(300000); // 300ms for process to exit
-            @unlink("/var/tmp/$socketName.sock");
+            @unlink($socketFile);
 
             // Start ttyd via ttyd-exec wrapper (same as Unraid native docker console).
             // ttyd-exec sources /etc/default/ttyd for TTYD_OPTS and adds -d0.
             // No -R flag = writable interactive terminal.
-            $cmd = "ttyd-exec -s9 -om1 -i " . escapeshellarg("/var/tmp/$socketName.sock")
+            $cmd = "ttyd-exec -s9 -om1 -i " . escapeshellarg($socketFile)
                 . " docker exec -it " . escapeshellarg($containerName)
                 . " " . escapeshellarg($shell);
             exec($cmd);
@@ -83,7 +84,7 @@ switch ($_POST['action']) {
             // Wait for ttyd to create the socket (up to 2s) to avoid 502
             waitForTtydSocket($socketName);
 
-            // /logterminal/ proxies to /var/tmp/<name>.sock with full
+            // /logterminal/ proxies to COMPOSE_TTYD_SOCKET_DIR/<name>.sock with full
             // bidirectional WebSocket — writable because we omit -R.
             echo "/logterminal/$socketName/";
         }
@@ -94,14 +95,15 @@ switch ($_POST['action']) {
         if ($containerName) {
             $safeName = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $containerName);
             $socketName = "compose_log_" . $safeName;
+            $socketFile = rtrim(COMPOSE_TTYD_SOCKET_DIR, '/') . "/$socketName.sock";
 
             // Kill any existing ttyd on this socket
             exec("pkill -f " . escapeshellarg($socketName . ".sock") . " 2>/dev/null");
             usleep(300000);
-            @unlink("/var/tmp/$socketName.sock");
+            @unlink($socketFile);
 
             // Start ttyd with docker logs -f (read-only)
-            $cmd = "ttyd -R -o -i " . escapeshellarg("/var/tmp/$socketName.sock")
+            $cmd = "ttyd -R -o -i " . escapeshellarg($socketFile)
                 . " docker logs -f " . escapeshellarg($containerName) . " > /dev/null 2>&1 &";
             exec($cmd);
 

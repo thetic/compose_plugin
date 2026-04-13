@@ -19,7 +19,7 @@ require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
  * @param int $intervalMs Poll interval in milliseconds (default 100)
  * @return bool True if socket existed within timeout, false otherwise
  */
-function waitForTtydSocket($socketName, $timeoutMs = 2000, $intervalMs = 100, $tmpDir = '/var/tmp')
+function waitForTtydSocket($socketName, $timeoutMs = 2000, $intervalMs = 100, $tmpDir = COMPOSE_TTYD_SOCKET_DIR)
 {
 
     $socketPath = rtrim($tmpDir, '/') . "/$socketName.sock";
@@ -45,11 +45,12 @@ function waitForTtydSocket($socketName, $timeoutMs = 2000, $intervalMs = 100, $t
 function execComposeCommandInTTY($cmd, $debug, $logFile = '')
 {
     global $socket_name;
+    $socketFile = rtrim(COMPOSE_TTYD_SOCKET_DIR, '/') . "/$socket_name.sock";
     // Use pkill -f for more robust process matching instead of pgrep|awk pipeline
     exec("pkill -f " . escapeshellarg("$socket_name.sock") . " 2>/dev/null");
     usleep(300000); // 300ms for process to exit
-    @unlink("/var/tmp/$socket_name.sock");
-    $socketPath = escapeshellarg("/var/tmp/$socket_name.sock");
+    @unlink($socketFile);
+    $socketPath = escapeshellarg($socketFile);
     if ($logFile !== '') {
         // Preserve interactive TTY behavior by running the command under "script"
         // (PTY capture). A plain tee pipeline breaks terminal redraw/spinner output.
