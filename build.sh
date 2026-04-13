@@ -42,7 +42,7 @@ if [[ -z "$COMPOSE_VERSION" && -f "$VERSIONS_FILE" ]]; then
         fi
     done < "$VERSIONS_FILE"
 fi
-: "${COMPOSE_VERSION:=5.0.2}"
+: "${COMPOSE_VERSION:=5.1.2}"
 
 # Generate dev version with timestamp if requested
 if [[ "$DEV" = true ]]; then
