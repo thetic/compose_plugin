@@ -28,7 +28,7 @@ test_setup() {
 # ============================================================
 
 @test "log_msg function logs to logger" {
-    # Source just the log_msg function
+    # Extract only log_msg to avoid sourcing compose.sh top-level side effects in tests.
     # shellcheck disable=SC1090
     # shellcheck source=/dev/null
     source <(sed -n '/^log_msg()/,/^}/p' "$COMPOSE_SCRIPT")
