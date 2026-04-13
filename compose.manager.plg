@@ -78,33 +78,53 @@ mkdir -p &pluginLOC;/projects
 
 <FILE Run="/bin/bash">
 <INLINE>
-echo "Ace editor v&aceVER; will only be downloaded and installed for pre-7.0 Unraid versions."
+echo ""
+echo "----------------------------------------------------"
+echo ""
+echo "  Ace editor v&aceVER; will only be downloaded and"
+echo "       installed for pre-7.0 Unraid versions."
+echo ""
+echo "  If on 7.0 or later, Ace editor files are included"
+echo "      by default and skips will be shown below."
+echo ""
+echo "----------------------------------------------------"
+echo ""
 </INLINE>
 </FILE>
 
 <!-- Ace editor fallback for pre-7.0: download zip to flash cache -->
-<FILE Name="&pluginLOC;/&aceZIP;" Max="6.99.99">
+<FILE Name="&pluginLOC;/cache-&aceZIP;" Max="6.99.99">
 <URL>&aceURL;</URL>
 <SHA256>&aceSHA256;</SHA256>
 </FILE>
 
 <!-- Ace editor fallback for pre-7.0: copy cached zip to /tmp for extraction -->
-<FILE Name="/tmp/cache-&aceZIP;" Max="6.99.99">
-<LOCAL>&pluginLOC;/&aceZIP;</LOCAL>
+<FILE Name="/tmp/temp-&aceZIP;" Max="6.99.99">
+<LOCAL>&pluginLOC;/cache-&aceZIP;</LOCAL>
 <SHA256>&aceSHA256;</SHA256>
 </FILE>
 
 <!-- Ace editor fallback for pre-7.0: extract needed JS files into plugin dir -->
 <FILE Name="/tmp/ace-editor-install.sh" Run="/bin/bash" Max="6.99.99">
 <INLINE>
-&emhttpLOC;/scripts/install-ace.sh /tmp/cache-&aceZIP; &emhttpLOC; &aceVER;
+&emhttpLOC;/scripts/install-ace.sh /tmp/temp-&aceZIP; &emhttpLOC; &aceVER;
 rm -f /tmp/ace-editor-install.sh
 </INLINE>
 </FILE>
 
 <FILE Run="/bin/bash">
 <INLINE>
-echo "Patches are only installed for pre-6.12 Unraid versions."
+echo ""
+echo "----------------------------------------------------"
+echo ""
+echo "          Patches are only installed for"
+echo "             pre-6.12 Unraid versions."
+echo ""
+echo "     If on 6.12 or later, patches are not needed"
+echo "          and skips will be shown below."
+echo ""
+echo "----------------------------------------------------"
+echo ""
 </INLINE>
 </FILE>
 
@@ -120,8 +140,10 @@ rm -f /tmp/patch-util-install.sh
 <INLINE>
 echo ""
 echo "----------------------------------------------------"
+echo ""
 echo "      Compose Manager Plus has been installed."
-echo "                Version: &version;"
+echo "               Version: &version;"
+echo ""
 echo "----------------------------------------------------"
 echo ""
 </INLINE>
@@ -129,7 +151,17 @@ echo ""
 
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
-echo "Patches are only modified for pre-6.12 Unraid versions."
+echo ""
+echo "----------------------------------------------------"
+echo ""
+echo "           Patches are only modified for"
+echo "             pre-6.12 Unraid versions."
+echo ""
+echo "     If on 6.12 or later, patches are not needed"
+echo "          and skips will be shown below."
+echo ""
+echo "----------------------------------------------------"
+echo ""
 </INLINE>
 </FILE>
 
