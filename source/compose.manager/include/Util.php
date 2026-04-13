@@ -56,6 +56,19 @@ function sanitizeLogText(string $text): string
     return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+if (!function_exists('getElement')) {
+    /**
+     * Convert an element name to a safe HTML ID.
+     * Replaces dots with dashes and removes spaces.
+     */
+    function getElement($element)
+    {
+        $return = str_replace('.', '-', $element);
+        $return = str_replace(' ', '', $return);
+        return $return;
+    }
+}
+
 function getComposeStackOrderKey(string $composeRoot): string
 {
     $normalized = realpath($composeRoot);
@@ -799,6 +812,23 @@ class ContainerInfo
     public string $startedAt = '';
 
     private function __construct() {}
+
+    /**
+     * Normalize Docker image name for update checking.
+     *
+     * Strips docker.io/ prefix and @sha256 digest suffix, then applies
+     * DockerUtil::ensureImageTag() to match Unraid's update-status keys.
+     */
+    public static function normalizeImageForUpdateCheck(string $image): string
+    {
+        if (strpos($image, 'docker.io/') === 0) {
+            $image = substr($image, 10);
+        }
+        if (($digestPos = strpos($image, '@sha256:')) !== false) {
+            $image = substr($image, 0, $digestPos);
+        }
+        return DockerUtil::ensureImageTag($image);
+    }
 
     /**
      * Create a ContainerInfo from a fully-assembled docker inspect + compose ps result.

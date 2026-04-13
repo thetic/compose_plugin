@@ -2,7 +2,6 @@
 
 require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/include/ExecHelpers.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 require_once('/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php');
 
@@ -817,7 +816,7 @@ switch ($_POST['action']) {
             foreach ($rows as $container) {
                 $image = $container['Image'] ?? '';
                 if ($image) {
-                    $image = normalizeImageForUpdateCheck($image);
+                    $image = ContainerInfo::normalizeImageForUpdateCheck($image);
                     if (isset($updateStatusData[$image])) {
                         $updateStatusData[$image]['local'] = null;
                         $statusDirty = true;
@@ -837,7 +836,7 @@ switch ($_POST['action']) {
 
                 if ($containerName && $image) {
                     // Normalize image name (strip docker.io/ prefix, @sha256: digest, add library/ for official images)
-                    $image = normalizeImageForUpdateCheck($image);
+                    $image = ContainerInfo::normalizeImageForUpdateCheck($image);
 
                     // Check update status using Unraid's DockerUpdate class
                     $DockerUpdate->reloadUpdateStatus($image);
@@ -928,7 +927,7 @@ switch ($_POST['action']) {
                     if ($state === 'running') {
                         $image = $container['Image'] ?? '';
                         if ($image) {
-                            $image = normalizeImageForUpdateCheck($image);
+                            $image = ContainerInfo::normalizeImageForUpdateCheck($image);
                             if (isset($updateStatusData[$image])) {
                                 $updateStatusData[$image]['local'] = null;
                                 $statusDirty = true;
@@ -951,7 +950,7 @@ switch ($_POST['action']) {
 
                     // Only check updates for running containers
                     if ($containerName && $image && $state === 'running') {
-                        $image = normalizeImageForUpdateCheck($image);
+                        $image = ContainerInfo::normalizeImageForUpdateCheck($image);
 
                         $DockerUpdate->reloadUpdateStatus($image);
                         $updateStatus = $DockerUpdate->getUpdateStatus($image);
