@@ -76,6 +76,12 @@ mkdir -p &pluginLOC;/projects
 <MD5>&packageMD5;</MD5>
 </FILE>
 
+<FILE Run="/bin/bash">
+<INLINE>
+echo "Ace editor v&aceVER; will only be downloaded and installed for pre-7.0 Unraid versions."
+</INLINE>
+</FILE>
+
 <!-- Ace editor fallback for pre-7.0: download zip to flash cache -->
 <FILE Name="&pluginLOC;/&aceZIP;" Max="6.11.99">
 <URL>&aceURL;</URL>
@@ -96,6 +102,13 @@ rm -f /tmp/ace-editor-install.sh
 </INLINE>
 </FILE>
 
+<FILE Run="/bin/bash">
+<INLINE>
+echo "Patches are only installed for pre-6.12 Unraid versions."
+</INLINE>
+</FILE>
+
+<!-- Patch utility installation for pre-6.12: install or remove patches -->
 <FILE Name="/tmp/patch-util-install.sh" Run="/bin/bash" Max="6.11.99">
 <INLINE>
 &emhttpLOC;/scripts/install-patch.sh install &emhttpLOC; &pluginLOC;
@@ -114,7 +127,13 @@ echo ""
 </INLINE>
 </FILE>
 
-<!-- The 'remove' script. -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+echo "Patches are only modified for pre-6.12 Unraid versions."
+</INLINE>
+</FILE>
+
+<!-- Patch utility removal for pre-6.12: remove patches -->
 <FILE Name="/tmp/patch-util-remove.sh" Run="/bin/bash" Method="remove" Max="6.11.99">
 <INLINE>
 &emhttpLOC;/scripts/install-patch.sh remove &emhttpLOC; &pluginLOC;
@@ -122,6 +141,7 @@ rm -f /tmp/patch-util-remove.sh
 </INLINE>
 </FILE>
 
+<!-- Uninstall script; plus cleanup old/unused packages -->
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
 # Remove all Slackware package entries for this plugin.
