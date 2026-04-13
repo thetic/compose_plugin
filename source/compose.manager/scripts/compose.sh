@@ -17,6 +17,7 @@ eval set -- "$OPTS"
 envFile=""
 env_args=()
 file_args=()
+profile_names=()
 profile_args=()
 cmd_args=()
 stack_path=""
@@ -91,6 +92,19 @@ save_result() {
     fi
 }
 
+# Persist selected profile names for later operations (e.g. update target scope).
+persist_running_profiles() {
+  if [ -z "$stack_path" ] || [ ! -d "$stack_path" ]; then
+    return
+  fi
+
+  if [ ${#profile_names[@]} -gt 0 ]; then
+    printf '%s\n' "$(IFS=,; echo "${profile_names[*]}")" > "$stack_path/running_profiles"
+  else
+    rm -f "$stack_path/running_profiles"
+  fi
+}
+
 while :
 do
   case "$1" in
@@ -128,7 +142,7 @@ do
       shift 2
       ;;
     -g | --profile )
-      profile_args+=("--profile" "$2")
+      profile_names+=("$2")
       shift 2
       ;;
     --recreate )
@@ -152,6 +166,11 @@ do
       shift
       ;;
   esac
+done
+
+# Build docker compose profile flags from canonical profile names.
+for profile_name in "${profile_names[@]}"; do
+  profile_args+=("--profile" "$profile_name")
 done
 
 # Build the compose base command as an array (no eval needed)
@@ -185,17 +204,7 @@ case $command in
       # Save stack started timestamp and running profiles
       if [ -n "$stack_path" ] && [ -d "$stack_path" ]; then
         date -Iseconds > "$stack_path/started_at"
-        # Persist which profiles were used for this run so update operations
-        # can target the same set of services.
-        running_names=()
-        for (( i=0; i<${#profile_args[@]}; i+=2 )); do
-          running_names+=("${profile_args[$((i+1))]}")
-        done
-        if [ ${#running_names[@]} -gt 0 ]; then
-          printf '%s\n' "$(IFS=,; echo "${running_names[*]}")" > "$stack_path/running_profiles"
-        else
-          rm -f "$stack_path/running_profiles"
-        fi
+        persist_running_profiles
       fi
       save_result "success" $exit_code "up"
       echo ""
@@ -324,15 +333,7 @@ case $command in
       # Save stack started timestamp and running profiles after update
       if [ -n "$stack_path" ] && [ -d "$stack_path" ]; then
         date -Iseconds > "$stack_path/started_at"
-        running_names=()
-        for (( i=0; i<${#profile_args[@]}; i+=2 )); do
-          running_names+=("${profile_args[$((i+1))]}")
-        done
-        if [ ${#running_names[@]} -gt 0 ]; then
-          printf '%s\n' "$(IFS=,; echo "${running_names[*]}")" > "$stack_path/running_profiles"
-        else
-          rm -f "$stack_path/running_profiles"
-        fi
+        persist_running_profiles
       fi
       save_result "success" 0 "update"
       echo ""
