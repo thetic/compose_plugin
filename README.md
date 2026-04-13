@@ -1,8 +1,17 @@
-# Compose Manager
+# Compose Manager Plus
+
+![GitHub Repo stars](https://img.shields.io/github/stars/mstrhakr/compose_plugin)
+![GitHub branch check runs](https://img.shields.io/github/check-runs/mstrhakr/compose_plugin/main)
+![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads-pre/mstrhakr/compose_plugin/latest/total)
+![GitHub Closed Issues](https://img.shields.io/github/issues-closed/mstrhakr/compose_plugin)
+![GitHub Closed Pull Requests](https://img.shields.io/github/issues-pr-closed/mstrhakr/compose_plugin)
 
 Compose Manager installs the Docker Compose CLI plugin on your unRAID server and provides a comprehensive web-based interface to create, run, update, back up, and restore Compose stacks directly from the unRAID dashboard. It includes per-stack autostart, scheduled automatic image updates, a rich context menu mirroring the native Docker tab experience, an integrated terminal for live command output, background command execution with notifications, optional UI integration to hide Compose-managed containers, and tooling for testing and CI.
 
 ## Screenshots
+
+<details>
+  <summary>Screenshots of Compose Manager Plus on Unraid</summary>
 
 ### Main Compose Manager Interface
 
@@ -55,6 +64,8 @@ The built-in editor provides multiple tabs for managing your compose stack:
 #### Settings - Log Viewer
 
 ![Settings - Logs Tab](docs/images/settings-logs.png)
+
+</details>
 
 ## Features
 
