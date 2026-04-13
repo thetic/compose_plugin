@@ -19,7 +19,6 @@ use PluginTests\Mocks\FunctionMocks;
 require_once '/usr/local/emhttp/plugins/compose.manager/include/Helpers.php';
 require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 require_once '/usr/local/emhttp/plugins/compose.manager/include/Defines.php';
-require_once '/usr/local/emhttp/plugins/compose.manager/include/ExecHelpers.php';
 
 /**
  * Tests for compose_util.php functions
@@ -275,7 +274,7 @@ class ComposeUtilTest extends TestCase
         $overrideInfo = OverrideInfo::fromStack($tempDir, $stackName);
         file_put_contents($overrideInfo->getOverridePath(), "services:\n  web:\n    ports:\n      - 80:80\n");
                 
-        $sanitizedStackName = sanitizeFolderName($stackName);
+        $sanitizedStackName = \StackInfo::sanitizeProjectString($stackName);
         file_put_contents("$stackDir/name", $sanitizedStackName);
         
         // Ensure array is started

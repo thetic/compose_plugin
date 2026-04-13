@@ -31,19 +31,19 @@ class DockerUpdateTest extends TestCase
         // docker.io prefix is stripped
         $this->assertEquals(
             'library/nginx:latest',
-            normalizeImageForUpdateCheck('docker.io/nginx')
+            \ContainerInfo::normalizeImageForUpdateCheck('docker.io/nginx')
         );
         
         // docker.io/library prefix is stripped to just library
         $this->assertEquals(
             'library/nginx:latest',
-            normalizeImageForUpdateCheck('docker.io/library/nginx')
+            \ContainerInfo::normalizeImageForUpdateCheck('docker.io/library/nginx')
         );
         
         // User images from docker.io
         $this->assertEquals(
             'linuxserver/plex:latest',
-            normalizeImageForUpdateCheck('docker.io/linuxserver/plex')
+            \ContainerInfo::normalizeImageForUpdateCheck('docker.io/linuxserver/plex')
         );
     }
 
@@ -55,19 +55,19 @@ class DockerUpdateTest extends TestCase
         // Image with both tag and digest
         $this->assertEquals(
             'library/nginx:1.25',
-            normalizeImageForUpdateCheck('nginx:1.25@sha256:abc123def456')
+            \ContainerInfo::normalizeImageForUpdateCheck('nginx:1.25@sha256:abc123def456')
         );
         
         // Image with only digest (no tag)
         $this->assertEquals(
             'library/redis:latest',
-            normalizeImageForUpdateCheck('redis@sha256:abc123')
+            \ContainerInfo::normalizeImageForUpdateCheck('redis@sha256:abc123')
         );
         
         // Full docker.io path with digest
         $this->assertEquals(
             'myuser/myapp:v2.0',
-            normalizeImageForUpdateCheck('docker.io/myuser/myapp:v2.0@sha256:xyz789')
+            \ContainerInfo::normalizeImageForUpdateCheck('docker.io/myuser/myapp:v2.0@sha256:xyz789')
         );
     }
 
