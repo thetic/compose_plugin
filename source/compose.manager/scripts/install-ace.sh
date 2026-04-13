@@ -11,9 +11,17 @@ if [ -z "$ACE_ZIP_PATH" ] || [ -z "$EMHTTP_PLUGIN_DIR" ] || [ -z "$ACE_VER" ]; t
     exit 1
 fi
 
-mkdir -p "$ACE_PLUGIN_DIR"
 TMPDIR_ACE="/tmp/ace-install-$$"
-mkdir -p "$TMPDIR_ACE"
+
+if ! mkdir -p "$ACE_PLUGIN_DIR"; then
+    echo "ERROR: Failed to create Ace plugin directory: $ACE_PLUGIN_DIR"
+    exit 1
+fi
+
+if ! mkdir -p "$TMPDIR_ACE"; then
+    echo "ERROR: Failed to create temporary directory: $TMPDIR_ACE"
+    exit 1
+fi
 
 fail_ace_install() {
     echo "ERROR: $1"
@@ -24,6 +32,18 @@ fail_ace_install() {
 }
 
 if [ -f "$ACE_ZIP_PATH" ]; then
+    if [ ! -r "$ACE_ZIP_PATH" ]; then
+        fail_ace_install "Cached Ace archive is not readable: $ACE_ZIP_PATH"
+    fi
+
+    if ! command -v unzip >/dev/null 2>&1; then
+        fail_ace_install "Required command not found: unzip"
+    fi
+
+    if ! command -v cp >/dev/null 2>&1; then
+        fail_ace_install "Required command not found: cp"
+    fi
+
     if unzip -q "$ACE_ZIP_PATH" \
         "ace-builds-$ACE_VER/src-min-noconflict/ace.js" \
         "ace-builds-$ACE_VER/src-min-noconflict/mode-yaml.js" \
