@@ -144,5 +144,5 @@ EOF
 
     assert_success
     assert_mock_called "docker" "run --rm --tmpfs /tmp"
-    assert_mock_called "docker" "/mnt/source/pkg_build.sh"
+    assert_mock_called "docker" "run .* vbatts/slackware:latest /mnt/source/pkg_build.sh"
 }
