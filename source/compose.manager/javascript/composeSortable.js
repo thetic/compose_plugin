@@ -45,10 +45,10 @@ function saveComposeSortOrder() {
         action: 'saveStackOrder',
         projects: projects
     }).fail(function(xhr) {
-        composeClientDebug('[saveComposeSortOrder] failed', {
+        composeClientDebug('failed', {
             status: xhr.status,
             response: xhr.responseText
-        }, 'daemon', 'error');
+        }, 'user', 'error', 'sort-order');
     });
 }
 

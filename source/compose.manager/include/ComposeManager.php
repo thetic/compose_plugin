@@ -520,9 +520,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                             status: status
                         });
                     });
-                    composeClientDebug('[composeLoadlist] initial-stack-statuses', {
+                    composeClientDebug('initial-stack-statuses', {
                         stacks: initialStatuses
-                    }, 'daemon', 'debug');
+                    }, 'user', 'debug', 'composeLoadlist');
                 } catch (e) {}
 
                 // Normalize icons based on state text to ensure server-side render and
@@ -552,23 +552,23 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         // If icon already matches, skip
                         if (($icon.hasClass('fa-' + desiredShape) && $icon.hasClass(desiredColor))) return;
 
-                        composeClientDebug('[composeLoadlist] normalize-icon', {
+                        composeClientDebug('normalize-icon', {
                             project: $row.data('project'),
                             stateText: stateText,
                             desiredShape: desiredShape,
                             desiredColor: desiredColor,
                             before: $icon.attr('class')
-                        }, 'daemon', 'debug');
+                        }, 'user', 'debug', 'composeLoadlist');
                         // Remove old fa-* classes, color classes and apply desired ones
                         $icon.removeClass(function(i, cls) {
                             return (cls.match(/fa-[^\s]+/g) || []).join(' ');
                         });
                         $icon.removeClass('green-text orange-text grey-text cyan-text');
                         $icon.addClass('fa fa-' + desiredShape + ' ' + desiredColor + ' compose-status-icon');
-                        composeClientDebug('[composeLoadlist] normalize-icon-done', {
+                        composeClientDebug('normalize-icon-done', {
                             project: $row.data('project'),
                             after: $icon.attr('class')
-                        }, 'daemon', 'debug');
+                        }, 'user', 'debug', 'composeLoadlist');
                     });
                 } catch (e) {}
 
@@ -603,10 +603,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 try { resolve(data); } catch (e) { resolve(); }
             })
             .fail(function(xhr, status, error) {
-                composeClientDebug('[composeLoadlist] failed', {
+                composeClientDebug('failed', {
                     status: status,
                     error: error
-                }, 'daemon', 'error');
+                }, 'user', 'error', 'composeLoadlist');
                 clearTimeout(composeTimers.load);
                 hideComposeSpinner();
                 $('#compose_list').html('<tr><td colspan="10" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
@@ -1073,13 +1073,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                             hadPendingRechecks = true;
                             composeClientDebug('checkPendingRechecks:found', {
                                 pendingStacks: pendingStacks
-                            }, 'daemon', 'info');
+                            }, 'user', 'info', 'update-check');
 
                             // Check each pending stack
                             pendingStacks.forEach(function(stackName) {
-                                composeClientDebug('Running recheck for recently updated stack:', {
+                                composeClientDebug('Running recheck for recently updated stack', {
                                     stackName: stackName
-                                }, 'daemon', 'info');
+                                }, 'user', 'info', 'update-check');
                                 checkStackUpdates(stackName);
                             });
                         }
@@ -1087,7 +1087,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 } catch (e) {
                     composeClientDebug('checkPendingRechecks:failed', {
                         error: e
-                    }, 'daemon', 'error');
+                    }, 'user', 'error', 'update-check');
                 }
             }
             if (callback) callback(hadPendingRechecks);
@@ -1113,11 +1113,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // If we have a lastChecked time and it's within the interval, don't check
         if (latestCheck > 0 && (now - latestCheck) < intervalSeconds) {
             needsCheck = false;
-            composeClientDebug('[Updates] Last check was ' + Math.round((now - latestCheck) / 60) + ' minutes ago, interval is ' + Math.round(intervalSeconds / 60) + ' minutes. Skipping.', null, 'daemon', 'info');
+            composeClientDebug('Last check was ' + Math.round((now - latestCheck) / 60) + ' minutes ago, interval is ' + Math.round(intervalSeconds / 60) + ' minutes. Skipping.', null, 'user', 'info', 'update-check');
         }
 
         if (needsCheck) {
-            composeClientDebug('[Updates] Running automatic update check...', null, 'daemon', 'info');
+            composeClientDebug('Running automatic update check...', null, 'user', 'info', 'update-check');
             checkAllUpdates();
         }
     }
@@ -1442,12 +1442,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // prevent a render->update->render loop.
         if (expandedStacks[stackId]) {
             if (stackDetailsLoading[stackId] || stackDetailsJustRendered[stackId]) {
-                composeClientDebug('[updateStackUpdateUI] skip-refresh', {
+                composeClientDebug('skip-refresh', {
                     stackId: stackId,
                     stackName: stackName,
                     loading: !!stackDetailsLoading[stackId],
                     justRendered: !!stackDetailsJustRendered[stackId]
-                }, 'daemon', 'info');
+                }, 'user', 'info', 'update-check');
             } else {
                 loadStackContainerDetails(stackId, stackName);
             }
@@ -1673,14 +1673,14 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // This defers the expensive docker commands to after the page renders
         composeLoadlist().then(function() {
             composeListReady = true;
-            composeClientDebug('[dockerload] composeListReady=true, rows=' + $('#compose_stacks tr.compose-sortable').length, null, 'daemon', 'debug');
+            composeClientDebug('composeListReady=true, rows=' + $('#compose_stacks tr.compose-sortable').length, null, 'user', 'debug', 'dockerload');
 
             // Start the dockerload socket now that the DOM has rows with data-ctids.
             if (typeof window.composeDockerLoadToggle === 'function') {
-                composeClientDebug('[dockerload] triggering composeDockerLoadToggle, advancedMode=' + isComposeAdvancedMode(), null, 'daemon', 'debug');
+                composeClientDebug('triggering composeDockerLoadToggle, advancedMode=' + isComposeAdvancedMode(), null, 'user', 'debug', 'dockerload');
                 window.composeDockerLoadToggle(isComposeAdvancedMode());
             } else {
-                composeClientDebug('[dockerload] composeDockerLoadToggle not available yet at composeLoadlist completion', null, 'daemon', 'debug');
+                composeClientDebug('composeDockerLoadToggle not available yet at composeLoadlist completion', null, 'user', 'debug', 'dockerload');
             }
 
             getConfig().then(function(config) {
@@ -1725,7 +1725,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                         // Skip compose reload if refreshStackRow is already handling it
                         if (pendingComposeRefreshCount > 0 || skipNextComposeLoadlist) {
-                            composeClientDebug('[hookLoadlist]  suppressed composeLoadlist (pending=' + pendingComposeRefreshCount + ', skip=' + skipNextComposeLoadlist + ')', null, 'daemon', 'debug');
+                            composeClientDebug('suppressed composeLoadlist (pending=' + pendingComposeRefreshCount + ', skip=' + skipNextComposeLoadlist + ')', null, 'user', 'debug', 'hookLoadlist');
                             skipNextComposeLoadlist = false;
                             return;
                         }
@@ -1742,7 +1742,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         }
                     };
                     window.loadlist._composeTabHooked = true;
-                    composeClientDebug('[hookLoadlist]  hooked loadlist() for cross-widget sync, tabbed=' + isTabbed, null, 'daemon', 'info');
+                    composeClientDebug('hooked loadlist() for cross-widget sync, tabbed=' + isTabbed, null, 'user', 'info', 'hookLoadlist');
                     return true;
                 }
                 return false;
@@ -1782,7 +1782,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // so the socket starts/stops whenever the user switches view modes.
         function initComposeDockerLoadSubscriber() {
             if (typeof NchanSubscriber !== 'function') {
-                composeClientDebug('[dockerload] NchanSubscriber not available yet', null, 'daemon', 'debug');
+                composeClientDebug('NchanSubscriber not available yet', null, 'user', 'debug', 'dockerload');
                 return false;
             }
 
@@ -1790,7 +1790,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // AJAX navigation preserves window globals but old closures/sockets
             // become stale).  Always create a fresh subscriber.
             if (window._composeDockerLoad) {
-                composeClientDebug('[dockerload] tearing down previous subscriber', null, 'daemon', 'info');
+                composeClientDebug('tearing down previous subscriber', null, 'user', 'info', 'dockerload');
                 try { window._composeDockerLoad.stop(); } catch (e) {}
             }
             if (window._composeDockerLoadStaleTimer) {
@@ -1804,7 +1804,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             }
             $(document).off('composeListRefreshed.dockerload');
 
-            composeClientDebug('[dockerload] initializing subscriber, composeListReady=' + composeListReady, null, 'daemon', 'info');
+            composeClientDebug('initializing subscriber, composeListReady=' + composeListReady, null, 'user', 'info', 'dockerload');
 
             var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket', reconnectTimeout: 5000});
             window._composeDockerLoad = composeDockerLoad;
@@ -1845,24 +1845,24 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         containerIds: ctidsAttr ? ctidsAttr.split(',') : []
                     });
                 });
-                composeClientDebug('[dockerload] buildComposeStackIndex complete, stacks=' + composeStackIndex.length, null, 'daemon', 'debug');
+                composeClientDebug('buildComposeStackIndex complete, stacks=' + composeStackIndex.length, null, 'user', 'debug', 'dockerload');
             }
 
             // Invalidate the cache when the list refreshes so that added/removed
             // stacks are picked up on the next stats tick.
             $(document).on('composeListRefreshed.dockerload', function() {
-                composeClientDebug('[dockerload] composeListRefreshed — invalidating stack index and load cache', null, 'daemon', 'debug');
+                composeClientDebug('composeListRefreshed — invalidating stack index and load cache', null, 'user', 'debug', 'dockerload');
                 composeStackIndex = null;
                 composeLoadById = {};
             });
 
             window.composeDockerLoadToggle = function(enable) {
                 if (enable && !composeDockerLoadRunning) {
-                    composeClientDebug('[dockerload] starting WebSocket', null, 'daemon', 'info');
+                    composeClientDebug('starting WebSocket', null, 'user', 'info', 'dockerload');
                     composeDockerLoad.start();
                     composeDockerLoadRunning = true;
                 } else if (!enable && composeDockerLoadRunning) {
-                    composeClientDebug('[dockerload] stopping WebSocket', null, 'daemon', 'info');
+                    composeClientDebug('stopping WebSocket', null, 'user', 'info', 'dockerload');
                     composeDockerLoad.stop();
                     composeDockerLoadRunning = false;
                 }
@@ -1876,7 +1876,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     }
                 }
                 if (staleIds.length > 0) {
-                    composeClientDebug('[dockerload] pruning ' + staleIds.length + ' stale container(s)', { ids: staleIds }, 'daemon', 'debug');
+                    composeClientDebug('pruning ' + staleIds.length + ' stale container(s)', { ids: staleIds }, 'user', 'debug', 'dockerload');
                 }
                 staleIds.forEach(function(staleId) {
                     delete composeLoadById[staleId];
@@ -1990,7 +1990,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             });
 
             composeDockerLoad.on('error', function(code, desc) {
-                composeClientDebug('[dockerload] WebSocket error', { code: code, desc: desc }, 'daemon', 'warn');
+                composeClientDebug('WebSocket error', { code: code, desc: desc }, 'user', 'warn', 'dockerload');
             });
 
             // If dockerload pauses/stalls, drop stale values on a timer so the UI
@@ -2011,7 +2011,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             window._composeDockerLoadVisHandler = function() {
                 if (document.visibilityState === 'visible' && composeDockerLoadRunning) {
                     if (composeDockerLoadDropped > 0) {
-                        composeClientDebug('[dockerload] browser tab became visible — skipped ' + composeDockerLoadDropped + ' messages while hidden, rendering cached data', null, 'daemon', 'debug');
+                        composeClientDebug('browser tab became visible — skipped ' + composeDockerLoadDropped + ' messages while hidden, rendering cached data', null, 'user', 'debug', 'dockerload');
                         composeDockerLoadDropped = 0;
                     }
                     composeStackIndex = null;
@@ -2035,10 +2035,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var $loadTable = $('#compose_stacks');
             var $loadTabPanel = $loadTable.length ? $loadTable.closest('[role="tabpanel"]') : $();
             if ($loadTabPanel.length) {
-                composeClientDebug('[dockerload] tabbed mode detected — observing panel visibility', {}, 'daemon', 'debug');
+                composeClientDebug('tabbed mode detected — observing panel visibility', {}, 'user', 'debug', 'dockerload');
                 window._composeDockerLoadPanelObserver = new MutationObserver(function() {
                     if ($loadTabPanel[0].style.display !== 'none' && composeDockerLoadRunning) {
-                        composeClientDebug('[dockerload] compose tab became visible — invalidating stack index', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'daemon', 'debug');
+                        composeClientDebug('compose tab became visible — invalidating stack index', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'user', 'debug', 'dockerload');
                         composeStackIndex = null;
                     }
                 });
@@ -2049,11 +2049,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // loaded (composeListReady is true).  Otherwise the
             // composeLoadlist().then() callback will start it.
             if (composeListReady && isComposeAdvancedMode()) {
-                composeClientDebug('[dockerload] auto-starting socket', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'daemon', 'info');
+                composeClientDebug('auto-starting socket', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'user', 'info', 'dockerload');
                 composeDockerLoad.start();
                 composeDockerLoadRunning = true;
             } else {
-                composeClientDebug('[dockerload] deferring socket start', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'daemon', 'debug');
+                composeClientDebug('deferring socket start', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'user', 'debug', 'dockerload');
             }
             return true;
         }
@@ -2061,15 +2061,15 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // Standalone compose mode can race script load order; retry briefly
         // so delayed NchanSubscriber availability still initializes dockerload.
         if (!initComposeDockerLoadSubscriber()) {
-            composeClientDebug('[dockerload] subscriber init deferred — will retry every 250ms', null, 'daemon', 'debug');
+            composeClientDebug('subscriber init deferred — will retry every 250ms', null, 'user', 'debug', 'dockerload');
             var composeDockerLoadInitAttempts = 0;
             var composeDockerLoadInitTimer = setInterval(function() {
                 composeDockerLoadInitAttempts++;
                 if (initComposeDockerLoadSubscriber()) {
-                    composeClientDebug('[dockerload] subscriber initialized on retry #' + composeDockerLoadInitAttempts, null, 'daemon', 'info');
+                    composeClientDebug('subscriber initialized on retry #' + composeDockerLoadInitAttempts, null, 'user', 'info', 'dockerload');
                     clearInterval(composeDockerLoadInitTimer);
                 } else if (composeDockerLoadInitAttempts >= 40) {
-                    composeClientDebug('[dockerload] subscriber init gave up after ' + composeDockerLoadInitAttempts + ' attempts', null, 'daemon', 'warn');
+                    composeClientDebug('subscriber init gave up after ' + composeDockerLoadInitAttempts + ' attempts', null, 'user', 'warn', 'dockerload');
                     clearInterval(composeDockerLoadInitTimer);
                 }
             }, 250);
@@ -2405,11 +2405,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                                 title: "Failed to update profiles.",
                                 type: "error"
                             });
-                            composeClientDebug('Failed to update profiles.', {
+                            composeClientDebug('Failed to update profiles', {
                                 project: project,
                                 rawProfiles: rawProfiles,
                                 response: data
-                            }, 'daemon', 'error');
+                            }, 'user', 'error', 'stack-action');
                         }
                     });
                 }
@@ -2530,7 +2530,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         return; // stop scheduling
                     }
                 } catch (e) {
-                    composeClientDebug('[pollBackgroundCompletion] Parse error', e, 'daemon', 'error');
+                    composeClientDebug('Parse error', e, 'user', 'error', 'poll');
                 }
 
                 // Schedule next check if still within timeout (30 minutes)
@@ -2539,7 +2539,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 if (elapsed < 1800) {
                     timeoutHandle = setTimeout(check, interval);
                 } else {
-                    composeClientDebug('[pollBackgroundCompletion] Timeout after 30m', {stack: stackName}, 'daemon', 'warn');
+                    composeClientDebug('Timeout after 30m', {stack: stackName}, 'user', 'warn', 'poll');
                     setStackActionInProgress(stackName, false);
                 }
             });
@@ -2863,7 +2863,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         setTimeout(function() {
             composeClientDebug('Processing pending update checks', {
                 stacks: stacksToCheck
-            }, 'daemon', 'debug');
+            }, 'user', 'debug', 'update-check');
 
             stacksToCheck.forEach(function(stackName) {
                 if (composeStackActionInProgress[stackName]) {
@@ -2871,7 +2871,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     deferredStacks.push(stackName);
                     composeClientDebug('Deferring pending update check while action is in progress', {
                         stack: stackName
-                    }, 'daemon', 'info');
+                    }, 'user', 'info', 'update-check');
                 } else {
                     checkStackUpdates(stackName);
                 }
@@ -2925,7 +2925,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         pendingComposeReloadStacks = [];
         composeClientDebug('processPendingComposeReloads', {
             stacks: reloadStacks.slice()
-        }, 'daemon', 'info');
+        }, 'user', 'info', 'ui-render');
 
         // If any of the target rows are missing from DOM, fallback to full reload
         var anyMissing = reloadStacks.some(function(project) {
@@ -2946,10 +2946,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 var stackId = $('#compose_stacks tr.compose-sortable[data-project="' + project + '"]').attr('id').replace('stack-row-', '');
                 refreshStackRow(stackId, project);
             } catch (e) {
-                composeClientDebug('[processPendingComposeReloads] update-failed', {
+                composeClientDebug('update-failed', {
                     project: project,
                     err: e.toString()
-                }, 'daemon', 'error');
+                }, 'user', 'error', 'ui-render');
             }
         });
 
@@ -2977,10 +2977,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }, function(data) {
             if (data) {
                 try {
-                    composeClientDebug('[refreshStackRow] response', {
+                    composeClientDebug('response', {
                         project: project,
                         data: data
-                    }, 'daemon', 'info');
+                    }, 'user', 'info', 'refreshStackRow');
                     var response = JSON.parse(data);
                     if (response.result === 'success') {
                         var containers = response.containers || [];
@@ -3005,10 +3005,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         }
                     }
                 } catch (e) {
-                    composeClientDebug('[refreshStackRow] parse-error', {
+                    composeClientDebug('parse-error', {
                         project: project,
                         err: e.toString()
-                    }, 'daemon', 'error');
+                    }, 'user', 'error', 'refreshStackRow');
                     // Fallback: update from whatever cache we have
                     updateParentStackFromContainers(stackId, project);
                 }
@@ -3029,7 +3029,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             stack: stackName,
             inProgress: inProgress,
             text: text
-        }, 'daemon', 'info');
+        }, 'user', 'info', 'stack-action');
 
         if (inProgress) {
             composeStackActionInProgress[stackName] = true;
@@ -3192,10 +3192,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         stacks.forEach(function(s) {
             var stackName = s.project;
             if (pendingComposeReloadStacks.indexOf(stackName) === -1) pendingComposeReloadStacks.push(stackName);
-            composeClientDebug('[executeStartAllStacks] queued', {
+            composeClientDebug('queued', {
                 stack: stackName,
                 pending: pendingComposeReloadStacks.slice()
-            }, 'daemon', 'info');
+            }, 'user', 'info', 'startAllStacks');
             setStackActionInProgress(stackName, true);
         });
 
@@ -3309,10 +3309,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         stacks.forEach(function(s) {
             var stackName = s.project;
             if (pendingComposeReloadStacks.indexOf(stackName) === -1) pendingComposeReloadStacks.push(stackName);
-            composeClientDebug('[executeStopAllStacks] queued', {
+            composeClientDebug('queued', {
                 stack: stackName,
                 pending: pendingComposeReloadStacks.slice()
-            }, 'daemon', 'info');
+            }, 'user', 'info', 'stopAllStacks');
             setStackActionInProgress(stackName, true);
         });
 
@@ -4828,15 +4828,15 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                             }
                         }
                     } catch (e) {
-                        composeClientDebug('[Delete response parse error] ', {
+                        composeClientDebug('Delete response parse error', {
                             project: project,
                             error: e
-                        }, 'daemon', 'error');
+                        }, 'user', 'error', 'stack-action');
                     }
                 }).fail(function() {
-                    composeClientDebug('[Delete request failed for project] ', {
+                    composeClientDebug('Delete request failed for project', {
                         project: project
-                    }, 'daemon', 'error');
+                    }, 'user', 'error', 'stack-action');
                 });
                 composeLoadlist();
             }
@@ -4879,17 +4879,17 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         // Prevent parallel loads for same stack
         if (stackDetailsLoading[stackId]) {
-            composeClientDebug('[loadStackContainerDetails] already-loading', {
+            composeClientDebug('already-loading', {
                 stackId: stackId,
                 project: project
-            }, 'daemon', 'warning');
+            }, 'user', 'warning', 'container-details');
             return;
         }
         stackDetailsLoading[stackId] = true;
-        composeClientDebug('[loadStackContainerDetails] start', {
+        composeClientDebug('start', {
             stackId: stackId,
             project: project
-        }, 'daemon', 'info');
+        }, 'user', 'info', 'container-details');
 
         // Show loading state
         $container.html('<div class="stack-details-loading"><i class="fa fa-spinner fa-spin"></i> Loading container details...</div>');
@@ -4912,11 +4912,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                         stackContainersCache[stackId] = containers;
                         if (response.startedAt) stackStartedAtCache[stackId] = response.startedAt;
-                        composeClientDebug('[loadStackContainerDetails] success', {
+                        composeClientDebug('success', {
                             stackId: stackId,
                             project: project,
                             containers: containers.length
-                        }, 'daemon', 'info');
+                        }, 'user', 'info', 'container-details');
                         renderContainerDetails(stackId, containers, project);
                         // Slide down details row now that content is rendered
                         $('#details-row-' + stackId).slideDown(200);
@@ -4925,38 +4925,38 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         var errorMsg = composeEscapeHtml(response.message || 'Failed to load container details');
                         $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> ' + errorMsg + '</div>');
                         $('#details-row-' + stackId).slideDown(200);
-                        composeClientDebug('[loadStackContainerDetails] error', {
+                        composeClientDebug('error', {
                             stackId: stackId,
                             project: project,
                             message: errorMsg
-                        }, 'daemon', 'error');
+                        }, 'user', 'error', 'container-details');
                     }
                 } catch (e) {
                     $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> Failed to parse container details response</div>');
                     $('#details-row-' + stackId).slideDown(200);
-                    composeClientDebug('[loadStackContainerDetails] parse-error', {
+                    composeClientDebug('parse-error', {
                         stackId: stackId,
                         project: project,
                         err: e.toString()
-                    }, 'daemon', 'error');
+                    }, 'user', 'error', 'container-details');
                 }
             } else {
                 $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> Failed to load container details</div>');
                 $('#details-row-' + stackId).slideDown(200);
-                composeClientDebug('[loadStackContainerDetails] empty-response', {
+                composeClientDebug('empty-response', {
                     stackId: stackId,
                     project: project
-                }, 'daemon', 'warning');
+                }, 'user', 'warning', 'container-details');
             }
             stackDetailsLoading[stackId] = false;
         }).fail(function() {
             $container.html('<div class="stack-details-error"><i class="fa fa-exclamation-triangle"></i> Failed to load container details</div>');
             $('#details-row-' + stackId).slideDown(200);
             stackDetailsLoading[stackId] = false;
-            composeClientDebug('[loadStackContainerDetails] failed', {
+            composeClientDebug('failed', {
                 stackId: stackId,
                 project: project
-            }, 'daemon', 'error');
+            }, 'user', 'error', 'container-details');
         });
     }
 
@@ -5163,25 +5163,25 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 try {
                     stackDetailsJustRendered[stackId] = true;
                 } catch (ex) {
-                    composeClientDebug('[renderContainerDetails] set-just-rendered-failed', {
+                    composeClientDebug('set-just-rendered-failed', {
                         err: ex.toString(),
                         stackId: stackId,
                         project: project
-                    }, 'daemon', 'error');
+                    }, 'user', 'error', 'container-details');
                 }
                 try {
                     updateParentStackFromContainers(stackId, project);
                 } catch (e) {
-                    composeClientDebug('[renderContainerDetails] update-parent-failed', {
+                    composeClientDebug('update-parent-failed', {
                         err: e.toString(),
                         stackId: stackId,
                         project: project
-                    }, 'daemon', 'error');
+                    }, 'user', 'error', 'container-details');
                 }
-                composeClientDebug('[renderContainerDetails] just-rendered', {
+                composeClientDebug('just-rendered', {
                     stackId: stackId,
                     project: project
-                }, 'daemon', 'info');
+                }, 'user', 'info', 'container-details');
                 // Clear the flag after a short window
                 setTimeout(function() {
                     try {
@@ -5253,10 +5253,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
             // If the stack has an in-progress action, keep the temporary status icon/text until completion.
             if (composeStackActionInProgress[project]) {
-                composeClientDebug('[updateParentStackFromContainers] skipping icon/state update while action in progress', {
+                composeClientDebug('skipping icon/state update while action in progress', {
                     stackId: stackId,
                     project: project
-                }, 'daemon', 'debug');
+                }, 'user', 'debug', 'container-details');
                 return;
             }
 
@@ -5355,11 +5355,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // Re-apply view mode (advanced/basic) to ensure column content visibility
             applyListView();
         } catch (e) {
-            composeClientDebug('[updateParentStackFromContainers] error', {
+            composeClientDebug('updateParentStackFromContainers error', {
                 err: e.toString(),
                 stackId: stackId,
                 project: project
-            }, 'daemon', 'error');
+            }, 'user', 'error', 'container-details');
             // If anything goes wrong, fallback to full reload
             composeLoadlist();
         }
@@ -5551,12 +5551,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 stateOrigText = $stateTextEl.text();
                 $stateTextEl.attr('data-orig-text', stateOrigText);
                 $stateTextEl.text(actionStatusText);
-                composeClientDebug('[containerAction] set-status', {
+                composeClientDebug('set-status', {
                     container: containerName,
                     action: action,
                     stackId: stackId,
                     statusText: actionStatusText
-                }, 'daemon', 'info');
+                }, 'user', 'info', 'container-action');
             } catch (e) {}
         }
 
@@ -5577,12 +5577,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         var project = $('#stack-row-' + stackId).data('project');
                         if (project) {
                             if (pendingComposeReloadStacks.indexOf(project) === -1) pendingComposeReloadStacks.push(project);
-                            composeClientDebug('[containerAction] queued-stack-reload', {
+                            composeClientDebug('queued-stack-reload', {
                                 container: containerName,
                                 action: action,
                                 stack: project,
                                 pending: pendingComposeReloadStacks.slice()
-                            }, 'daemon', 'info');
+                            }, 'user', 'info', 'container-action');
                             // Show per-stack spinner immediately
                             try {
                                 setStackActionInProgress(project, true);

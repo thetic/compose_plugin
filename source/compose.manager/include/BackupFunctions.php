@@ -123,7 +123,7 @@ function applyRetentionPolicy($destination)
         foreach ($toDelete as $archive) {
             $filePath = $destination . '/' . $archive['filename'];
             @unlink($filePath);
-            logger("Retention: deleted old backup " . $archive['filename']);
+            clientDebug("Retention: deleted old backup " . $archive['filename'], null, 'daemon', 'info', 'backup');
         }
     }
 }
@@ -334,17 +334,6 @@ function formatBytes($bytes)
         return round($bytes / 1024, 2) . ' KB';
     }
     return $bytes . ' B';
-}
-
-/**
- * Log a message to syslog with compose.manager tag.
- * Guarded to avoid redeclaration when Helpers.php is also loaded.
- */
-if (!function_exists('logger')) {
-    function logger($message)
-    {
-        exec("logger -t 'compose.manager' " . escapeshellarg("[backup] " . $message));
-    }
 }
 
 /**
