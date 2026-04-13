@@ -1,6 +1,9 @@
 /**
  * Compose Stack Utilities
  *
+ * @file composeStackUtils.js
+ * @module composeStackUtils
+ *
  * Shared helpers for stack status derivation and related display logic.
  * Mirrors the PHP StackInfo::getStackState() / getContainerCounts() methods
  * so the live-refresh JS path stays consistent with server-rendered state.
