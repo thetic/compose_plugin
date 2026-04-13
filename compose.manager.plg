@@ -83,19 +83,19 @@ echo "Ace editor v&aceVER; will only be downloaded and installed for pre-7.0 Unr
 </FILE>
 
 <!-- Ace editor fallback for pre-7.0: download zip to flash cache -->
-<FILE Name="&pluginLOC;/&aceZIP;" Max="6.11.99">
+<FILE Name="&pluginLOC;/&aceZIP;" Max="6.99.99">
 <URL>&aceURL;</URL>
 <SHA256>&aceSHA256;</SHA256>
 </FILE>
 
 <!-- Ace editor fallback for pre-7.0: copy cached zip to /tmp for extraction -->
-<FILE Name="/tmp/cache-&aceZIP;" Max="6.11.99">
+<FILE Name="/tmp/cache-&aceZIP;" Max="6.99.99">
 <LOCAL>&pluginLOC;/&aceZIP;</LOCAL>
 <SHA256>&aceSHA256;</SHA256>
 </FILE>
 
 <!-- Ace editor fallback for pre-7.0: extract needed JS files into plugin dir -->
-<FILE Name="/tmp/ace-editor-install.sh" Run="/bin/bash" Max="6.11.99">
+<FILE Name="/tmp/ace-editor-install.sh" Run="/bin/bash" Max="6.99.99">
 <INLINE>
 &emhttpLOC;/scripts/install-ace.sh /tmp/cache-&aceZIP; &emhttpLOC; &aceVER;
 rm -f /tmp/ace-editor-install.sh
