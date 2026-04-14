@@ -57,8 +57,12 @@ wget_args() {
 }
 
 echo "Installing unzip dependency..."
-run_quiet wget $(wget_args) https://slackware.uk/slackware/slackware64-14.2/slackware64/a/infozip-6.0-x86_64-3.txz
-run_quiet upgradepkg --install-new infozip-6.0-x86_64-3.txz
+INFOZIP_PKG="infozip-6.0-x86_64-8.txz"
+run_quiet wget $(wget_args) "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}"
+run_quiet wget $(wget_args) "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}.sha256"
+run_quiet sha256sum -c "${INFOZIP_PKG}.sha256"
+run_quiet rm -f "${INFOZIP_PKG}.sha256"
+run_quiet upgradepkg --install-new "${INFOZIP_PKG}"
 
 echo "Creating temporary package structure at $tmpdir..."
 run_quiet mkdir -p "$tmpdir"
