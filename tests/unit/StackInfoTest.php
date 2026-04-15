@@ -1095,4 +1095,63 @@ class StackInfoTest extends TestCase
         $this->assertSame(2, $state['running']);
         $this->assertSame('partial (2/3)', $state['label']);
     }
+    /**
+     * Bug #95: When importing an indirect project that already has docker-compose.yml,
+     * compose manager should NOT create a new compose.yaml and should resolve the
+     * override name based on the existing file.
+     */
+    public function testCreateNewIndirectExistingDockerComposeYml(): void
+    {
+        $indirectDir = $this->tempRoot . '/falco';
+        mkdir($indirectDir, 0755, true);
+        file_put_contents("$indirectDir/docker-compose.yml", "services:\n  falco:\n    image: falco\n");
+
+        $stack = \StackInfo::createNew($this->tempRoot, 'Falco', '', $indirectDir);
+
+        $this->assertTrue($stack->isIndirect);
+        // Should NOT create compose.yaml when docker-compose.yml already exists
+        $this->assertFileDoesNotExist("$indirectDir/compose.yaml",
+            "compose.yaml should not be created when docker-compose.yml already exists");
+        // Should NOT overwrite existing compose file
+        $this->assertSame("services:\n  falco:\n    image: falco\n",
+            file_get_contents("$indirectDir/docker-compose.yml"));
+        // The resolved compose file should be the existing docker-compose.yml
+        $this->assertSame("$indirectDir/docker-compose.yml", $stack->composeFilePath);
+        // The override should be named to match docker-compose.yml, not compose.yaml
+        $this->assertSame('docker-compose.override.yml', $stack->overrideInfo->computedName);
+    }
+
+    /**
+     * Bug #95 variant: Same issue with docker-compose.yaml
+     */
+    public function testCreateNewIndirectExistingDockerComposeYaml(): void
+    {
+        $indirectDir = $this->tempRoot . '/test-yaml';
+        mkdir($indirectDir, 0755, true);
+        file_put_contents("$indirectDir/docker-compose.yaml", "services:\n  app:\n    image: app\n");
+
+        $stack = \StackInfo::createNew($this->tempRoot, 'TestYaml', '', $indirectDir);
+
+        $this->assertTrue($stack->isIndirect);
+        $this->assertFileDoesNotExist("$indirectDir/compose.yaml");
+        $this->assertSame("$indirectDir/docker-compose.yaml", $stack->composeFilePath);
+        $this->assertSame('docker-compose.override.yaml', $stack->overrideInfo->computedName);
+    }
+
+    /**
+     * Bug #95 variant: Same issue with compose.yml
+     */
+    public function testCreateNewIndirectExistingComposeYml(): void
+    {
+        $indirectDir = $this->tempRoot . '/test-yml';
+        mkdir($indirectDir, 0755, true);
+        file_put_contents("$indirectDir/compose.yml", "services:\n  svc:\n    image: svc\n");
+
+        $stack = \StackInfo::createNew($this->tempRoot, 'TestYml', '', $indirectDir);
+
+        $this->assertTrue($stack->isIndirect);
+        $this->assertFileDoesNotExist("$indirectDir/compose.yaml");
+        $this->assertSame("$indirectDir/compose.yml", $stack->composeFilePath);
+        $this->assertSame('compose.override.yml', $stack->overrideInfo->computedName);
+    }
 }
