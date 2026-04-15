@@ -41,13 +41,15 @@ function waitForTtydSocket($socketName, $timeoutMs = 2000, $intervalMs = 100, $t
  * @param string $cmd The command to execute
  * @param bool $debug Whether to log debug messages
  * @param string $logFile Optional path to write a copy of the output
+ * @param string $socketOverride Optional socket name to use instead of the global default
  */
-function execComposeCommandInTTY($cmd, $debug, $logFile = '')
+function execComposeCommandInTTY($cmd, $debug, $logFile = '', $socketOverride = '')
 {
     global $socket_name;
-    $socketFile = rtrim(COMPOSE_TTYD_SOCKET_DIR, '/') . "/$socket_name.sock";
+    $effectiveSocket = $socketOverride !== '' ? $socketOverride : $socket_name;
+    $socketFile = rtrim(COMPOSE_TTYD_SOCKET_DIR, '/') . "/$effectiveSocket.sock";
     // Use pkill -f for more robust process matching instead of pgrep|awk pipeline
-    exec("pkill -f " . escapeshellarg("$socket_name.sock") . " 2>/dev/null");
+    exec("pkill -f " . escapeshellarg("$effectiveSocket.sock") . " 2>/dev/null");
     usleep(300000); // 300ms for process to exit
     @unlink($socketFile);
     $socketPath = escapeshellarg($socketFile);
@@ -64,7 +66,7 @@ function execComposeCommandInTTY($cmd, $debug, $logFile = '')
     clientDebug("Executing command in ttyd: " . $cmd, ['command' => $cmd], 'user', 'debug', 'ttyd');
 
     // Wait for the socket to be created to avoid 502 on first open.
-    waitForTtydSocket($socket_name);
+    waitForTtydSocket($effectiveSocket);
 }
 
 /**
@@ -178,9 +180,19 @@ function echoComposeCommand($action, $recreate = false, $background = false)
                 return escapeshellarg($item);
             }, $composeCommand);
             $composeCommandStr = join(" ", $composeCommandEscaped);
-            execComposeCommandInTTY($composeCommandStr, $debug, $logFile);
+            // Use a per-stack socket for logs so viewing logs doesn't conflict
+            // with action operations (up/update/pull) that share the default socket.
+            $logsSocket = '';
+            if ($action === 'logs') {
+                $logsSocket = 'compose_logs_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', basename($path));
+            }
+            execComposeCommandInTTY($composeCommandStr, $debug, $logFile, $logsSocket);
             clientDebug("Executing command in ttyd: " . $composeCommandStr, ['command' => $composeCommandStr], 'user', 'debug', 'compose');
-            $composeCommand = "/plugins/compose.manager/include/ShowTtyd.php" . ($action !== 'logs' ? "?done=1" : "");
+            if ($action === 'logs') {
+                $composeCommand = "/plugins/compose.manager/include/ShowTtyd.php?socket=" . urlencode($logsSocket);
+            } else {
+                $composeCommand = "/plugins/compose.manager/include/ShowTtyd.php?done=1";
+            }
             echo $composeCommand;
         } else {
             $i = 0;
