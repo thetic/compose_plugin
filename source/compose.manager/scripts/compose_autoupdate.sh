@@ -59,7 +59,8 @@ get_image_digests() {
 OLD_DIGESTS=$(get_image_digests || true)
 
 # Run pull and capture output (timeout prevents indefinite hangs on unresponsive registries)
-timeout "$COMMAND_TIMEOUT" docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull > "$OUT" 2>&1 || RC=$?
+# --ignore-buildable: skip services with build sections (they should be rebuilt, not pulled)
+timeout "$COMMAND_TIMEOUT" docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull --ignore-buildable > "$OUT" 2>&1 || RC=$?
 
 if [ "$RC" -ne 0 ]; then
   ERRMSG="Auto-update pull failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"

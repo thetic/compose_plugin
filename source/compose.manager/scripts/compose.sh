@@ -243,10 +243,10 @@ case $command in
 
   pull)
     if [ "$debug" = true ]; then
-      log_msg "DEBUG" "${compose_base[*]} -p $name pull"
+      log_msg "DEBUG" "${compose_base[*]} -p $name pull --ignore-buildable"
     fi
     
-    "${compose_base[@]}" -p "$name" pull
+    "${compose_base[@]}" -p "$name" pull --ignore-buildable
     exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
@@ -264,7 +264,7 @@ case $command in
   update)
     if [ "$debug" = true ]; then
       log_msg "DEBUG" "${compose_base[*]} -p $name images -q"
-      log_msg "DEBUG" "${compose_base[*]} -p $name pull"
+      log_msg "DEBUG" "${compose_base[*]} -p $name pull --ignore-buildable"
       log_msg "DEBUG" "${compose_base[*]} -p $name up -d --build"
     fi
 
@@ -291,9 +291,9 @@ case $command in
       images=( "${images[@]##sha256:}" )
     fi
     
-    # Pull latest images
+    # Pull latest images (--ignore-buildable: skip services with build sections, they are rebuilt by up --build)
     echo "Pulling latest images..."
-    "${compose_base[@]}" -p "$name" pull
+    "${compose_base[@]}" -p "$name" pull --ignore-buildable
     pull_exit=$?
     
     if [ $pull_exit -ne 0 ]; then

@@ -85,6 +85,32 @@ test_setup() {
 }
 
 # ============================================================
+# --ignore-buildable Flag Tests
+# ============================================================
+
+@test "compose.sh pull action uses --ignore-buildable" {
+    # Ensure the pull action always passes --ignore-buildable to skip build-only services
+    run grep -E '^\s*"\$\{compose_base\[@\]\}" -p "\$name" pull --ignore-buildable' "$COMPOSE_SCRIPT"
+    assert_success
+}
+
+@test "compose.sh update action pull step uses --ignore-buildable" {
+    # The update action pulls before 'up -d --build'; buildable services are handled by --build
+    run grep -E 'pull --ignore-buildable' "$COMPOSE_SCRIPT"
+    assert_success
+    # Should appear at least twice (pull action + update action)
+    local count
+    count=$(grep -cE 'pull --ignore-buildable' "$COMPOSE_SCRIPT")
+    [ "$count" -ge 2 ]
+}
+
+@test "compose_autoupdate.sh uses --ignore-buildable" {
+    local autoupdate_script="$BATS_TEST_DIRNAME/../../source/compose.manager/scripts/compose_autoupdate.sh"
+    run grep -E 'pull --ignore-buildable' "$autoupdate_script"
+    assert_success
+}
+
+# ============================================================
 # Stack Directory Tests
 # ============================================================
 
