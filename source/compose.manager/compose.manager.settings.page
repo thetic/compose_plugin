@@ -18,6 +18,9 @@ $ui_patch_help_class = $option_patch_ui ? "hidden" : "inline_help"; // hide help
 
 $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc -l")) != 0;
 
+$pluginVersion = get_plugin_attr('version', '/var/log/plugins/compose.manager.plg') ?: 'unknown';
+$composeCliVersion = trim(shell_exec('docker compose version --short 2>/dev/null') ?? '');
+
 $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js')
     ? '/webGui/javascript/ace'
     : '/plugins/compose.manager/javascript/ace';
@@ -2476,6 +2479,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 <!-- Credits Tab -->
 <div id="compose-tab-credits" class="compose-tab-content">
     <div class="title"><span class="left"><i class="fa fa-star icon"></i>_(Credits)_</span></div>
+
+    <div class="credits-section" style="padding:16px 12px;border-bottom:1px solid var(--dynamix-sb-border-color, #ccc);">
+        <span style="font-size:1.2em;font-weight:bold;">Plugin Version: <?= htmlspecialchars($pluginVersion) ?></span><br>
+        <?php if ($composeCliVersion): ?>
+        <span style="font-size:1.2em;font-weight:bold;">Docker Compose: v<?= htmlspecialchars($composeCliVersion) ?></span>
+        <?php endif; ?>
+    </div>
 
     <div class="credits-section" style="padding:12px;">
         <p><strong>Original GitHub repository:</strong> <a href="https://github.com/dcflachs/compose_plugin" target="_blank" rel="noopener noreferrer">dcflachs/compose_plugin</a></p>

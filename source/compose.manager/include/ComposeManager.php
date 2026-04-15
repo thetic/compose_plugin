@@ -1632,15 +1632,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         } else {
             $('body').prepend($toggleContainer);
         }
-        // Inject Compose CLI version next to the page title
-        if (composeCliVersion) {
-            $('div.content').children('div.title').each(function() {
-                var txt = $(this).text().trim();
-                if (/Compose/i.test(txt) && !/Docker\s*Containers/i.test(txt)) {
-                    $(this).append(' <span class="compose-text-muted" style="font-size:0.75em;font-weight:normal;vertical-align:middle;">v' + composeEscapeHtml(composeCliVersion) + '</span>');
-                }
-            });
-        }
+
 
         // Initialize the Advanced/Basic view toggle.
         // labels_placement:'left' puts both labels to the left of the slider.
