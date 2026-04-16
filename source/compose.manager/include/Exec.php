@@ -213,6 +213,48 @@ switch ($_POST['action']) {
         file_put_contents($overridePath, $scriptContents);
         echo "$overridePath saved";
         break;
+    case 'clearIconCache':
+        $script = getPostScript();
+        $services = json_decode($_POST['services'] ?? '[]', true);
+        if (!$script || !is_array($services) || empty($services)) {
+            echo json_encode(['result' => 'error', 'message' => 'Missing project or services.']);
+            break;
+        }
+
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $args = $stackInfo->buildComposeArgs();
+
+        // Resolve container names via docker compose config (works without running containers)
+        $cmd = "docker compose {$args['files']} {$args['envFile']} -p "
+            . escapeshellarg($args['projectName'])
+            . " config --format json 2>/dev/null";
+        $configJson = shell_exec($cmd);
+        $config = $configJson ? json_decode($configJson, true) : null;
+
+        $iconCacheRAM = '/usr/local/emhttp/state/plugins/dynamix.docker.manager/images';
+        $iconCacheUSB = '/var/lib/docker/unraid/images';
+        $cleared = [];
+
+        foreach ($services as $service) {
+            if (!is_string($service)) continue;
+
+            // Resolve container name from compose config, fall back to default naming
+            $containerName = null;
+            if (isset($config['services'][$service]['container_name'])) {
+                $containerName = $config['services'][$service]['container_name'];
+            } else {
+                $containerName = $args['projectName'] . '-' . $service . '-1';
+            }
+
+            $ramFile = $iconCacheRAM . '/' . $containerName . '-icon.png';
+            $usbFile = $iconCacheUSB . '/' . $containerName . '-icon.png';
+            @unlink($ramFile);
+            @unlink($usbFile);
+            $cleared[] = $containerName;
+        }
+
+        echo json_encode(['result' => 'success', 'cleared' => $cleared]);
+        break;
     case 'updateAutostart':
         $script = getPostScript();
         if (!$script) {

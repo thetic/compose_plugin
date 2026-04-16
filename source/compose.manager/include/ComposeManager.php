@@ -4695,6 +4695,23 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             scriptContents: rawOverride
         }).then(function(data) {
             if (data) {
+                // Collect services whose icon changed, then clear webgui icon cache
+                var changedIconServices = [];
+                for (var serviceKey in mainDoc.services) {
+                    var oldIcon = editorModal.originalLabels[serviceKey + '_icon'] || '';
+                    var newIcon = $('#label-' + serviceKey + '-icon').val() || '';
+                    if (oldIcon !== newIcon) {
+                        changedIconServices.push(serviceKey);
+                    }
+                }
+                if (changedIconServices.length > 0) {
+                    $.post(caURL, {
+                        action: 'clearIconCache',
+                        script: project,
+                        services: JSON.stringify(changedIconServices)
+                    });
+                }
+
                 // Update original labels to match current values
                 for (var serviceKey in mainDoc.services) {
                     editorModal.originalLabels[serviceKey + '_icon'] = $('#label-' + serviceKey + '-icon').val() || '';
