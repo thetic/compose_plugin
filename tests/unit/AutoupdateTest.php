@@ -10,6 +10,7 @@ use PluginTests\TestCase;
 class AutoupdateTest extends TestCase
 {
     private ?string $wrapperPath = null;
+    private ?string $cronFile = null;
 
     protected function setUp(): void
     {
@@ -31,16 +32,23 @@ class AutoupdateTest extends TestCase
     exit(0);
     PHP;
         file_put_contents($this->wrapperPath, $shim);
-        // redirect cron writes to plugin root in tests
-        putenv('COMPOSE_MANAGER_CRON_DIR=' . $plugin_root);
+        // redirect cron writes to temp file in tests
+        $this->cronFile = sys_get_temp_dir() . '/compose_cron_test_' . getmypid() . '.cron';
+        putenv('COMPOSE_MANAGER_CRON_FILE=' . $this->cronFile);
+        putenv('COMPOSE_MANAGER_CRON_NOSYNC=1');
     }
 
     protected function tearDown(): void
     {
-        putenv('COMPOSE_MANAGER_CRON_DIR');
+        putenv('COMPOSE_MANAGER_CRON_FILE');
+        putenv('COMPOSE_MANAGER_CRON_NOSYNC');
         putenv('COMPOSE_MANAGER_SH');
         putenv('AUTOTEST_MARKER');
         putenv('COMPOSE_MANAGER_AUTOUPDATE_FILE');
+        if ($this->cronFile !== null && is_file($this->cronFile)) {
+            @unlink($this->cronFile);
+        }
+        $this->cronFile = null;
         if ($this->wrapperPath !== null && is_file($this->wrapperPath)) {
             unlink($this->wrapperPath);
         }
@@ -107,11 +115,8 @@ class AutoupdateTest extends TestCase
 
     public function testInstallCronUsesAbsolutePhpBinary(): void
     {
-        global $plugin_root;
-
-        $cronFile = $plugin_root . 'compose_manager_autoupdate';
-        if (is_file($cronFile)) {
-            unlink($cronFile);
+        if (is_file($this->cronFile)) {
+            unlink($this->cronFile);
         }
 
         $_POST = ['action' => 'installCron'];
@@ -123,15 +128,15 @@ class AutoupdateTest extends TestCase
         $this->assertIsArray($response);
         $this->assertArrayHasKey('ok', $response);
         $this->assertTrue((bool)$response['ok']);
-        $this->assertFileExists($cronFile);
+        $this->assertFileExists($this->cronFile);
 
-        $line = file_get_contents($cronFile);
-        $this->assertStringContainsString('/usr/bin/php', $line);
-        $this->assertStringContainsString('AutoUpdateRunner.php', $line);
+        $content = file_get_contents($this->cronFile);
+        $this->assertStringContainsString('/usr/bin/php', $content);
+        $this->assertStringContainsString('AutoUpdateRunner.php', $content);
+        $this->assertStringContainsString('#compose-autoupdate', $content);
+        // Verify no stray 'root' user field
+        $this->assertStringNotContainsString('* root ', $content);
 
-        if (is_file($cronFile)) {
-            unlink($cronFile);
-        }
         $_POST = [];
     }
 }

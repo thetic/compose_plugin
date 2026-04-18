@@ -261,64 +261,18 @@ function restoreStacks($archivePath, $stacks)
 
 /**
  * Install or remove the backup cron job.
- * Uses root's crontab directly for maximum compatibility with Unraid's cron daemon.
+ * Delegates to CronManager for centralized .cron file management via update_cron.
  */
-function updateBackupCron()
+function updateBackupCron(): bool
 {
-    $cfg = parse_plugin_cfg('compose.manager');
-    $script = '/usr/local/emhttp/plugins/compose.manager/scripts/backup_cron.sh';
-    $marker = '#compose-manager-backup';
+    require_once("/usr/local/emhttp/plugins/compose.manager/include/CronManager.php");
+    $cronManager = composeCronManager();
 
-    // Also clean up old /etc/cron.d file if it exists from previous versions
-    $oldCronFile = '/etc/cron.d/compose-manager-backup';
-    if (file_exists($oldCronFile)) {
-        @unlink($oldCronFile);
-    }
+    // One-time migration: clean up legacy root crontab entries and old /etc/cron.d file
+    $cronManager->cleanupLegacy();
 
-    // Read current crontab, stripping any existing compose-manager-backup lines
-    $existing = '';
-    exec('crontab -l 2>/dev/null', $lines, $rc);
-    if ($rc === 0 && !empty($lines)) {
-        $filtered = array_filter($lines, function($line) use ($marker) {
-            return strpos($line, $marker) === false;
-        });
-        $existing = implode("\n", $filtered);
-        // Ensure it ends with a newline
-        $existing = rtrim($existing) . "\n";
-    }
-
-    $enabled = ($cfg['BACKUP_SCHEDULE_ENABLED'] ?? 'false') === 'true';
-
-    if (!$enabled) {
-        // Write back crontab without our line
-        $tmpFile = tempnam('/tmp', 'compose-cron-');
-        file_put_contents($tmpFile, $existing);
-        exec("crontab " . escapeshellarg($tmpFile));
-        @unlink($tmpFile);
-        return;
-    }
-
-    $frequency = $cfg['BACKUP_SCHEDULE_FREQUENCY'] ?? 'daily';
-    $time = $cfg['BACKUP_SCHEDULE_TIME'] ?? '03:00';
-    $dayOfWeek = $cfg['BACKUP_SCHEDULE_DAY'] ?? '1'; // Monday
-
-    // Parse time - use directly as cron runs in server's local timezone
-    $parts = explode(':', $time);
-    $hour = isset($parts[0]) ? intval($parts[0]) : 3;
-    $minute = isset($parts[1]) ? intval($parts[1]) : 0;
-
-    if ($frequency === 'weekly') {
-        $cronLine = "{$minute} {$hour} * * {$dayOfWeek} {$script} {$marker}";
-    } else {
-        // daily
-        $cronLine = "{$minute} {$hour} * * * {$script} {$marker}";
-    }
-
-    // Write updated crontab
-    $tmpFile = tempnam('/tmp', 'compose-cron-');
-    file_put_contents($tmpFile, $existing . $cronLine . "\n");
-    exec("crontab " . escapeshellarg($tmpFile));
-    @unlink($tmpFile);
+    // Rebuild the unified .cron file (reads config to determine backup schedule)
+    return $cronManager->rebuild();
 }
 
 /**

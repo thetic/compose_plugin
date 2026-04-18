@@ -1405,8 +1405,12 @@ switch ($_POST['action']) {
 
     case 'updateBackupCron':
         require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
-        updateBackupCron();
-        echo json_encode(['result' => 'success', 'message' => 'Backup schedule updated.']);
+        if (updateBackupCron()) {
+            echo json_encode(['result' => 'success', 'message' => 'Backup schedule updated.']);
+        } else {
+            http_response_code(500);
+            echo json_encode(['result' => 'error', 'message' => 'Failed to update backup schedule.']);
+        }
         break;
 
     case 'saveBackupSettings':
@@ -1463,7 +1467,9 @@ switch ($_POST['action']) {
 
         // Update cron job and log the action
         require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
-        updateBackupCron();
+        if (!updateBackupCron()) {
+            clientDebug('Warning: failed to sync cron schedule', null, 'user', 'warning', 'backup');
+        }
 
         // Log the scheduler status
         $enabled = ($settings['BACKUP_SCHEDULE_ENABLED'] ?? 'false') === 'true';

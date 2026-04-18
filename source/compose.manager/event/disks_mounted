@@ -1,0 +1,4 @@
+#!/bin/bash
+# Compose Manager - Disks Mounted Event Handler
+# Syncs plugin cron entries into the system crontab after reboot.
+/usr/local/sbin/update_cron

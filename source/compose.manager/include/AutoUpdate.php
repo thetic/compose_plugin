@@ -65,84 +65,29 @@ switch ($action) {
         echo json_encode(array('ok' => true));
         break;
     case 'installCron':
-        // Cron runs with a minimal PATH; use absolute PHP binary to avoid exit status 127.
-        $phpBinary = '/usr/bin/php';
-        $cronDirEnv = getenv('COMPOSE_MANAGER_CRON_DIR');
-        // If a cron directory is explicitly provided (e.g., in tests), keep legacy file-based behavior.
-        if ($cronDirEnv !== false && $cronDirEnv !== '') {
-            $cronDir = $cronDirEnv;
-            $cronFile = rtrim($cronDir, '/') . '/compose_manager_autoupdate';
-            $runner = escapeshellarg($plugin_root . "include/AutoUpdateRunner.php");
-            $line = "*/15 * * * * " . escapeshellarg($phpBinary) . " " . $runner . " >/dev/null 2>&1\n";
-            // ensure cron directory exists for test environments
-            $cdir = dirname($cronFile);
-            if (!is_dir($cdir)) mkdir($cdir, 0755, true);
-            if (file_put_contents($cronFile, $line) !== false) {
-                echo json_encode(array('ok' => true));
-            } else {
-                http_response_code(500);
-                echo json_encode(array('error' => 'Failed to write cron file'));
-            }
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/CronManager.php");
+        $cronManager = composeCronManager();
+        if ($cronManager->enableAutoupdate()) {
+            echo json_encode(array('ok' => true));
         } else {
-            // Default behavior: use plugin-owned cron file and let update_cron sync it to the system
-            $pluginCron = '/boot/config/plugins/compose.manager/compose.manager.cron';
-            $runner = escapeshellarg($plugin_root . "include/AutoUpdateRunner.php");
-            $line = "*/15 * * * * " . escapeshellarg($phpBinary) . " " . $runner . " >/dev/null 2>&1\n";
-
-            if (!is_dir(dirname($pluginCron))) {
-                @mkdir(dirname($pluginCron), 0755, true);
-            }
-            if (file_put_contents($pluginCron, $line) === false) {
-                http_response_code(500);
-                echo json_encode(array('error' => 'Failed to write plugin cron file'));
-                break;
-            }
-
-            // Sync into /etc/cron.d
-            exec('/usr/local/sbin/update_cron 2>/dev/null', $output, $returnVar);
-            if ($returnVar === 0) {
-                echo json_encode(array('ok' => true));
-            } else {
-                http_response_code(500);
-                echo json_encode(array('error' => 'Failed to update cron (update_cron)'));
-            }
+            http_response_code(500);
+            echo json_encode(array('error' => 'Failed to update cron'));
         }
         break;
     case 'removeCron':
-        $cronDirEnv = getenv('COMPOSE_MANAGER_CRON_DIR');
-        if ($cronDirEnv !== false && $cronDirEnv !== '') {
-            // Legacy/test behavior: remove cron.d file if it exists.
-            $cronDir = $cronDirEnv;
-            $cronFile = rtrim($cronDir, '/') . '/compose_manager_autoupdate';
-            if (is_file($cronFile)) unlink($cronFile);
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/CronManager.php");
+        $cronManager = composeCronManager();
+        if ($cronManager->disableAutoupdate()) {
             echo json_encode(array('ok' => true));
         } else {
-            // Default behavior: remove the plugin cron file and sync via update_cron
-            $pluginCron = '/boot/config/plugins/compose.manager/compose.manager.cron';
-            if (is_file($pluginCron)) {
-                unlink($pluginCron);
-            }
-            exec('/usr/local/sbin/update_cron 2>/dev/null', $output, $returnVar);
-            if ($returnVar === 0) {
-                echo json_encode(array('ok' => true));
-            } else {
-                http_response_code(500);
-                echo json_encode(array('error' => 'Failed to update cron (update_cron)'));
-            }
+            http_response_code(500);
+            echo json_encode(array('error' => 'Failed to update cron'));
         }
         break;
     case 'getCronStatus':
-        $cronDirEnv = getenv('COMPOSE_MANAGER_CRON_DIR');
-        if ($cronDirEnv !== false && $cronDirEnv !== '') {
-            // Legacy/test behavior: check for cron.d file existence.
-            $cronDir = $cronDirEnv;
-            $cronFile = rtrim($cronDir, '/') . '/compose_manager_autoupdate';
-            echo json_encode(array('installed' => is_file($cronFile)));
-        } else {
-            // Default behavior: check for the plugin cron file.
-            $pluginCron = '/boot/config/plugins/compose.manager/compose.manager.cron';
-            echo json_encode(array('installed' => is_file($pluginCron)));
-        }
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/CronManager.php");
+        $cronManager = composeCronManager();
+        echo json_encode(array('installed' => $cronManager->isAutoupdateInstalled()));
         break;
     case 'runNow':
         $path = isset($_POST['path']) ? $_POST['path'] : '';
