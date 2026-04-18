@@ -73,7 +73,7 @@ switch ($action) {
             $cronDir = $cronDirEnv;
             $cronFile = rtrim($cronDir, '/') . '/compose_manager_autoupdate';
             $runner = escapeshellarg($plugin_root . "include/AutoUpdateRunner.php");
-            $line = "*/15 * * * * root " . escapeshellarg($phpBinary) . " " . $runner . " >/dev/null 2>&1\n";
+            $line = "*/15 * * * * " . escapeshellarg($phpBinary) . " " . $runner . " >/dev/null 2>&1\n";
             // ensure cron directory exists for test environments
             $cdir = dirname($cronFile);
             if (!is_dir($cdir)) mkdir($cdir, 0755, true);
@@ -87,7 +87,7 @@ switch ($action) {
             // Default behavior: use plugin-owned cron file and let update_cron sync it to the system
             $pluginCron = '/boot/config/plugins/compose.manager/compose.manager.cron';
             $runner = escapeshellarg($plugin_root . "include/AutoUpdateRunner.php");
-            $line = "*/15 * * * * root " . escapeshellarg($phpBinary) . " " . $runner . " >/dev/null 2>&1\n";
+            $line = "*/15 * * * * " . escapeshellarg($phpBinary) . " " . $runner . " >/dev/null 2>&1\n";
 
             if (!is_dir(dirname($pluginCron))) {
                 @mkdir(dirname($pluginCron), 0755, true);
