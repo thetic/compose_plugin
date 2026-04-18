@@ -1491,11 +1491,15 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         });
     }
 
-    // Validate URL scheme for WebUI links
+    // Validate URL scheme for WebUI links (allows [IP] and [PORT]/[PORT:xxxx] placeholders)
     function isValidWebUIUrl(url) {
         if (!url) return false;
-        var lowerUrl = url.toLowerCase().trim();
-        return lowerUrl.startsWith('http://') || lowerUrl.startsWith('https://');
+        // Replace placeholders with dummy values for structural validation
+        var normalized = url.replace(/\[IP\]/gi, 'localhost')
+                           .replace(/\[PORT:\d+\]/gi, '8080')
+                           .replace(/\[PORT\]/gi, '8080');
+        try { return Boolean(new URL(normalized)); }
+        catch(e) { return false; }
     }
 
     // Validate an icon source: http(s) URL, data URI, or local server path
@@ -1512,8 +1516,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         if (!url) return url;
         // Replace [IP] with the server hostname/IP (stack-level only)
         url = url.replace(/\[IP\]/gi, window.location.hostname);
-        // Replace [PORT:xxxx] with the specified port as-is (no container port mapping at stack level)
+        // Replace [PORT:xxxx] with the specified port (no container port mapping at stack level)
         url = url.replace(/\[PORT:(\d+)\]/gi, '$1');
+        // Replace bare [PORT] — no default port available at stack level, clean up
+        // This shouldn't normally be reached (save validation rejects bare [PORT]),
+        // but handle gracefully by removing the placeholder and any preceding colon
+        url = url.replace(/:?\[PORT\]/gi, '');
         return url;
     }
 
@@ -4058,6 +4066,23 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     $('#settings-webui-url').val(webuiUrl);
                     editorModal.originalSettings['webui-url'] = webuiUrl;
 
+                    // Detect suggested WebUI URL
+                    $('#settings-webui-suggestion').hide();
+                    $.post(caURL, { action: 'detectWebui', script: project }).then(function(detectData) {
+                        try { var dr = JSON.parse(detectData); } catch(e) { return; }
+                        if (dr.result === 'success' && dr.detected && dr.detected.url) {
+                            var currentVal = $('#settings-webui-url').val();
+                            if (currentVal === dr.detected.url) return; // already set to detected value
+                            $('#settings-webui-detected-url').text(dr.detected.url);
+                            $('#settings-webui-detected-source').text('(from ' + dr.detected.source + ')');
+                            $('#settings-webui-suggestion').show();
+                            $('#settings-webui-use-btn').off('click').on('click', function() {
+                                $('#settings-webui-url').val(dr.detected.url).trigger('input');
+                                $('#settings-webui-suggestion').hide();
+                            });
+                        }
+                    });
+
                     // ENV path
                     var envPath = response.envPath || '';
                     $('#settings-env-path').val(envPath);
@@ -4577,6 +4602,14 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('webui-url') || editorModal.modifiedSettings.has('env-path') || editorModal.modifiedSettings.has('default-profile') || editorModal.modifiedSettings.has('external-compose-path')) {
             var iconUrl = $('#settings-icon-url').val();
             var webuiUrl = $('#settings-webui-url').val();
+            if (webuiUrl && !isValidWebUIUrl(webuiUrl)) {
+                swal({type: 'error', title: 'Save Failed', text: 'Invalid WebUI URL. Must be http:// or https:// (supports [IP] and [PORT:xxxx] placeholders).'});
+                return;
+            }
+            if (webuiUrl && /\[PORT\]/i.test(webuiUrl)) {
+                swal({type: 'error', title: 'Save Failed', text: 'Bare [PORT] placeholder is not supported at stack level. Use [PORT:xxxx] with a default port instead (e.g. [PORT:8080]).'});
+                return;
+            }
             var envPath = $('#settings-env-path').val();
             var defaultProfile = $('#settings-default-profile').val();
             var externalComposePath = $('#settings-external-compose-path').val();
@@ -6274,8 +6307,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                         <div class="settings-field">
                             <label for="settings-webui-url">WebUI URL</label>
-                            <input type="url" id="settings-webui-url" placeholder="http://[IP]:[PORT]:8080">
-                            <div class="settings-field-help">URL to the main WebUI for this stack. This adds a "WebUI" option to the stack's context menu. Supports [IP] and [PORT] placeholders for dynamic replacement.</div>
+                            <input type="text" id="settings-webui-url" placeholder="http://[IP]:[PORT:8080]/">
+                            <div class="settings-field-help">URL to the main WebUI for this stack. This adds a "WebUI" option to the stack's context menu. Supports <code>[IP]</code> and <code>[PORT:xxxx]</code> placeholders.</div>
+                            <div id="settings-webui-suggestion" style="display:none; margin-top:4px; padding:6px 10px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,165,0,0.3); border-radius:4px; font-size:0.9em;">
+                                <span style="color:#aaa;">Detected: </span><code id="settings-webui-detected-url" style="user-select:all;"></code>
+                                <span id="settings-webui-detected-source" style="color:#888; margin-left:6px; font-size:0.85em;"></span>
+                                <button type="button" id="settings-webui-use-btn" class="btn btn-sm" style="margin-left:8px; padding:1px 10px; font-size:0.85em;">Use</button>
+                            </div>
                         </div>
                     </div>
 

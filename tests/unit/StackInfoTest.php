@@ -534,6 +534,32 @@ class StackInfoTest extends TestCase
         $this->assertNull($info->getWebUIUrl());
     }
 
+    public function testGetWebUIUrlWithPlaceholders(): void
+    {
+        $stack = 'placeholder-webui';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/webui_url", "http://[IP]:[PORT:8080]/");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame('http://[IP]:[PORT:8080]/', $info->getWebUIUrl());
+    }
+
+    public function testGetWebUIUrlWithBarePortPlaceholder(): void
+    {
+        $stack = 'bare-port-webui';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/webui_url", "http://[IP]:[PORT]/");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame('http://[IP]:[PORT]/', $info->getWebUIUrl());
+    }
+
     public function testGetDefaultProfiles(): void
     {
         $stack = 'profiles-stack';

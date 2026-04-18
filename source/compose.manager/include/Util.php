@@ -255,6 +255,167 @@ class Path
     }
 }
 
+/**
+ * Validate a WebUI URL, allowing [IP] and [PORT]/[PORT:xxxx] placeholders.
+ */
+function isValidWebuiUrl(string $url): bool
+{
+    if ($url === '') {
+        return false;
+    }
+    // Replace placeholders with dummy values so the URL can be validated structurally
+    $normalized = preg_replace(
+        ['/\[IP\]/i', '/\[PORT:\d+\]/i', '/\[PORT\]/i'],
+        ['localhost', '8080', '8080'],
+        $url
+    );
+    if ($normalized === null) {
+        return false;
+    }
+    return (bool) filter_var($normalized, FILTER_VALIDATE_URL)
+        && (strpos($normalized, 'http://') === 0 || strpos($normalized, 'https://') === 0);
+}
+
+/**
+ * Ports that are reliably not associated with HTTP-based WebUI endpoints.
+ *
+ * This blocklist is used as a conservative exclusion step during WebUI detection to
+ * avoid treating well-known infrastructure and database ports as browser-accessible
+ * interfaces. A blocklist is preferred here because many applications expose WebUIs on
+ * arbitrary high ports, so an allowlist of "known good" ports would create too many
+ * false negatives.
+ *
+ * Extend this list only for ports that are consistently reserved for non-WebUI
+ * protocols across common deployments. If a port is sometimes used by application
+ * dashboards or other HTTP services, leave it out so detection can continue to inspect
+ * it normally.
+ */
+const NON_WEBUI_PORTS = [
+    22,    // SSH
+    25,    // SMTP
+    53,    // DNS
+    67, 68, // DHCP
+    69,    // TFTP
+    123,   // NTP
+    143,   // IMAP
+    161,   // SNMP
+    389,   // LDAP
+    465,   // SMTPS
+    514,   // Syslog
+    587,   // SMTP submission
+    636,   // LDAPS
+    993,   // IMAPS
+    995,   // POP3S
+    1194,  // OpenVPN
+    1883,  // MQTT
+    3306,  // MySQL
+    5432,  // PostgreSQL
+    5672,  // AMQP/RabbitMQ
+    6379,  // Redis
+    6881,  // BitTorrent
+    11211, // Memcached
+    27017, // MongoDB
+    51820, // WireGuard
+];
+
+/** Ports that imply HTTPS rather than HTTP. */
+const HTTPS_PORTS = [443, 8443];
+
+/**
+ * Detect a likely WebUI URL from a stack's compose file and override labels.
+ *
+ * Uses a blocklist approach: any TCP port NOT in NON_WEBUI_PORTS is a candidate.
+ * First candidate wins; use the first service's first eligible port.
+ *
+ * @param string $composeRoot Compose projects root directory
+ * @param string $project     Stack folder name
+ * @return array{url: string, source: string}|null Detected URL template + source description, or null
+ */
+function detectWebuiUrl(string $composeRoot, string $project): ?array
+{
+    if (!function_exists('yaml_parse')) {
+        return null;
+    }
+
+    try {
+        $stackInfo = \StackInfo::fromProject($composeRoot, $project);
+    } catch (\Throwable $e) {
+        return null;
+    }
+
+    // 1. Check override labels for explicit net.unraid.docker.webui
+    $overridePath = $stackInfo->getOverridePath();
+    if ($overridePath && is_file($overridePath)) {
+        $overrideContent = @file_get_contents($overridePath);
+        if ($overrideContent !== false) {
+            $override = @yaml_parse($overrideContent);
+            if (is_array($override) && !empty($override['services'])) {
+                foreach ($override['services'] as $svcName => $svc) {
+                    $webui = $svc['labels']['net.unraid.docker.webui'] ?? null;
+                    if (is_string($webui) && $webui !== '' && isValidWebuiUrl($webui)) {
+                        return ['url' => $webui, 'source' => "label on service '$svcName'"];
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Parse main compose file for port mappings
+    $composePath = $stackInfo->composeFilePath;
+    if (!$composePath || !is_file($composePath)) {
+        return null;
+    }
+    $content = @file_get_contents($composePath);
+    if ($content === false) {
+        return null;
+    }
+    $parsed = @yaml_parse($content);
+    if (!is_array($parsed) || empty($parsed['services'])) {
+        return null;
+    }
+
+    // Collect all services with eligible port mappings (not in blocklist)
+    $candidates = [];
+    foreach ($parsed['services'] as $svcName => $svc) {
+        if (empty($svc['ports']) || !is_array($svc['ports'])) {
+            continue;
+        }
+        foreach ($svc['ports'] as $portEntry) {
+            $proto = 'tcp';
+            if (is_string($portEntry)) {
+                if (preg_match('/\/udp$/i', $portEntry)) {
+                    continue; // skip UDP-only ports
+                }
+                $clean = preg_replace('/\/\w+$/', '', $portEntry);
+                $parts = explode(':', $clean);
+                $containerPort = (int) end($parts);
+            } elseif (is_array($portEntry) && isset($portEntry['target'])) {
+                $proto = $portEntry['protocol'] ?? 'tcp';
+                if ($proto !== 'tcp') {
+                    continue;
+                }
+                $containerPort = (int) $portEntry['target'];
+            } else {
+                continue;
+            }
+            if ($containerPort > 0 && !in_array($containerPort, NON_WEBUI_PORTS, true)) {
+                $candidates[] = ['service' => $svcName, 'port' => $containerPort];
+            }
+        }
+    }
+
+    if (empty($candidates)) {
+        return null;
+    }
+
+    // 3. First eligible candidate wins
+    $c = $candidates[0];
+    $scheme = in_array($c['port'], HTTPS_PORTS, true) ? 'https' : 'http';
+    return [
+        'url' => "{$scheme}://[IP]:[PORT:{$c['port']}]/",
+        'source' => "port {$c['port']} on service '{$c['service']}'"
+    ];
+}
 
 function pruneOverrideContentServices(string $overrideContent, array $validServices): array
 {
@@ -1388,10 +1549,7 @@ class StackInfo
     public function getWebUIUrl(): ?string
     {
         $url = $this->readMetadata('webui_url');
-        if (
-            $url !== null && filter_var($url, FILTER_VALIDATE_URL)
-            && (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0)
-        ) {
+        if ($url !== null && isValidWebuiUrl($url)) {
             return $url;
         }
         return null;

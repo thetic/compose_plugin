@@ -512,4 +512,58 @@ class UtilTest extends TestCase
             $this->tearDownLockTests();
         }
     }
+
+    // ===========================================
+    // isValidWebuiUrl Tests
+    // ===========================================
+
+    public function testIsValidWebuiUrlAcceptsPlainHttp(): void
+    {
+        $this->assertTrue(isValidWebuiUrl('http://192.168.1.1:8080'));
+    }
+
+    public function testIsValidWebuiUrlAcceptsHttps(): void
+    {
+        $this->assertTrue(isValidWebuiUrl('https://myserver.local:443/admin'));
+    }
+
+    public function testIsValidWebuiUrlAcceptsIpPlaceholder(): void
+    {
+        $this->assertTrue(isValidWebuiUrl('http://[IP]:8080/'));
+    }
+
+    public function testIsValidWebuiUrlAcceptsPortPlaceholderWithDefault(): void
+    {
+        $this->assertTrue(isValidWebuiUrl('http://[IP]:[PORT:8080]/'));
+    }
+
+    public function testIsValidWebuiUrlAcceptsBarePortPlaceholder(): void
+    {
+        $this->assertTrue(isValidWebuiUrl('http://[IP]:[PORT]/'));
+    }
+
+    public function testIsValidWebuiUrlAcceptsBothPlaceholders(): void
+    {
+        $this->assertTrue(isValidWebuiUrl('http://[IP]:[PORT:9090]/dashboard'));
+    }
+
+    public function testIsValidWebuiUrlRejectsJavascript(): void
+    {
+        $this->assertFalse(isValidWebuiUrl('javascript:alert(1)'));
+    }
+
+    public function testIsValidWebuiUrlRejectsNoScheme(): void
+    {
+        $this->assertFalse(isValidWebuiUrl('192.168.1.1:8080'));
+    }
+
+    public function testIsValidWebuiUrlRejectsFtp(): void
+    {
+        $this->assertFalse(isValidWebuiUrl('ftp://server/file'));
+    }
+
+    public function testIsValidWebuiUrlRejectsEmpty(): void
+    {
+        $this->assertFalse(isValidWebuiUrl(''));
+    }
 }

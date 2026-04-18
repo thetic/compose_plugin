@@ -464,6 +464,15 @@ switch ($_POST['action']) {
             'availableProfiles' => $availableProfiles
         ]);
         break;
+    case 'detectWebui':
+        $script = getPostScript();
+        if (!$script) {
+            echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
+            break;
+        }
+        $detected = detectWebuiUrl($compose_root, $script);
+        echo json_encode(['result' => 'success', 'detected' => $detected]);
+        break;
     case 'setStackSettings':
         $script = getPostScript();
         if (!$script) {
@@ -488,8 +497,12 @@ switch ($_POST['action']) {
 
         $webuiUrl = isset($_POST['webuiUrl']) ? trim($_POST['webuiUrl']) : "";
         if (!empty($webuiUrl)) {
-            if (!filter_var($webuiUrl, FILTER_VALIDATE_URL) || (strpos($webuiUrl, 'http://') !== 0 && strpos($webuiUrl, 'https://') !== 0)) {
-                echo json_encode(['result' => 'error', 'message' => 'Invalid WebUI URL. Must be http:// or https://']);
+            if (!isValidWebuiUrl($webuiUrl)) {
+                echo json_encode(['result' => 'error', 'message' => 'Invalid WebUI URL. Must be http:// or https:// (supports [IP] and [PORT:xxxx] placeholders).']);
+                break;
+            }
+            if (preg_match('/\[PORT\]/i', $webuiUrl)) {
+                echo json_encode(['result' => 'error', 'message' => 'Bare [PORT] is not supported at stack level. Use [PORT:xxxx] with a default port (e.g. [PORT:8080]).']);
                 break;
             }
         }
