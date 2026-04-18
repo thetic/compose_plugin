@@ -109,7 +109,8 @@ compose.manager: https://github.com/mstrhakr/compose_plugin
 EOF
 
 # Build the package (Slackware convention: NAME-VERSION-ARCH-BUILD)
-run_quiet makepkg -l y -c y "$OUTPUT_FOLDER/compose.manager-${version}-noarch-${build}.txz"
+# Force a non-interactive yes for makepkg prompts in CI/container builds.
+run_quiet bash -lc "yes y | makepkg -l y -c y \"$OUTPUT_FOLDER/compose.manager-${version}-noarch-${build}.txz\""
 
 # Copy build log into output folder for debugging archives
 if [ -d "$OUTPUT_FOLDER" ]; then
