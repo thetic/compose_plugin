@@ -59,7 +59,7 @@ class CronManager
      */
     public function rebuild(?array $overrides = null): bool
     {
-        clientDebug('rebuild() called' . ($overrides !== null ? ' with overrides: ' . implode(', ', array_keys($overrides)) : ''), null, 'daemon', 'debug', 'cron');
+        composeLogger('rebuild() called' . ($overrides !== null ? ' with overrides: ' . implode(', ', array_keys($overrides)) : ''), null, 'daemon', 'debug', 'cron');
         $cfg = parse_plugin_cfg('compose.manager');
         if ($overrides !== null) {
             $cfg = array_merge($cfg, $overrides);
@@ -70,16 +70,16 @@ class CronManager
         // Preserve autoupdate state: only include if already installed
         if ($this->isAutoupdateInstalled()) {
             $lines[] = $this->buildAutoupdateLine();
-            clientDebug('rebuild: autoupdate is installed, preserving', null, 'daemon', 'debug', 'cron');
+            composeLogger('rebuild: autoupdate is installed, preserving', null, 'daemon', 'debug', 'cron');
         }
 
         $backupLine = $this->buildBackupLine($cfg);
         if ($backupLine !== null) {
             $lines[] = $backupLine;
-            clientDebug('rebuild: backup cron line included', null, 'daemon', 'debug', 'cron');
+            composeLogger('rebuild: backup cron line included', null, 'daemon', 'debug', 'cron');
         }
 
-        clientDebug('rebuild: writing ' . count($lines) . ' cron line(s)', null, 'daemon', 'debug', 'cron');
+        composeLogger('rebuild: writing ' . count($lines) . ' cron line(s)', null, 'daemon', 'debug', 'cron');
         return $this->writeCronFile($lines);
     }
 
@@ -88,7 +88,7 @@ class CronManager
      */
     public function enableAutoupdate(): bool
     {
-        clientDebug('enableAutoupdate() called', null, 'daemon', 'debug', 'cron');
+        composeLogger('enableAutoupdate() called', null, 'daemon', 'debug', 'cron');
         $cfg = parse_plugin_cfg('compose.manager');
 
         $lines = [];
@@ -109,7 +109,7 @@ class CronManager
      */
     public function disableAutoupdate(): bool
     {
-        clientDebug('disableAutoupdate() called', null, 'daemon', 'debug', 'cron');
+        composeLogger('disableAutoupdate() called', null, 'daemon', 'debug', 'cron');
         $lines = [];
 
         $cfg = parse_plugin_cfg('compose.manager');
@@ -151,16 +151,16 @@ class CronManager
      */
     public function cleanupLegacy(): void
     {
-        clientDebug('cleanupLegacy() called', null, 'daemon', 'debug', 'cron');
+        composeLogger('cleanupLegacy() called', null, 'daemon', 'debug', 'cron');
         // Remove old /etc/cron.d file from previous versions
         $oldCronDFile = '/etc/cron.d/compose-manager-backup';
         if (file_exists($oldCronDFile)) {
-            clientDebug('cleanupLegacy: removing old cron.d file: ' . $oldCronDFile, null, 'daemon', 'info', 'cron');
+            composeLogger('cleanupLegacy: removing old cron.d file: ' . $oldCronDFile, null, 'daemon', 'info', 'cron');
             @unlink($oldCronDFile);
         }
 
         if (!$this->syncEnabled) {
-            clientDebug('cleanupLegacy: sync disabled, skipping crontab cleanup', null, 'daemon', 'debug', 'cron');
+            composeLogger('cleanupLegacy: sync disabled, skipping crontab cleanup', null, 'daemon', 'debug', 'cron');
             return;
         }
 
@@ -178,11 +178,11 @@ class CronManager
 
         // Only rewrite if we actually removed something
         if (count($filtered) === count($lines)) {
-            clientDebug('cleanupLegacy: no legacy entries found in crontab', null, 'daemon', 'debug', 'cron');
+            composeLogger('cleanupLegacy: no legacy entries found in crontab', null, 'daemon', 'debug', 'cron');
             return;
         }
 
-        clientDebug('cleanupLegacy: removing ' . (count($lines) - count($filtered)) . ' legacy crontab entries', null, 'daemon', 'info', 'cron');
+        composeLogger('cleanupLegacy: removing ' . (count($lines) - count($filtered)) . ' legacy crontab entries', null, 'daemon', 'info', 'cron');
         $tmpFile = tempnam('/tmp', 'compose-cron-cleanup-');
         if ($tmpFile === false) {
             return;
@@ -244,24 +244,24 @@ class CronManager
     {
         $dir = dirname($this->cronFile);
         if (!is_dir($dir)) {
-            clientDebug('writeCronFile: creating directory ' . $dir, null, 'daemon', 'debug', 'cron');
+            composeLogger('writeCronFile: creating directory ' . $dir, null, 'daemon', 'debug', 'cron');
             if (!@mkdir($dir, 0755, true)) {
-                clientDebug('writeCronFile: FAILED to create directory ' . $dir, null, 'daemon', 'error', 'cron');
+                composeLogger('writeCronFile: FAILED to create directory ' . $dir, null, 'daemon', 'error', 'cron');
                 return false;
             }
         }
 
         if (empty($lines)) {
             // No cron entries — remove file so update_cron drops our entries
-            clientDebug('writeCronFile: no entries, removing cron file', null, 'daemon', 'debug', 'cron');
+            composeLogger('writeCronFile: no entries, removing cron file', null, 'daemon', 'debug', 'cron');
             if (is_file($this->cronFile)) {
                 @unlink($this->cronFile);
             }
         } else {
-            clientDebug('writeCronFile: writing ' . count($lines) . ' line(s) to ' . $this->cronFile, null, 'daemon', 'debug', 'cron');
+            composeLogger('writeCronFile: writing ' . count($lines) . ' line(s) to ' . $this->cronFile, null, 'daemon', 'debug', 'cron');
             $content = implode("\n", $lines) . "\n";
             if (file_put_contents($this->cronFile, $content) === false) {
-                clientDebug('writeCronFile: FAILED to write ' . $this->cronFile, null, 'daemon', 'error', 'cron');
+                composeLogger('writeCronFile: FAILED to write ' . $this->cronFile, null, 'daemon', 'error', 'cron');
                 return false;
             }
         }
@@ -275,16 +275,16 @@ class CronManager
     private function syncCron(): bool
     {
         if (!$this->syncEnabled) {
-            clientDebug('syncCron: sync disabled, skipping', null, 'daemon', 'debug', 'cron');
+            composeLogger('syncCron: sync disabled, skipping', null, 'daemon', 'debug', 'cron');
             return true;
         }
 
-        clientDebug('syncCron: calling update_cron', null, 'daemon', 'debug', 'cron');
+        composeLogger('syncCron: calling update_cron', null, 'daemon', 'debug', 'cron');
         $output = [];
         $returnVar = 0;
         exec('/usr/local/sbin/update_cron 2>/dev/null', $output, $returnVar);
         if ($returnVar !== 0) {
-            clientDebug('syncCron: update_cron FAILED with exit code ' . $returnVar, null, 'daemon', 'error', 'cron');
+            composeLogger('syncCron: update_cron FAILED with exit code ' . $returnVar, null, 'daemon', 'error', 'cron');
         }
         return $returnVar === 0;
     }

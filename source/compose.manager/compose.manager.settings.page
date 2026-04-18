@@ -2144,27 +2144,27 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             for (var i = 0; i < allowed.length; i++) {
                 var cfg = <?= json_encode($cfg); ?>;
                 var showCompose = (cfg['SHOW_COMPOSE_IN_HEADER_MENU'] || '').toString().toLowerCase();
-                composeClientDebug('Checking referrer path ' + ref.pathname + ' against allowed path ' + allowed[i] + ' with showCompose=' + showCompose, null, 'user', 'debug', 'settings');
+                composeLogger('Checking referrer path ' + ref.pathname + ' against allowed path ' + allowed[i] + ' with showCompose=' + showCompose, null, 'user', 'debug', 'settings');
                 if (existingPath && existingPath.toLowerCase() === '/docker' && showCompose === 'true') {
-                    composeClientDebug('Referrer is /Docker and showCompose is true, returning /Compose', null, 'user', 'warn', 'settings');
+                    composeLogger('Referrer is /Docker and showCompose is true, returning /Compose', null, 'user', 'warn', 'settings');
                     return '/Compose' + (ref.search || '');
                 } else if (existingPath && existingPath.toLowerCase() === '/compose' && showCompose === 'false') {
-                    composeClientDebug('Referrer is /Compose and showCompose is false, returning /Docker', null, 'user', 'warn', 'settings');
+                    composeLogger('Referrer is /Compose and showCompose is false, returning /Docker', null, 'user', 'warn', 'settings');
                     return '/Docker' + (ref.search || '');
                 }
                 if (p.toLowerCase() === allowed[i].toLowerCase()) {
-                    composeClientDebug('Referrer matches allowed path ' + allowed[i], null, 'user', 'debug', 'settings');
+                    composeLogger('Referrer matches allowed path ' + allowed[i], null, 'user', 'debug', 'settings');
                     return ref.pathname + (ref.search || '');
                 }
                 if (allowed[i].toLowerCase().endsWith('/') && p.toLowerCase().startsWith(allowed[i].toLowerCase())) {
-                    composeClientDebug('Referrer matches allowed path prefix ' + allowed[i], null, 'user', 'debug', 'settings');
+                    composeLogger('Referrer matches allowed path prefix ' + allowed[i], null, 'user', 'debug', 'settings');
                     return ref.pathname + (ref.search || '');
                 }
             }
-            composeClientDebug('Referrer path ' + ref.pathname + ' does not match any allowed paths', null, 'user', 'warn', 'settings');
+            composeLogger('Referrer path ' + ref.pathname + ' does not match any allowed paths', null, 'user', 'warn', 'settings');
             return null;
         } catch (e) {
-            composeClientDebug('Error parsing referrer URL: ' + e.message, null, 'user', 'error', 'settings');
+            composeLogger('Error parsing referrer URL: ' + e.message, null, 'user', 'error', 'settings');
             return null;
         }
     }

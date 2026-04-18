@@ -49,7 +49,7 @@ foreach ($data as $path => $entry) {
     
     // Validate path is within allowed locations for security
     if (!isAllowedAutoUpdatePath($path)) {
-        clientDebug('Skipping disallowed path: ' . sanitizeLogText($path), null, 'daemon', 'warn', 'autoupdate');
+        composeLogger('Skipping disallowed path: ' . sanitizeLogText($path), null, 'daemon', 'warn', 'autoupdate');
         continue;
     }
     
@@ -109,7 +109,7 @@ foreach ($data as $path => $entry) {
         }
 
         // Log the scheduled auto-update trigger
-        clientDebug("Scheduled auto-update triggered for: $projectName ($schedule)", null, 'daemon', 'info', 'autoupdate');
+        composeLogger("Scheduled auto-update triggered for: $projectName ($schedule)", null, 'daemon', 'info', 'autoupdate');
 
         $script = $plugin_root . "scripts/compose_autoupdate.sh";
         // Allow overriding the shell command via environment for tests; default to sh

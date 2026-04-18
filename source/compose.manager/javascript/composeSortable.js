@@ -3,7 +3,7 @@
  *
  * Depends on globals provided by the page:
  *   caURL             – AJAX endpoint for exec.php
- *   composeClientDebug – debug/logging helper (common.js)
+ *   composeLogger – debug/logging helper (common.js)
  *   $.cookie / $.removeCookie – jquery.cookie plugin
  *   $.fn.sortable     – jQuery UI Sortable
  */
@@ -45,7 +45,7 @@ function saveComposeSortOrder() {
         action: 'saveStackOrder',
         projects: projects
     }).fail(function(xhr) {
-        composeClientDebug('failed', {
+        composeLogger('failed', {
             status: xhr.status,
             response: xhr.responseText
         }, 'user', 'error', 'sort-order');

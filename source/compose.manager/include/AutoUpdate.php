@@ -98,7 +98,7 @@ switch ($action) {
         }
         // Security: validate path is under allowed directories
         if (!isAllowedAutoUpdatePath($path)) {
-            clientDebug('Rejected invalid path: ' . sanitizeLogText($path), null, 'user', 'error', 'autoupdate');
+            composeLogger('Rejected invalid path: ' . sanitizeLogText($path), null, 'user', 'error', 'autoupdate');
             http_response_code(403);
             echo json_encode(array('error' => 'Path not allowed'));
             break;
@@ -121,7 +121,7 @@ switch ($action) {
             $projectName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $projectName);
         }
 
-        clientDebug("Running manual auto-update for: $projectName", null, 'user', 'info', 'autoupdate');
+        composeLogger("Running manual auto-update for: $projectName", null, 'user', 'info', 'autoupdate');
 
         $script = $plugin_root . "scripts/compose_autoupdate.sh";
         // Allow overriding the shell command via environment for tests; default to sh

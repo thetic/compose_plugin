@@ -77,7 +77,7 @@ function getConfig() {
                     resp = JSON.parse(resp);
                 } catch (e) {
                     _configPromise = null;
-                    composeClientDebug('getConfig returned non-JSON response; using empty config', { response: response, error: e }, 'user', 'error', 'config');
+                    composeLogger('getConfig returned non-JSON response; using empty config', { response: response, error: e }, 'user', 'error', 'config');
                     resolve({});
                     return;
                 }
@@ -89,12 +89,12 @@ function getConfig() {
                 resolve(_configCache);
             } else {
                 _configPromise = null;
-                composeClientDebug('getConfig returned non-success response; using empty config', resp, 'user', 'error', 'config');
+                composeLogger('getConfig returned non-success response; using empty config', resp, 'user', 'error', 'config');
                 resolve({});
             }
         }).fail(function () {
             _configPromise = null;
-            composeClientDebug('Network error while fetching config; using empty config', null, 'user', 'error', 'config');
+            composeLogger('Network error while fetching config; using empty config', null, 'user', 'error', 'config');
             resolve({});
         });
     });
@@ -103,11 +103,11 @@ function getConfig() {
 }
 
 // Client-side debug helper: logs to console and posts short messages to server syslog
-function composeClientDebug(msg, obj, type, lvl, category) {
+function composeLogger(msg, obj, type, lvl, category) {
     // Send lightweight debug message to server for persistence (non-blocking)
     try {
         var payload = {
-            action: 'clientDebug',
+            action: 'composeLogger',
             msg: msg,
             type: type || 'user',
             lvl: lvl || 'info'

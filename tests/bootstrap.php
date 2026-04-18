@@ -18,10 +18,10 @@ if (!function_exists('logger')) {
     }
 }
 
-// Stub clientDebug before source files are loaded.
+// Stub composeLogger before source files are loaded.
 // It calls exec("logger ...") internally which doesn't exist on Windows.
-if (!function_exists('clientDebug')) {
-    function clientDebug($message, $data = null, $type = 'daemon', $level = 'info'): void
+if (!function_exists('composeLogger')) {
+    function composeLogger($message, $data = null, $type = 'daemon', $level = 'info'): void
     {
         // no-op in test environment
     }

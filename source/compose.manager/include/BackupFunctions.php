@@ -123,7 +123,7 @@ function applyRetentionPolicy($destination)
         foreach ($toDelete as $archive) {
             $filePath = $destination . '/' . $archive['filename'];
             @unlink($filePath);
-            clientDebug("Retention: deleted old backup " . $archive['filename'], null, 'daemon', 'info', 'backup');
+            composeLogger("Retention: deleted old backup " . $archive['filename'], null, 'daemon', 'info', 'backup');
         }
     }
 }

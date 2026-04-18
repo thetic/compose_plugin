@@ -21,13 +21,13 @@ if (!function_exists('getPostScript')) {
 }
 
 switch ($_POST['action']) {
-    case 'clientDebug':
+    case 'composeLogger':
         $message = $_POST['msg'] ?? '';
         $data = $_POST['data'] ?? null;
         $type = $_POST['type'] ?? 'user';
         $level = $_POST['lvl'] ?? 'info';
         $category = $_POST['category'] ?? '';
-        clientDebug($message, $data, $type, $level, $category);
+        composeLogger($message, $data, $type, $level, $category);
         break;
     case 'getConfig':
         $cfg = @parse_ini_file("/boot/config/plugins/compose.manager/compose.manager.cfg", true, INI_SCANNER_NORMAL);
@@ -39,17 +39,17 @@ switch ($_POST['action']) {
         if ($indirect !== '') {
             $realIndirect = realpath(dirname($indirect));
             if ($realIndirect === false) {
-                clientDebug("Failed to create stack: Could not resolve indirect path: $indirect", null, 'user', 'error', 'stack');
+                composeLogger("Failed to create stack: Could not resolve indirect path: $indirect", null, 'user', 'error', 'stack');
                 echo json_encode(['result' => 'error', 'message' => 'Stack path is invalid or does not exist.']);
                 break;
             }
             if (strpos($realIndirect, '/mnt/') !== 0 && strpos($realIndirect, '/boot/config/') !== 0) {
-                clientDebug("Failed to create stack: Invalid indirect path: $indirect", null, 'user', 'error', 'stack');
+                composeLogger("Failed to create stack: Invalid indirect path: $indirect", null, 'user', 'error', 'stack');
                 echo json_encode(['result' => 'error', 'message' => 'Stack path must be under /mnt/ or /boot/config/.']);
                 break;
             }
             if (!is_dir($indirect)) {
-                clientDebug("Failed to create stack: Indirect stack path does not exist: $indirect", null, 'user', 'error', 'stack');
+                composeLogger("Failed to create stack: Indirect stack path does not exist: $indirect", null, 'user', 'error', 'stack');
                 echo json_encode(['result' => 'error', 'message' => 'Indirect stack path does not exist.']);
                 break;
             }
@@ -61,7 +61,7 @@ switch ($_POST['action']) {
         try {
             $stack = StackInfo::createNew($compose_root, $stackName, $stackDesc, $indirect);
         } catch (\RuntimeException $e) {
-            clientDebug('Failed to create stack: ' . $e->getMessage(), null, 'user', 'error', 'stack');
+            composeLogger('Failed to create stack: ' . $e->getMessage(), null, 'user', 'error', 'stack');
             // Return user-safe messages; avoid exposing filesystem paths
             $userMessage = match (true) {
                 str_contains($e->getMessage(), 'cannot be empty') => 'Stack name cannot be empty.',
@@ -75,13 +75,13 @@ switch ($_POST['action']) {
             break;
         }
 
-        clientDebug("Created stack: $stackName", null, 'user', 'info', 'stack');
+        composeLogger("Created stack: $stackName", null, 'user', 'info', 'stack');
         echo json_encode(['result' => 'success', 'message' => '', 'project' => $stack->projectFolder, 'projectName' => $stack->getName()]);
         break;
     case 'deleteStack':
         $stackName = isset($_POST['stackName']) ? basename(trim($_POST['stackName'])) : "";
         if (!$stackName) {
-            clientDebug("Stack deletion failed: Stack name not specified.", null, 'user', 'error', 'stack');
+            composeLogger("Stack deletion failed: Stack name not specified.", null, 'user', 'error', 'stack');
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
         }
@@ -90,13 +90,13 @@ switch ($_POST['action']) {
         $isInvalidIndirect = !$isIndirect && is_file("$folderName/indirect.invalid");
         $filesRemain = $isIndirect ? file_get_contents("$folderName/indirect")
             : ($isInvalidIndirect ? file_get_contents("$folderName/indirect.invalid") : "");
-        clientDebug("Deleting stack: $stackName", null, 'user', 'info', 'stack');
+        composeLogger("Deleting stack: $stackName", null, 'user', 'info', 'stack');
         exec("rm -rf " . escapeshellarg($folderName));
         if ($filesRemain == "") {
-            clientDebug("Deleted stack: $stackName", null, 'user', 'info', 'stack');
+            composeLogger("Deleted stack: $stackName", null, 'user', 'info', 'stack');
             echo json_encode(['result' => 'success', 'message' => '']);
         } else {
-            clientDebug("Deleted stack: $stackName (indirect, external files remain at $filesRemain)", null, 'user', 'warning', 'stack');
+            composeLogger("Deleted stack: $stackName (indirect, external files remain at $filesRemain)", null, 'user', 'warning', 'stack');
             echo json_encode(['result' => 'warning', 'message' => $filesRemain]);
         }
         break;
@@ -324,7 +324,7 @@ switch ($_POST['action']) {
         $entry = "[{$ts}] runPatch {$cmd} exit={$rc}\n" . implode("\n", $output) . "\n\n";
         @file_put_contents($logfile, $entry, FILE_APPEND);
         foreach ($output as $line) {
-            clientDebug(escapeshellarg($cmd) . ' ' . $line, null, 'user', 'debug', 'patch.sh');
+            composeLogger(escapeshellarg($cmd) . ' ' . $line, null, 'user', 'debug', 'patch.sh');
         }
         echo json_encode(['result' => $rc === 0 ? 'success' : 'error', 'output' => implode("\n", $output), 'rc' => $rc]);
         break;
@@ -953,7 +953,7 @@ switch ($_POST['action']) {
         // Check for updates for all compose stacks
         require_once("/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php");
 
-        clientDebug('Starting update check for all stacks', null, 'user', 'debug', 'update-check');
+        composeLogger('Starting update check for all stacks', null, 'user', 'debug', 'update-check');
 
         $allUpdates = [];
         $DockerUpdate = new DockerUpdate();
@@ -1064,7 +1064,7 @@ switch ($_POST['action']) {
             if ($si['hasUpdate'])
                 $updatesFound++;
         }
-        clientDebug("Completed: $totalStacks stacks checked, $updatesFound with updates", null, 'user', 'debug', 'update-check');
+        composeLogger("Completed: $totalStacks stacks checked, $updatesFound with updates", null, 'user', 'debug', 'update-check');
 
         echo json_encode(['result' => 'success', 'stacks' => $allUpdates]);
         break;
@@ -1276,12 +1276,12 @@ switch ($_POST['action']) {
 
     case 'createBackup':
         require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
-        clientDebug('Manual backup starting...', null, 'user', 'info', 'backup');
+        composeLogger('Manual backup starting...', null, 'user', 'info', 'backup');
         $result = createBackup();
         if ($result['result'] === 'success') {
-            clientDebug("Manual backup completed: " . $result['archive'] . " (" . $result['size'] . ", " . $result['stacks'] . " stacks)", null, 'user', 'info', 'backup');
+            composeLogger("Manual backup completed: " . $result['archive'] . " (" . $result['size'] . ", " . $result['stacks'] . " stacks)", null, 'user', 'info', 'backup');
         } else {
-            clientDebug('Manual backup FAILED: ' . ($result['message'] ?? 'Unknown error'), null, 'user', 'error', 'backup');
+            composeLogger('Manual backup FAILED: ' . ($result['message'] ?? 'Unknown error'), null, 'user', 'error', 'backup');
         }
         echo json_encode($result);
         break;
@@ -1319,19 +1319,19 @@ switch ($_POST['action']) {
         $dest = getBackupDestination();
         if (!is_dir($dest)) {
             if (!@mkdir($dest, 0755, true)) {
-                clientDebug('Failed to create backup destination directory: ' . $dest, null, 'user', 'error', 'backup');
+                composeLogger('Failed to create backup destination directory: ' . $dest, null, 'user', 'error', 'backup');
                 echo json_encode(['result' => 'error', 'message' => 'Backup destination does not exist and could not be created: ' . $dest]);
                 break;
             }
         }
         if (!is_writable($dest)) {
-            clientDebug('Backup destination is not writable: ' . $dest, null, 'user', 'error', 'backup');
+            composeLogger('Backup destination is not writable: ' . $dest, null, 'user', 'error', 'backup');
             echo json_encode(['result' => 'error', 'message' => 'Backup destination is not writable: ' . $dest]);
             break;
         }
         $targetPath = $dest . '/' . $filename;
         if (file_exists($targetPath)) {
-            clientDebug('Archive already exists in backup destination: ' . $filename, null, 'user', 'error', 'backup');
+            composeLogger('Archive already exists in backup destination: ' . $filename, null, 'user', 'error', 'backup');
             echo json_encode(['result' => 'error', 'message' => 'Archive "' . $filename . '" already exists in backup destination.']);
             break;
         }
@@ -1339,7 +1339,7 @@ switch ($_POST['action']) {
             echo json_encode(['result' => 'error', 'message' => 'Failed to save uploaded file.']);
             break;
         }
-        clientDebug('Uploaded backup archive: ' . $filename, null, 'user', 'info', 'backup');
+        composeLogger('Uploaded backup archive: ' . $filename, null, 'user', 'info', 'backup');
         echo json_encode(['result' => 'success', 'message' => 'Archive uploaded successfully.', 'archive' => $filename]);
         break;
 
@@ -1371,16 +1371,16 @@ switch ($_POST['action']) {
             echo json_encode(['result' => 'error', 'message' => 'No stacks selected for restore.']);
             break;
         }
-        clientDebug('Restore starting from archive: ' . $archive . ' with ' . count($stacks) . ' stacks selected', null, 'user', 'info', 'restore');
+        composeLogger('Restore starting from archive: ' . $archive . ' with ' . count($stacks) . ' stacks selected', null, 'user', 'info', 'restore');
         $archivePath = resolveArchivePath($archive);
         $result = restoreStacks($archivePath, $stacks);
         if ($result['result'] === 'error') {
-            clientDebug('Restore FAILED: ' . ($result['message'] ?? 'Unknown error'), null, 'user', 'error', 'restore');
+            composeLogger('Restore FAILED: ' . ($result['message'] ?? 'Unknown error'), null, 'user', 'error', 'restore');
         } else {
             $restoredList = implode(', ', $result['restored'] ?? []);
-            clientDebug('Restore completed: ' . count($result['restored']) . ' stacks restored (' . $restoredList . ')', null, 'user', 'info', 'restore');
+            composeLogger('Restore completed: ' . count($result['restored']) . ' stacks restored (' . $restoredList . ')', null, 'user', 'info', 'restore');
             if (!empty($result['errors'])) {
-                clientDebug('Restore errors: ' . implode(', ', $result['errors']), null, 'user', 'error', 'restore');
+                composeLogger('Restore errors: ' . implode(', ', $result['errors']), null, 'user', 'error', 'restore');
             }
         }
         echo json_encode($result);
@@ -1399,7 +1399,7 @@ switch ($_POST['action']) {
             break;
         }
         @unlink($archivePath);
-        clientDebug('Deleted backup archive: ' . $archive, null, 'user', 'info', 'backup');
+        composeLogger('Deleted backup archive: ' . $archive, null, 'user', 'info', 'backup');
         echo json_encode(['result' => 'success', 'message' => 'Backup deleted.']);
         break;
 
@@ -1468,7 +1468,7 @@ switch ($_POST['action']) {
         // Update cron job and log the action
         require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
         if (!updateBackupCron()) {
-            clientDebug('Warning: failed to sync cron schedule', null, 'user', 'warning', 'backup');
+            composeLogger('Warning: failed to sync cron schedule', null, 'user', 'warning', 'backup');
         }
 
         // Log the scheduler status
@@ -1491,9 +1491,9 @@ switch ($_POST['action']) {
             if ($hour12 === 0)
                 $hour12 = 12;
             $time12 = "{$hour12}:{$minute} {$ampm}";
-            clientDebug("Scheduler ENABLED: {$freq}{$day} at {$time12}", null, 'user', 'info', 'backup');
+            composeLogger("Scheduler ENABLED: {$freq}{$day} at {$time12}", null, 'user', 'info', 'backup');
         } else {
-            clientDebug('Scheduler DISABLED', null, 'user', 'info', 'backup');
+            composeLogger('Scheduler DISABLED', null, 'user', 'info', 'backup');
         }
 
         echo json_encode(['result' => 'success', 'message' => 'Backup settings saved.']);
