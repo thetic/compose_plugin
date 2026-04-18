@@ -99,13 +99,13 @@ foreach ($data as $path => $entry) {
         $dataModified = true;
 
         // Resolve project name via StackInfo if possible
+        // Use projectName (sanitized lowercase) — not projectFolder or display name —
+        // because docker compose requires lowercase alphanumeric project names.
         $stackInfo = StackInfo::fromComposePath($compose_root, $path);
         if ($stackInfo !== null) {
-            $projectName = $stackInfo->projectFolder;
+            $projectName = $stackInfo->projectName;
         } else {
-            $projectName = basename($path);
-            if (is_file($path . '/name')) $projectName = trim(file_get_contents($path . '/name'));
-            $projectName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $projectName);
+            $projectName = StackInfo::sanitizeProjectString(basename($path));
         }
 
         // Log the scheduled auto-update trigger
