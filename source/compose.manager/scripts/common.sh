@@ -2,6 +2,54 @@
 # Compose Manager - Shared shell functions
 # Sourced by event scripts and other shell scripts that need common utilities.
 
+# Shared logging function matching the PHP composeLogger() convention.
+# Usage: composeLogger "message" [level] [category] [type]
+#   level: info (default), debug, error, warning
+#   category: optional tag (e.g. autoupdate, backup, compose)
+#   type: optional log type (user, daemon) defaults to user
+composeLogger() {
+    local msg="$1"
+    local level="${2:-info}"
+    local category="${3:-}"
+    local type="${4:-user}"
+    local priority="${type}.info"
+    local displayLevel="[INFO]"
+    local debugMode="false"
+
+    if [ "${debug:-false}" = true ] || [ "${DEBUG_TO_LOG:-false}" = true ]; then
+        debugMode="true"
+    fi
+
+    case "$level" in
+        debug)
+            priority="${type}.debug"
+            displayLevel="[DEBUG]"
+            ;;
+        error|err)
+            priority="${type}.err"
+            displayLevel="[ERROR]"
+            ;;
+        warning|warn)
+            priority="${type}.warning"
+            displayLevel="[WARN]"
+            ;;
+        info|*)
+            priority="${type}.info"
+            displayLevel="[INFO]"
+            ;;
+    esac
+
+    if [ "$debugMode" = true ]; then
+        local prefix="[${priority}]"
+    else
+        local prefix="${displayLevel}"
+    fi
+    if [ -n "$category" ]; then
+        prefix="${prefix} [${category}]"
+    fi
+    logger -t 'compose.manager' -p "$priority" "${prefix} ${msg}"
+}
+
 # Sanitize a string for use as a Docker Compose project name.
 # Replaces spaces, dots, and dashes with underscores and lowercases.
 sanitize() {

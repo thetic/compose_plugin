@@ -3,9 +3,10 @@
 # Called by cron to create scheduled backups.
 
 PLUGIN_ROOT="/usr/local/emhttp/plugins/compose.manager"
-LOG_TAG="compose.manager"
+# shellcheck disable=SC1091
+. "$PLUGIN_ROOT/scripts/common.sh"
 
-logger -t "$LOG_TAG" "[backup] Scheduled backup starting..."
+composeLogger "Scheduled backup starting..." info backup daemon
 
 # Execute the backup via the PHP backend
 result=$(php -r "
@@ -29,7 +30,7 @@ size=$(printf '%s' "$result" | php -r '$j = json_decode(file_get_contents("php:/
 stacks=$(printf '%s' "$result" | php -r '$j = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $j["stacks"] ?? "0";')
 
 if [ "$status" = "success" ]; then
-    logger -t "$LOG_TAG" "[backup] Scheduled backup completed: $archive ($size, $stacks stacks)"
+    composeLogger "Scheduled backup completed: $archive ($size, $stacks stacks)" info backup daemon
 else
-    logger -t "$LOG_TAG" "[backup] Scheduled backup FAILED: $message"
+    composeLogger "Scheduled backup FAILED: $message" error backup daemon
 fi

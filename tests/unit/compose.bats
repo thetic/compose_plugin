@@ -28,6 +28,10 @@ test_setup() {
 # ============================================================
 
 @test "log_msg function logs to logger" {
+    # Stub composeLogger so the extracted log_msg can call it
+    composeLogger() { logger -t 'compose.manager' -p "daemon.${2:-info}" "[${3:-compose}] $1"; }
+    export -f composeLogger
+
     # Extract only log_msg to avoid sourcing compose.sh top-level side effects in tests.
     # shellcheck disable=SC1090
     # shellcheck source=/dev/null

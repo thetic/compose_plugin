@@ -2,6 +2,9 @@
 # Compose auto-update runner
 # Args: <compose_yml_path> <project_name>
 
+# shellcheck disable=SC1091
+. "$(dirname "$0")/common.sh"
+
 COMPOSE_FILE="$1"
 PROJECT_NAME="$2"
 NOTIFY="/usr/local/emhttp/webGui/scripts/notify"
@@ -13,14 +16,6 @@ if [ -z "$COMPOSE_FILE" ] || [ -z "$PROJECT_NAME" ]; then
   echo "Usage: $0 <compose_yml_path> <project_name>"
   exit 2
 fi
-
-# Log helper — writes to syslog so entries appear alongside plugin logs
-log_msg() {
-  logger -t 'compose.manager' -p 'daemon.info' "[autoupdate] $1"
-}
-log_err() {
-  logger -t 'compose.manager' -p 'daemon.err' "[autoupdate] $1"
-}
 
 # Create lock directory if needed
 mkdir -p "$LOCK_DIR" 2>/dev/null || true
@@ -72,7 +67,7 @@ timeout "$COMMAND_TIMEOUT" docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" 
 
 if [ "$RC" -ne 0 ]; then
   ERRMSG="Auto-update pull failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
-  log_err "$ERRMSG"
+  composeLogger "$ERRMSG" error autoupdate daemon
   echo "$ERRMSG" >&2
   if [ -x "$NOTIFY" ]; then
     "$NOTIFY" -e 'Compose Manager' -s "Auto-update failed: $PROJECT_NAME" -d "$ERRMSG" -i 'warning'
@@ -91,7 +86,7 @@ if [ "$OLD_DIGESTS" != "$NEW_DIGESTS" ]; then
   
   if [ "$RC" -ne 0 ]; then
     ERRMSG="Auto-update up failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
-    log_err "$ERRMSG"
+    composeLogger "$ERRMSG" error autoupdate daemon
     echo "$ERRMSG" >&2
     if [ -x "$NOTIFY" ]; then
       "$NOTIFY" -e 'Compose Manager' -s "Auto-update failed: $PROJECT_NAME" -d "$ERRMSG" -i 'warning'
@@ -101,14 +96,14 @@ if [ "$OLD_DIGESTS" != "$NEW_DIGESTS" ]; then
   fi
   
   MSG="Stack '$PROJECT_NAME' was updated successfully."
-  log_msg "$MSG"
+  composeLogger "$MSG" info autoupdate daemon
   echo "$MSG"
   if [ -x "$NOTIFY" ]; then
     "$NOTIFY" -e 'Compose Manager' -s "Stack updated: $PROJECT_NAME" -d "$MSG"
   fi
 else
   MSG="No updates for stack '$PROJECT_NAME'."
-  log_msg "$MSG"
+  composeLogger "$MSG" info autoupdate daemon
   echo "$MSG"
 fi
 

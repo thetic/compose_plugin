@@ -4,6 +4,9 @@ export HOME=/root
 # Compose Manager - Docker Compose wrapper script
 # Provides error handling, result tracking, and operation locking
 
+# shellcheck disable=SC1091
+. "$(dirname "$0")/common.sh"
+
 # Configuration - can be overridden via environment
 LOCK_TIMEOUT=${COMPOSE_LOCK_TIMEOUT:-30}
 LOCK_DIR="/var/run/compose.manager"
@@ -24,11 +27,12 @@ stack_path=""
 debug=false
 lock_fd=""
 
-# Logging helper
+
+# Logging helper — delegates to shared composeLogger, adds console echo in debug mode
 log_msg() {
     local level="$1"
     local msg="$2"
-    logger -t "compose.manager" "[$level] $msg"
+    composeLogger "$msg" "${level,,}" compose
     if [ "$debug" = true ]; then
         echo "[$level] $msg"
     fi
