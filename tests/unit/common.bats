@@ -35,7 +35,7 @@ COMMON_SCRIPT="$BATS_TEST_DIRNAME/../../source/compose.manager/scripts/common.sh
 
     composeLogger "category msg" "warning" "cron"
 
-    assert_logged "message= \[cron\] category msg"
+    assert_logged "\[WARN\] \[cron\] category msg"
 }
 
 # ============================================================
