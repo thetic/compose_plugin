@@ -36,10 +36,18 @@
 >
 
 <CHANGES>
-###2026.04.16.0728
-- Features: add clearIconCache action to remove service icons from cache
+###2026.04.20.1510
+- Features: implement centralized cron management with CronManager for autoupdate and backup tasks
+- Features: enhance WebUI URL validation and detection with placeholder support
+- Bug Fixes (pkg_build): force non-interactive yes for makepkg prompts in CI/container builds
+- Bug Fixes (autoupdate): update project name resolution to use sanitized lowercase projectName instead of raw projectFolder
+- Bug Fixes (autoupdate): enhance logging in compose_autoupdate.sh for error and success messages
+- Bug Fixes: remove redundant 'root' user specification in cron job entries; fixes #99
+- Refactoring (logging): enhance logging display levels in composeLogger() for improved clarity
+- Refactoring (logging): replace logger calls in scripts with new composeLogger() func for consistent logging across scripts + tests
+- Refactoring (logging): renamed composeClientDebug() and clientDebug() funcs to composeLogger()
 - [PR #93](https://github.com/mstrhakr/compose_plugin/pull/93)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.10...v2026.04.16.0728)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.10...v2026.04.20.1510)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
