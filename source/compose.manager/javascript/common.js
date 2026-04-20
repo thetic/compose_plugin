@@ -121,27 +121,32 @@ function composeLogger(msg, obj, type, lvl, category) {
     // Use cached async getter to fetch config and decide console logging
     getConfig().then(function (cfg) {
         try {
-            switch (lvl) {
-                case 'debug':
-                    if (cfg && (cfg.DEBUG_TO_LOG === 'false' || cfg.DEBUG_TO_LOG === false)) {
-                        return; // Skip debug logs if disabled in config
-                    } else {
-                        // When config fetch fails (cfg === null), default to showing debug logs.
-                        msg = '[DEBUG] ' + msg;
-                    }
-                    break;
-                case 'err':
-                case 'error':
-                    msg = '[ERROR] ' + msg;
-                    break;
-                case 'warn':
-                case 'warning':
-                    msg = '[WARN] ' + msg;
-                    break;
-                case 'info':
-                default:
-                    msg = '[INFO] ' + msg;
+            var displayLevel;
+            var debugMode = cfg && (cfg.DEBUG_TO_LOG === 'true' || cfg.DEBUG_TO_LOG === true);
+            if (debugMode) {
+                displayLevel = '[' + (type || 'user') + '.' + (lvl || 'info') + ']';
+            } else {
+                switch (lvl) {
+                    case 'debug':
+                        if (cfg && (cfg.DEBUG_TO_LOG === 'false' || cfg.DEBUG_TO_LOG === false)) {
+                            return; // Skip debug logs if disabled in config
+                        }
+                        displayLevel = '[DEBUG]';
+                        break;
+                    case 'err':
+                    case 'error':
+                        displayLevel = '[ERROR]';
+                        break;
+                    case 'warn':
+                    case 'warning':
+                        displayLevel = '[WARN]';
+                        break;
+                    case 'info':
+                    default:
+                        displayLevel = '[INFO]';
+                }
             }
+            msg = displayLevel + ' ' + msg;
             if (category !== undefined && category !== null && category !== '') {
                 msg = '[' + category + '] ' + msg;
             }

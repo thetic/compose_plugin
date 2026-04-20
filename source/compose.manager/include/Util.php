@@ -23,22 +23,27 @@ if (!function_exists('composeLogger')) {
         switch ($level) {
             case 'debug':
                 $logLevel = "$type.debug";
+                $displayLevel = '[DEBUG]';
                 break;
             case 'error':
             case 'err':
                 $logLevel = "$type.err";
+                $displayLevel = '[ERROR]';
                 break;
             case 'warning':
             case 'warn':
                 $logLevel = "$type.warning";
+                $displayLevel = '[WARN]';
                 break;
             case 'info':
             default:
                 $logLevel = "$type.info";
+                $displayLevel = '[INFO]';
         }
         $cfg = @parse_ini_file("/boot/config/plugins/compose.manager/compose.manager.cfg", true, INI_SCANNER_RAW);
+        $debugMode = ((($cfg['DEBUG_TO_LOG'] ?? 'false') == 'true'));
         // Skip debug messages if debug logging is disabled in plugin settings
-        if ((($cfg['DEBUG_TO_LOG'] ?? 'false') == 'false') && $level == 'debug') {
+        if (!$debugMode && $level == 'debug') {
             return;
         }
 
@@ -47,8 +52,11 @@ if (!function_exists('composeLogger')) {
             $category = preg_replace('/[^A-Za-z0-9_.-]+/', '-', $category) ?? '';
             $category = trim($category, '-');
         }
-
-        $messageParts = ["[$logLevel]"];
+        if ($debugMode) {
+            $messageParts = ["[$logLevel]"];
+        } else {
+            $messageParts = [$displayLevel];
+        }
         if ($category !== '') {
             $messageParts[] = '[' . $category . ']';
         }
