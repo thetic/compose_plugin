@@ -6307,8 +6307,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                         <div class="settings-field">
                             <label for="settings-webui-url">WebUI URL</label>
-                            <input type="text" id="settings-webui-url" placeholder="http://[IP]:[PORT:8080]/">
-                            <div class="settings-field-help">URL to the main WebUI for this stack. This adds a "WebUI" option to the stack's context menu. Supports <code>[IP]</code> and <code>[PORT:xxxx]</code> placeholders.</div>
+                            <input type="text" id="settings-webui-url" placeholder="http://tower.local:8080/">
+                            <div class="settings-field-help">URL to the main WebUI for this stack. This adds a "WebUI" option to the stack's context menu. </div>
                             <div id="settings-webui-suggestion" style="display:none; margin-top:4px; padding:6px 10px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,165,0,0.3); border-radius:4px; font-size:0.9em;">
                                 <span style="color:#aaa;">Detected: </span><code id="settings-webui-detected-url" style="user-select:all;"></code>
                                 <span id="settings-webui-detected-source" style="color:#888; margin-left:6px; font-size:0.85em;"></span>
