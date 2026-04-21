@@ -2144,7 +2144,6 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             for (var i = 0; i < allowed.length; i++) {
                 var cfg = <?= json_encode($cfg); ?>;
                 var showCompose = (cfg['SHOW_COMPOSE_IN_HEADER_MENU'] || '').toString().toLowerCase();
-                composeLogger('Checking referrer path ' + ref.pathname + ' against allowed path ' + allowed[i] + ' with showCompose=' + showCompose, null, 'user', 'debug', 'settings');
                 if (existingPath && existingPath.toLowerCase() === '/docker' && showCompose === 'true') {
                     composeLogger('Referrer is /Docker and showCompose is true, returning /Compose', null, 'user', 'warn', 'settings');
                     return '/Compose' + (ref.search || '');
