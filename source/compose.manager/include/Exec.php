@@ -90,8 +90,35 @@ switch ($_POST['action']) {
         $isInvalidIndirect = !$isIndirect && is_file("$folderName/indirect.invalid");
         $filesRemain = $isIndirect ? file_get_contents("$folderName/indirect")
             : ($isInvalidIndirect ? file_get_contents("$folderName/indirect.invalid") : "");
-        composeLogger("Deleting stack: $stackName", null, 'user', 'info', 'stack');
-        exec("rm -rf " . escapeshellarg($folderName));
+        composeLogger("Deleting stack: $stackName", [
+            'folderName' => $folderName,
+            'isIndirect' => $isIndirect,
+            'isInvalidIndirect' => $isInvalidIndirect,
+            'filesRemain' => $filesRemain
+        ], 'user', 'debug', 'stack');
+
+        $execOutput = [];
+        $execRc = 0;
+        exec("rm -rf " . escapeshellarg($folderName), $execOutput, $execRc);
+
+        $folderStillExists = is_dir($folderName);
+        if ($execRc !== 0 || $folderStillExists) {
+            composeLogger("Stack folder delete failed", [
+                'stackName' => $stackName,
+                'folderName' => $folderName,
+                'execRc' => $execRc,
+                'execOutput' => $execOutput,
+                'folderStillExists' => $folderStillExists,
+                'filesRemain' => $filesRemain
+            ], 'user', 'error', 'stack');
+            $msg = "Failed to delete stack folder. " .
+                ($execRc !== 0 ? "rm exit code: $execRc. " : "") .
+                ($folderStillExists ? "Folder still exists after rm. " : "") .
+                (count($execOutput) ? "Output: " . implode("; ", $execOutput) : "");
+            echo json_encode(['result' => 'error', 'message' => $msg]);
+            break;
+        }
+
         if ($filesRemain == "") {
             composeLogger("Deleted stack: $stackName", null, 'user', 'info', 'stack');
             echo json_encode(['result' => 'success', 'message' => '']);
