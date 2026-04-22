@@ -1510,6 +1510,30 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             || s.indexOf('data:image/') === 0 || s.indexOf('/') === 0;
     }
 
+    function loadPersistentContainerCache() {
+        return new Promise(function(resolve) {
+            $.get('/plugins/compose.manager/containers.cache.json')
+                .done(function(data) {
+                    try {
+                        persistentContainerCache = JSON.parse(data) || {};
+                    } catch (e) {
+                        persistentContainerCache = {};
+                        composeLogger('Failed to parse persistent container cache', {error: e && e.toString()}, 'user', 'warn', 'loadPersistentContainerCache');
+                    }
+                    resolve(persistentContainerCache);
+                })
+                .fail(function() {
+                    persistentContainerCache = {};
+                    resolve(persistentContainerCache);
+                });
+        });
+    }
+
+    function getPersistentContainerInfo(project, service) {
+        if (!project || !service || !persistentContainerCache[project]) return null;
+        return persistentContainerCache[project][service] || null;
+    }
+
     // Process WebUI URL placeholders for stack-level WebUI (where no container context exists)
     // For container-level WebUI, resolution is done server-side in exec.php
     function processWebUIUrl(url) {
@@ -1669,8 +1693,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // Gate dockerload socket start until the stack list DOM is ready.
         var composeListReady = false;
 
-        // Load the stack list asynchronously (like Docker tab)
-        // This defers the expensive docker commands to after the page renders
+        // Load the persistent container cache before the stack list.
+        // This ensures dialog merge logic can use last-known container metadata.
+        loadPersistentContainerCache().then(function() {
         composeLoadlist().then(function() {
             composeListReady = true;
             composeLogger('composeListReady=true, rows=' + $('#compose_stacks tr.compose-sortable').length, null, 'user', 'debug', 'dockerload');
@@ -3394,29 +3419,42 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             // Build a lookup of running containers by service name
             var containersByService = {};
             cachedContainers.forEach(function(ct) {
-                var svc = ct.service || '';
+                var svc = (ct.service || ct.Service || '').toString();
                 if (svc) containersByService[svc] = ct;
             });
 
-            // Build the container list: use real container data when
-            // available, otherwise create a minimal placeholder so the
-            // service still appears in the dialog.
+            // Build the container list: prefer live/runtime container data,
+            // then fall back to persistent cache, then to a minimal placeholder.
             var containers = [];
             profileServices.forEach(function(svc) {
-                if (containersByService[svc]) {
-                    containers.push(containersByService[svc]);
-                } else {
-                    containers.push({ service: svc, name: svc, state: 'stopped', image: '' });
+                var container = containersByService[svc];
+                if (!container) {
+                    var persisted = getPersistentContainerInfo(project, svc);
+                    if (persisted) {
+                        container = createContainerInfo(persisted);
+                    }
                 }
+                if (!container) {
+                    container = { service: svc, name: svc, state: 'stopped', image: '' };
+                }
+                containers.push(container);
             });
 
             composeLogger('profile/unified AJAX done', {profileServices, containers, cachedContainers}, 'user', 'debug', 'showStackActionDialog');
             containers = mergeUpdateStatus(containers, project);
             renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
         }).fail(function(xhr, status, error) {
-            // Fallback: show whatever we have cached
+            // Fallback: if profile resolution fails, show cached container metadata
             composeLogger('getProfileServices AJAX fail', {xhr, status, error, cachedContainers}, 'user', 'error', 'showStackActionDialog');
-            var containers = mergeUpdateStatus(cachedContainers, project);
+            var containers = [];
+            if (cachedContainers.length > 0) {
+                containers = mergeUpdateStatus(cachedContainers, project);
+            } else if (persistentContainerCache[project]) {
+                containers = Object.keys(persistentContainerCache[project]).map(function(key) {
+                    return createContainerInfo(persistentContainerCache[project][key]);
+                });
+                containers = mergeUpdateStatus(containers, project);
+            }
             renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
         });
         return;
@@ -3702,6 +3740,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     var currentStackId = null;
     var expandedStacks = {};
     var stackContainersCache = {};
+    var persistentContainerCache = {}; // Persistent cache loaded from disk
     var stackStartedAtCache = {}; // Cache for stack-level started_at timestamps
     // Track stacks currently loading details to prevent concurrent reloads
     var stackDetailsLoading = {};
