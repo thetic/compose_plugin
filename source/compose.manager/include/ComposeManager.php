@@ -759,7 +759,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     // Initialize editor modal
     function initEditorModal() {
         if (typeof ace === 'undefined') {
-            console.warn('Compose Manager: Ace editor not available. Stack editor is unavailable.');
+            composeLogger('Ace editor not available. Stack editor is unavailable.', null, 'user', 'warn', 'initEditorModal');
             return;
         }
         // Initialize Ace editors for compose and env tabs only
@@ -917,7 +917,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     function switchTab(tabName) {
         var validTabs = ['compose', 'env', 'labels', 'settings'];
         if (validTabs.indexOf(tabName) === -1) {
-            console.error('Invalid tab name: ' + tabName);
+            composeLogger('Invalid tab name: ' + tabName, null, 'user', 'error', 'switchTab');
             return;
         }
 
@@ -944,7 +944,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 editorModal.editors[tabName].renderer.updateFull();
                 editorModal.editors[tabName].focus();
             } catch (e) {
-                console.warn('Compose Manager: editor resize failed', e);
+                composeLogger('Editor resize failed', {error: e && e.toString(), tab: type}, 'user', 'warn', 'switchTab');
             }
         }
 
@@ -960,7 +960,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             editorModal.editors[type].resize();
             editorModal.editors[type].renderer.updateFull();
         } catch (e) {
-            console.warn('Compose Manager: refreshEditorContents failed for ' + type, e);
+            composeLogger('refreshEditorContents failed for ' + type, {error: e && e.toString()}, 'user', 'warn', 'refreshEditorContents');
         }
     }
 
@@ -1039,7 +1039,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         });
                     }
                 } catch (e) {
-                    console.error('Failed to load saved update status:', e);
+                    composeLogger('Failed to load saved update status', {error: e && e.toString()}, 'user', 'error', 'loadSavedUpdateStatus');
                     checkPendingRechecks(function(hadPendingRechecks) {
                         if (!hadPendingRechecks && autoCheckUpdates) {
                             checkAllUpdates();
@@ -1157,7 +1157,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         updateUpdateAllButton();
                     }
                 } catch (e) {
-                    console.error('Failed to parse update check response:', e);
+                    composeLogger('Failed to parse update check response', {error: e && e.toString()}, 'user', 'error', 'checkAllUpdates');
                 }
             }
             $('#checkUpdatesBtn').prop('disabled', false).val('Check for Updates');
@@ -1485,7 +1485,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         });
                     }
                 } catch (e) {
-                    console.error('Failed to parse update check response:', e);
+                    composeLogger('Failed to parse update check response', {error: e && e.toString(), stackName: stackName}, 'user', 'error', 'checkStackUpdates');
                 }
             }
         });
@@ -1696,9 +1696,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // Load the persistent container cache before the stack list.
         // This ensures dialog merge logic can use last-known container metadata.
         loadPersistentContainerCache().then(function() {
-        composeLoadlist().then(function() {
-            composeListReady = true;
-            composeLogger('composeListReady=true, rows=' + $('#compose_stacks tr.compose-sortable').length, null, 'user', 'debug', 'dockerload');
+            composeLoadlist().then(function() {
+                composeListReady = true;
+                composeLogger('composeListReady=true, rows=' + $('#compose_stacks tr.compose-sortable').length, null, 'user', 'debug', 'dockerload');
 
             // Start the dockerload socket now that the DOM has rows with data-ctids.
             if (typeof window.composeDockerLoadToggle === 'function') {
@@ -2192,9 +2192,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                             response = JSON.parse(data);
                         } catch (e) {
                             // Handle invalid or unexpected JSON response
-                            if (window.console && console.error) {
-                                console.error("Failed to parse addStack response:", e, data);
-                            }
+                            composeLogger('Failed to parse addStack response', {error: e && e.toString(), data: data}, 'user', 'error', 'addStack');
                             swal({
                                 title: "Failed to create stack",
                                 text: "Unexpected response from server",
@@ -4200,7 +4198,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 renderLabelsUI(mainDoc, overrideDoc);
 
             } catch (e) {
-                console.error('Failed to parse compose files for labels:', e);
+                composeLogger('Failed to parse compose files for labels', {error: e && e.toString()}, 'user', 'error', 'loadLabelsData');
                 $('#labels-services-container').html('<div class="labels-empty-state"><i class="fa fa-exclamation-triangle"></i> Error loading services: ' + composeEscapeHtml(e.message) + '</div>');
             }
         }).fail(function() {
@@ -6389,7 +6387,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 $(window).on('resize', updateModalOffset);
                 initEditorModal();
             } catch (e) {
-                console.warn('Compose Manager: editor init error (non-fatal):', e);
+                composeLogger('Editor init error (non-fatal)', {error: e && e.toString()}, 'user', 'warn', 'editorInit');
             }
             // Attach Unraid folder/file browser to all path inputs on the page.
             // The picker popup needs manual positioning for modals and overlay stacks.
@@ -6425,7 +6423,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 });
 
                 if (!$dockerTitle || !$composeTitle) {
-                    console.warn('Compose Manager: reorder skipped — dockerTitle:', !!$dockerTitle, 'composeTitle:', !!$composeTitle);
+                    composeLogger('Reorder Compose above Docker skipped', {dockerTitle: !!$dockerTitle, composeTitle: !!$composeTitle}, 'user', 'warn', 'reorderComposeAboveDocker');
                     return;
                 }
 
