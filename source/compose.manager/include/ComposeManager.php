@@ -46,7 +46,10 @@ function compose_manager_cpu_spec_count($cpuSpec)
     }
     return $count;
 }
-$cpus = function_exists('cpu_list') ? cpu_list() : [];
+
+/** @disregard P1010 cpu_list is defined externally and imported here */
+// @phpstan-ignore-next-line
+$cpus = cpu_list();
 $cpuCount = 0;
 foreach ($cpus as $cpuSpec) {
     $cpuCount += compose_manager_cpu_spec_count($cpuSpec);
@@ -75,15 +78,15 @@ if ($cpuCount <= 0) {
 
     /* Stabilize header row height across basic/advanced toggle transitions */
     #compose_stacks thead tr th {
-	font-weight: normal;
-	font-size: 1.1rem;
-	text-transform: uppercase;
-	letter-spacing: 1px;
-	color: var(--dynamix-tablesorter-thead-th-text-color);
-	background-color: var(--dynamix-tablesorter-thead-th-bg-color);
-	padding: 8px 20px 8px 6px;
-	white-space: nowrap;
-	text-align: left;
+        font-weight: normal;
+        font-size: 1.1rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--dynamix-tablesorter-thead-th-text-color);
+        background-color: var(--dynamix-tablesorter-thead-th-bg-color);
+        padding: 8px 20px 8px 6px;
+        white-space: nowrap;
+        text-align: left;
     }
 
     /* Clip overflowing content in fixed-layout cells */
@@ -230,7 +233,7 @@ if ($cpuCount <= 0) {
     }
 
     .dropdown-menu {
-        z-index: 100 !important; 
+        z-index: 100 !important;
     }
 
     /* CPU & Memory load display (matches Docker manager usage-disk style) */
@@ -238,30 +241,34 @@ if ($cpuCount <= 0) {
         white-space: nowrap;
         font-size: 0.9em;
     }
+
     .compose-load-cell .compose-load-cpu,
     .compose-load-cell .compose-load-mem {
         display: block;
     }
+
     .compose-load-cell .compose-load-mem {
         margin-top: 2px;
     }
+
     .compose-load-cell .usage-disk.mm {
         height: 3px;
         margin: 3px 20px 0 0;
         position: relative;
         background-color: var(--usage-disk-background-color, #e0e0e0);
     }
-    .compose-load-cell .usage-disk.mm > span:first-child {
+
+    .compose-load-cell .usage-disk.mm>span:first-child {
         position: absolute;
         left: 0;
         height: 3px;
         background-color: var(--gray-400, #888);
     }
-    .compose-load-cell .usage-disk.mm > span:last-child {
+
+    .compose-load-cell .usage-disk.mm>span:last-child {
         position: relative;
         z-index: 1;
     }
-
 </style>
 
 <?php
@@ -315,25 +322,40 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var unit = (match[2] || 'b').toLowerCase();
 
         switch (unit) {
-            case 'tb':  return num * 1000000000000;
-            case 'tib': return num * 1099511627776;
-            case 'gb':  return num * 1000000000;
-            case 'gib': return num * 1073741824;
-            case 'mb':  return num * 1000000;
-            case 'mib': return num * 1048576;
-            case 'kb':  return num * 1000;
-            case 'kib': return num * 1024;
-            default:    return num;
+            case 'tb':
+                return num * 1000000000000;
+            case 'tib':
+                return num * 1099511627776;
+            case 'gb':
+                return num * 1000000000;
+            case 'gib':
+                return num * 1073741824;
+            case 'mb':
+                return num * 1000000;
+            case 'mib':
+                return num * 1048576;
+            case 'kb':
+                return num * 1000;
+            case 'kib':
+                return num * 1024;
+            default:
+                return num;
         }
     }
 
     // Parse docker stats memory string "used / limit" into bytes.
     function parseMemUsagePair(memStr) {
-        if (!memStr) return {used: 0, limit: 0};
+        if (!memStr) return {
+            used: 0,
+            limit: 0
+        };
         var parts = String(memStr).split('/');
         var used = parseMemValueToBytes(parts[0] || '');
         var limit = parseMemValueToBytes(parts[1] || '');
-        return {used: used, limit: limit};
+        return {
+            used: used,
+            limit: limit
+        };
     }
 
     // Backward-compatible helper used by existing code paths.
@@ -414,8 +436,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     function createStackInfo(project, containers, opts) {
         opts = opts || {};
         var normalized = (containers || []).map(createContainerInfo).filter(Boolean);
-        var isRunning = normalized.some(function(c) { return c.isRunning; });
-        var hasUpdate = normalized.some(function(c) { return c.hasUpdate; });
+        var isRunning = normalized.some(function(c) {
+            return c.isRunning;
+        });
+        var hasUpdate = normalized.some(function(c) {
+            return c.hasUpdate;
+        });
 
         return {
             projectName: opts.projectName || project,
@@ -459,7 +485,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 });
             });
             // Recompute stack-level hasUpdate from merged containers
-            stackInfo.hasUpdate = stackInfo.containers.some(function(c) { return c.hasUpdate; });
+            stackInfo.hasUpdate = stackInfo.containers.some(function(c) {
+                return c.hasUpdate;
+            });
         }
 
         return stackInfo;
@@ -475,7 +503,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         if (!$spinner.length) {
             return;
         }
-        $spinner.css({'z-index': 100000});
+        $spinner.css({
+            'z-index': 100000
+        });
         $spinner.stop(true, true).show('slow');
     }
 
@@ -496,124 +526,136 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             }, 500);
 
             $.get('/plugins/compose.manager/include/ComposeList.php')
-            .done(function(data) {
-                clearTimeout(composeTimers.load);
+                .done(function(data) {
+                    clearTimeout(composeTimers.load);
 
-                // Insert the loaded content
-                $('#compose_list').html(data);
+                    // Insert the loaded content
+                    $('#compose_list').html(data);
 
-                // Signal load subscribers (e.g. dockerload cache) that the list changed
-                $(document).trigger('composeListRefreshed');
+                    // Signal load subscribers (e.g. dockerload cache) that the list changed
+                    $(document).trigger('composeListRefreshed');
 
-                // Initialize UI components for the newly loaded content
-                initStackListUI();
+                    // Initialize UI components for the newly loaded content
+                    initStackListUI();
 
-                // Debug: log initial per-stack rendered status icons (data-status attribute)
-                try {
-                    var initialStatuses = [];
-                    $('#compose_stacks tr.compose-sortable').each(function() {
-                        var project = $(this).data('project');
-                        var icon = $(this).find('.compose-status-icon').first();
-                        var status = icon.attr('data-status') || icon.attr('class') || '';
-                        initialStatuses.push({
-                            project: project,
-                            status: status
+                    // Debug: log initial per-stack rendered status icons (data-status attribute)
+                    try {
+                        var initialStatuses = [];
+                        $('#compose_stacks tr.compose-sortable').each(function() {
+                            var project = $(this).data('project');
+                            var icon = $(this).find('.compose-status-icon').first();
+                            var status = icon.attr('data-status') || icon.attr('class') || '';
+                            initialStatuses.push({
+                                project: project,
+                                status: status
+                            });
                         });
-                    });
-                    composeLogger('initial-stack-statuses', {
-                        stacks: initialStatuses
-                    }, 'user', 'debug', 'composeLoadlist');
-                } catch (e) {}
-
-                // Normalize icons based on state text to ensure server-side render and
-                // client-side update logic agree (workaround for caching or older server HTML)
-                try {
-                    $('#compose_stacks tr.compose-sortable').each(function() {
-                        var $row = $(this);
-                        var stateText = $row.find('.state').text().toLowerCase();
-                        var $icon = $row.find('.compose-status-icon').first();
-                        if (!$icon.length) return;
-                        var desiredShape = null;
-                        var desiredColor = 'grey-text';
-                        if (stateText.indexOf('partial') !== -1) {
-                            desiredShape = 'exclamation-circle';
-                            desiredColor = 'orange-text';
-                        } else if (stateText.indexOf('started') !== -1) {
-                            desiredShape = 'play';
-                            desiredColor = 'green-text';
-                        } else if (stateText.indexOf('paused') !== -1) {
-                            desiredShape = 'pause';
-                            desiredColor = 'orange-text';
-                        } else {
-                            desiredShape = 'square';
-                            desiredColor = 'grey-text';
-                        }
-
-                        // If icon already matches, skip
-                        if (($icon.hasClass('fa-' + desiredShape) && $icon.hasClass(desiredColor))) return;
-
-                        composeLogger('normalize-icon', {
-                            project: $row.data('project'),
-                            stateText: stateText,
-                            desiredShape: desiredShape,
-                            desiredColor: desiredColor,
-                            before: $icon.attr('class')
+                        composeLogger('initial-stack-statuses', {
+                            stacks: initialStatuses
                         }, 'user', 'debug', 'composeLoadlist');
-                        // Remove old fa-* classes, color classes and apply desired ones
-                        $icon.removeClass(function(i, cls) {
-                            return (cls.match(/fa-[^\s]+/g) || []).join(' ');
+                    } catch (e) {}
+
+                    // Normalize icons based on state text to ensure server-side render and
+                    // client-side update logic agree (workaround for caching or older server HTML)
+                    try {
+                        $('#compose_stacks tr.compose-sortable').each(function() {
+                            var $row = $(this);
+                            var stateText = $row.find('.state').text().toLowerCase();
+                            var $icon = $row.find('.compose-status-icon').first();
+                            if (!$icon.length) return;
+                            var desiredShape = null;
+                            var desiredColor = 'grey-text';
+                            if (stateText.indexOf('partial') !== -1) {
+                                desiredShape = 'exclamation-circle';
+                                desiredColor = 'orange-text';
+                            } else if (stateText.indexOf('started') !== -1) {
+                                desiredShape = 'play';
+                                desiredColor = 'green-text';
+                            } else if (stateText.indexOf('paused') !== -1) {
+                                desiredShape = 'pause';
+                                desiredColor = 'orange-text';
+                            } else {
+                                desiredShape = 'square';
+                                desiredColor = 'grey-text';
+                            }
+
+                            // If icon already matches, skip
+                            if (($icon.hasClass('fa-' + desiredShape) && $icon.hasClass(desiredColor))) return;
+
+                            composeLogger('normalize-icon', {
+                                project: $row.data('project'),
+                                stateText: stateText,
+                                desiredShape: desiredShape,
+                                desiredColor: desiredColor,
+                                before: $icon.attr('class')
+                            }, 'user', 'debug', 'composeLoadlist');
+                            // Remove old fa-* classes, color classes and apply desired ones
+                            $icon.removeClass(function(i, cls) {
+                                return (cls.match(/fa-[^\s]+/g) || []).join(' ');
+                            });
+                            $icon.removeClass('green-text orange-text grey-text cyan-text');
+                            $icon.addClass('fa fa-' + desiredShape + ' ' + desiredColor + ' compose-status-icon');
+                            composeLogger('normalize-icon-done', {
+                                project: $row.data('project'),
+                                after: $icon.attr('class')
+                            }, 'user', 'debug', 'composeLoadlist');
                         });
-                        $icon.removeClass('green-text orange-text grey-text cyan-text');
-                        $icon.addClass('fa fa-' + desiredShape + ' ' + desiredColor + ' compose-status-icon');
-                        composeLogger('normalize-icon-done', {
-                            project: $row.data('project'),
-                            after: $icon.attr('class')
-                        }, 'user', 'debug', 'composeLoadlist');
-                    });
-                } catch (e) {}
+                    } catch (e) {}
 
-                // Cleanup any temporary per-container spinners or leftover in-progress state
-                try {
-                    $('#compose_list').find('.compose-container-spinner').each(function() {
-                        var $sp = $(this);
-                        var $wrap = $sp.closest('.hand');
-                        $sp.remove();
-                        $wrap.find('img').css('opacity', 1);
-                    });
-                    // Restore any state text preserved by setStackActionInProgress
-                    $('#compose_stacks .state').each(function() {
-                        var $s = $(this);
-                        if ($s.data('orig-text')) {
-                            $s.text($s.data('orig-text'));
-                            $s.removeData('orig-text');
-                        }
-                    });
-                } catch (e) {}
+                    // Cleanup any temporary per-container spinners or leftover in-progress state
+                    try {
+                        $('#compose_list').find('.compose-container-spinner').each(function() {
+                            var $sp = $(this);
+                            var $wrap = $sp.closest('.hand');
+                            $sp.remove();
+                            $wrap.find('img').css('opacity', 1);
+                        });
+                        // Restore any state text preserved by setStackActionInProgress
+                        $('#compose_stacks .state').each(function() {
+                            var $s = $(this);
+                            if ($s.data('orig-text')) {
+                                $s.text($s.data('orig-text'));
+                                $s.removeData('orig-text');
+                            }
+                        });
+                    } catch (e) {}
 
-                // Hide compose spinner overlay
-                hideComposeSpinner();
+                    // Hide compose spinner overlay
+                    hideComposeSpinner();
 
-                // Show buttons now that content is loaded
-                $('input[type=button]').show();
+                    // Show buttons now that content is loaded
+                    $('input[type=button]').show();
 
-                // Notify other features (e.g. hide-from-docker) that compose list is ready
-                $(document).trigger('compose-list-loaded');
+                    // Notify other features (e.g. hide-from-docker) that compose list is ready
+                    $(document).trigger('compose-list-loaded');
 
-                // Resolve the promise so callers know the list has been loaded
-                try { resolve(data); } catch (e) { resolve(); }
-            })
-            .fail(function(xhr, status, error) {
-                composeLogger('failed', {
-                    status: status,
-                    error: error
-                }, 'user', 'error', 'composeLoadlist');
-                clearTimeout(composeTimers.load);
-                hideComposeSpinner();
-                $('#compose_list').html('<tr><td colspan="10" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
+                    // Resolve the promise so callers know the list has been loaded
+                    try {
+                        resolve(data);
+                    } catch (e) {
+                        resolve();
+                    }
+                })
+                .fail(function(xhr, status, error) {
+                    composeLogger('failed', {
+                        status: status,
+                        error: error
+                    }, 'user', 'error', 'composeLoadlist');
+                    clearTimeout(composeTimers.load);
+                    hideComposeSpinner();
+                    $('#compose_list').html('<tr><td colspan="10" class="compose-status-danger" style="text-align:center;padding:20px;">Failed to load stack list. Please refresh the page.</td></tr>');
 
-                // Reject the promise so callers can handle the error
-                try { reject({xhr: xhr, status: status, error: error}); } catch (e) { reject(error); }
-            });
+                    // Reject the promise so callers can handle the error
+                    try {
+                        reject({
+                            xhr: xhr,
+                            status: status,
+                            error: error
+                        });
+                    } catch (e) {
+                        reject(error);
+                    }
+                });
         });
     }
 
@@ -695,7 +737,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     // Safely attempt to parse a JSON string; returns null on failure
     function tryParseJson(str) {
         if (!str || typeof str !== 'string') return null;
-        try { return JSON.parse(str); } catch (e) { return null; }
+        try {
+            return JSON.parse(str);
+        } catch (e) {
+            return null;
+        }
     }
 
     // Editor modal state
@@ -944,7 +990,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 editorModal.editors[tabName].renderer.updateFull();
                 editorModal.editors[tabName].focus();
             } catch (e) {
-                composeLogger('Editor resize failed', {error: e && e.toString(), tab: type}, 'user', 'warn', 'switchTab');
+                composeLogger('Editor resize failed', {
+                    error: e && e.toString(),
+                    tab: type
+                }, 'user', 'warn', 'switchTab');
             }
         }
 
@@ -960,7 +1009,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             editorModal.editors[type].resize();
             editorModal.editors[type].renderer.updateFull();
         } catch (e) {
-            composeLogger('refreshEditorContents failed for ' + type, {error: e && e.toString()}, 'user', 'warn', 'refreshEditorContents');
+            composeLogger('refreshEditorContents failed for ' + type, {
+                error: e && e.toString()
+            }, 'user', 'warn', 'refreshEditorContents');
         }
     }
 
@@ -1039,7 +1090,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         });
                     }
                 } catch (e) {
-                    composeLogger('Failed to load saved update status', {error: e && e.toString()}, 'user', 'error', 'loadSavedUpdateStatus');
+                    composeLogger('Failed to load saved update status', {
+                        error: e && e.toString()
+                    }, 'user', 'error', 'loadSavedUpdateStatus');
                     checkPendingRechecks(function(hadPendingRechecks) {
                         if (!hadPendingRechecks && autoCheckUpdates) {
                             checkAllUpdates();
@@ -1157,7 +1210,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         updateUpdateAllButton();
                     }
                 } catch (e) {
-                    composeLogger('Failed to parse update check response', {error: e && e.toString()}, 'user', 'error', 'checkAllUpdates');
+                    composeLogger('Failed to parse update check response', {
+                        error: e && e.toString()
+                    }, 'user', 'error', 'checkAllUpdates');
                 }
             }
             $('#checkUpdatesBtn').prop('disabled', false).val('Check for Updates');
@@ -1485,7 +1540,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         });
                     }
                 } catch (e) {
-                    composeLogger('Failed to parse update check response', {error: e && e.toString(), stackName: stackName}, 'user', 'error', 'checkStackUpdates');
+                    composeLogger('Failed to parse update check response', {
+                        error: e && e.toString(),
+                        stackName: stackName
+                    }, 'user', 'error', 'checkStackUpdates');
                 }
             }
         });
@@ -1496,18 +1554,21 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         if (!url) return false;
         // Replace placeholders with dummy values for structural validation
         var normalized = url.replace(/\[IP\]/gi, 'localhost')
-                           .replace(/\[PORT:\d+\]/gi, '8080')
-                           .replace(/\[PORT\]/gi, '8080');
-        try { return Boolean(new URL(normalized)); }
-        catch(e) { return false; }
+            .replace(/\[PORT:\d+\]/gi, '8080')
+            .replace(/\[PORT\]/gi, '8080');
+        try {
+            return Boolean(new URL(normalized));
+        } catch (e) {
+            return false;
+        }
     }
 
     // Validate an icon source: http(s) URL, data URI, or local server path
     function isValidIconSrc(src) {
         if (!src) return false;
         var s = src.trim();
-        return s.indexOf('http://') === 0 || s.indexOf('https://') === 0
-            || s.indexOf('data:image/') === 0 || s.indexOf('/') === 0;
+        return s.indexOf('http://') === 0 || s.indexOf('https://') === 0 ||
+            s.indexOf('data:image/') === 0 || s.indexOf('/') === 0;
     }
 
     function loadPersistentContainerCache() {
@@ -1518,7 +1579,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         persistentContainerCache = JSON.parse(data) || {};
                     } catch (e) {
                         persistentContainerCache = {};
-                        composeLogger('Failed to parse persistent container cache', {error: e && e.toString()}, 'user', 'warn', 'loadPersistentContainerCache');
+                        composeLogger('Failed to parse persistent container cache', {
+                            error: e && e.toString()
+                        }, 'user', 'warn', 'loadPersistentContainerCache');
                     }
                     resolve(persistentContainerCache);
                 })
@@ -1576,24 +1639,54 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         if (!animate) {
             setClass(advanced);
-            $table.css({height: '', overflow: ''});
-            $advanced.css({opacity: '', display: ''});
+            $table.css({
+                height: '',
+                overflow: ''
+            });
+            $advanced.css({
+                opacity: '',
+                display: ''
+            });
         } else {
             if (advanced) {
                 // basic -> advanced: enable class first, then fade in advanced cells
                 setClass(true);
-                $table.css({height: $table.outerHeight(), overflow: 'hidden'});
-                $advanced.stop(true, true).css({opacity: 0}).animate({opacity: 1}, 300, function() {
-                    $table.css({height: '', overflow: ''});
-                    $advanced.css({opacity: '', display: ''});
+                $table.css({
+                    height: $table.outerHeight(),
+                    overflow: 'hidden'
+                });
+                $advanced.stop(true, true).css({
+                    opacity: 0
+                }).animate({
+                    opacity: 1
+                }, 300, function() {
+                    $table.css({
+                        height: '',
+                        overflow: ''
+                    });
+                    $advanced.css({
+                        opacity: '',
+                        display: ''
+                    });
                 });
             } else {
                 // advanced -> basic: fade out then disable class to avoid flicker
-                $table.css({height: $table.outerHeight(), overflow: 'hidden'});
-                $advanced.stop(true, true).animate({opacity: 0}, 300, function() {
+                $table.css({
+                    height: $table.outerHeight(),
+                    overflow: 'hidden'
+                });
+                $advanced.stop(true, true).animate({
+                    opacity: 0
+                }, 300, function() {
                     setClass(false);
-                    $table.css({height: '', overflow: ''});
-                    $advanced.css({opacity: '', display: ''});
+                    $table.css({
+                        height: '',
+                        overflow: ''
+                    });
+                    $advanced.css({
+                        opacity: '',
+                        display: ''
+                    });
                 });
             }
         }
@@ -1700,405 +1793,428 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 composeListReady = true;
                 composeLogger('composeListReady=true, rows=' + $('#compose_stacks tr.compose-sortable').length, null, 'user', 'debug', 'dockerload');
 
-            // Start the dockerload socket now that the DOM has rows with data-ctids.
-            if (typeof window.composeDockerLoadToggle === 'function') {
-                composeLogger('triggering composeDockerLoadToggle, advancedMode=' + isComposeAdvancedMode(), null, 'user', 'debug', 'dockerload');
-                window.composeDockerLoadToggle(isComposeAdvancedMode());
-            } else {
-                composeLogger('composeDockerLoadToggle not available yet at composeLoadlist completion', null, 'user', 'debug', 'dockerload');
-            }
+                // Start the dockerload socket now that the DOM has rows with data-ctids.
+                if (typeof window.composeDockerLoadToggle === 'function') {
+                    composeLogger('triggering composeDockerLoadToggle, advancedMode=' + isComposeAdvancedMode(), null, 'user', 'debug', 'dockerload');
+                    window.composeDockerLoadToggle(isComposeAdvancedMode());
+                } else {
+                    composeLogger('composeDockerLoadToggle not available yet at composeLoadlist completion', null, 'user', 'debug', 'dockerload');
+                }
 
-            getConfig().then(function(config) {
-                if (config['STACKS_DEFAULT_EXPANDED'] == 'true') {
-                    // Expand all stacks if the default is set to expanded
-                    $('#compose_stacks tr.compose-sortable').each(function() {
-                        if ($(this).data('isup') != "1" && config['ONLY_EXPAND_RUNNING_STACKS'] == 'true') {
-                            return; // Skip stopped stacks if ONLY_EXPAND_RUNNING_STACKS is true
-                        }
-                        var stackId = $(this).attr('id').replace('stack-row-', '');
-                        toggleStackDetails(stackId);
+                getConfig().then(function(config) {
+                    if (config['STACKS_DEFAULT_EXPANDED'] == 'true') {
+                        // Expand all stacks if the default is set to expanded
+                        $('#compose_stacks tr.compose-sortable').each(function() {
+                            if ($(this).data('isup') != "1" && config['ONLY_EXPAND_RUNNING_STACKS'] == 'true') {
+                                return; // Skip stopped stacks if ONLY_EXPAND_RUNNING_STACKS is true
+                            }
+                            var stackId = $(this).attr('id').replace('stack-row-', '');
+                            toggleStackDetails(stackId);
+                        });
+                    }
+                });
+            });
+            // ── Cross-widget sync ──────────────────────────────────────────
+            // On the Docker page the Compose stacks list is rendered below
+            // the built-in Docker containers table (non-tabbed) or in a
+            // separate tab (tabbed mode).  When Docker's loadlist() fires
+            // (container start/stop/restart/etc.), the compose list must
+            // also refresh so state stays in sync.
+            (function hookLoadlist() {
+                var composeRefreshTimer = null;
+                var composeDataStale = false;
+
+                // For tabbed mode: detect if our panel is hidden so we can
+                // defer the refresh until the user switches to the compose tab.
+                var composeTable = document.getElementById('compose_stacks');
+                var tabPanel = composeTable ? composeTable.closest('[role="tabpanel"]') : null;
+                var isTabbed = tabPanel !== null;
+
+                function isComposePanelVisible() {
+                    if (!isTabbed) return true; // non-tabbed: always visible
+                    return tabPanel.style.display !== 'none';
+                }
+
+                function wrapLoadlist() {
+                    if (typeof window.loadlist === 'function' && !window.loadlist._composeTabHooked) {
+                        var originalLoadlist = window.loadlist;
+                        window.loadlist = function() {
+                            originalLoadlist.apply(this, arguments);
+
+                            // Skip compose reload if refreshStackRow is already handling it
+                            if (pendingComposeRefreshCount > 0 || skipNextComposeLoadlist) {
+                                composeLogger('suppressed composeLoadlist (pending=' + pendingComposeRefreshCount + ', skip=' + skipNextComposeLoadlist + ')', null, 'user', 'debug', 'hookLoadlist');
+                                skipNextComposeLoadlist = false;
+                                return;
+                            }
+
+                            if (isComposePanelVisible()) {
+                                // Visible — refresh with debounce
+                                clearTimeout(composeRefreshTimer);
+                                composeRefreshTimer = setTimeout(function() {
+                                    composeLoadlist();
+                                }, 2000);
+                            } else {
+                                // Hidden tab — mark stale, refresh on tab switch
+                                composeDataStale = true;
+                            }
+                        };
+                        window.loadlist._composeTabHooked = true;
+                        composeLogger('hooked loadlist() for cross-widget sync, tabbed=' + isTabbed, null, 'user', 'info', 'hookLoadlist');
+                        return true;
+                    }
+                    return false;
+                }
+
+                // loadlist may not exist yet — retry every 500ms
+                if (!wrapLoadlist()) {
+                    var hookInterval = setInterval(function() {
+                        if (wrapLoadlist()) clearInterval(hookInterval);
+                    }, 500);
+                    // Give up after 30s
+                    setTimeout(function() {
+                        clearInterval(hookInterval);
+                    }, 30000);
+                }
+
+                // Tabbed mode: watch for tab switches to flush stale data
+                if (isTabbed) {
+                    var panelObserver = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            if (mutation.attributeName === 'style' && isComposePanelVisible() && composeDataStale) {
+                                composeDataStale = false;
+                                composeLoadlist();
+                            }
+                        });
+                    });
+                    panelObserver.observe(tabPanel, {
+                        attributes: true,
+                        attributeFilter: ['style']
                     });
                 }
-            });
-        });
-        // ── Cross-widget sync ──────────────────────────────────────────
-        // On the Docker page the Compose stacks list is rendered below
-        // the built-in Docker containers table (non-tabbed) or in a
-        // separate tab (tabbed mode).  When Docker's loadlist() fires
-        // (container start/stop/restart/etc.), the compose list must
-        // also refresh so state stays in sync.
-        (function hookLoadlist() {
-            var composeRefreshTimer = null;
-            var composeDataStale = false;
+            })();
 
-            // For tabbed mode: detect if our panel is hidden so we can
-            // defer the refresh until the user switches to the compose tab.
-            var composeTable = document.getElementById('compose_stacks');
-            var tabPanel = composeTable ? composeTable.closest('[role="tabpanel"]') : null;
-            var isTabbed = tabPanel !== null;
+            // ── CPU & Memory load via dockerload Nchan channel ─────────────
+            // Only runs in advanced view (load column is hidden in basic view).
+            // composeDockerLoadToggle(true/false) is called from applyListView()
+            // so the socket starts/stops whenever the user switches view modes.
+            function initComposeDockerLoadSubscriber() {
+                if (typeof NchanSubscriber !== 'function') {
+                    composeLogger('NchanSubscriber not available yet', null, 'user', 'debug', 'dockerload');
+                    return false;
+                }
 
-            function isComposePanelVisible() {
-                if (!isTabbed) return true; // non-tabbed: always visible
-                return tabPanel.style.display !== 'none';
-            }
+                // Tear down previous subscriber if page was re-navigated (Unraid
+                // AJAX navigation preserves window globals but old closures/sockets
+                // become stale).  Always create a fresh subscriber.
+                if (window._composeDockerLoad) {
+                    composeLogger('tearing down previous subscriber', null, 'user', 'info', 'dockerload');
+                    try {
+                        window._composeDockerLoad.stop();
+                    } catch (e) {}
+                }
+                if (window._composeDockerLoadStaleTimer) {
+                    clearInterval(window._composeDockerLoadStaleTimer);
+                }
+                if (window._composeDockerLoadVisHandler) {
+                    document.removeEventListener('visibilitychange', window._composeDockerLoadVisHandler);
+                }
+                if (window._composeDockerLoadPanelObserver) {
+                    window._composeDockerLoadPanelObserver.disconnect();
+                }
+                $(document).off('composeListRefreshed.dockerload');
 
-            function wrapLoadlist() {
-                if (typeof window.loadlist === 'function' && !window.loadlist._composeTabHooked) {
-                    var originalLoadlist = window.loadlist;
-                    window.loadlist = function() {
-                        originalLoadlist.apply(this, arguments);
+                composeLogger('initializing subscriber, composeListReady=' + composeListReady, null, 'user', 'info', 'dockerload');
 
-                        // Skip compose reload if refreshStackRow is already handling it
-                        if (pendingComposeRefreshCount > 0 || skipNextComposeLoadlist) {
-                            composeLogger('suppressed composeLoadlist (pending=' + pendingComposeRefreshCount + ', skip=' + skipNextComposeLoadlist + ')', null, 'user', 'debug', 'hookLoadlist');
-                            skipNextComposeLoadlist = false;
-                            return;
-                        }
+                var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {
+                    subscriber: 'websocket',
+                    reconnectTimeout: 5000
+                });
+                window._composeDockerLoad = composeDockerLoad;
+                var composeDockerLoadRunning = false;
+                var composeDockerLoadDropped = 0;
 
-                        if (isComposePanelVisible()) {
-                            // Visible — refresh with debounce
-                            clearTimeout(composeRefreshTimer);
-                            composeRefreshTimer = setTimeout(function() {
-                                composeLoadlist();
-                            }, 2000);
-                        } else {
-                            // Hidden tab — mark stale, refresh on tab switch
-                            composeDataStale = true;
-                        }
-                    };
-                    window.loadlist._composeTabHooked = true;
-                    composeLogger('hooked loadlist() for cross-widget sync, tabbed=' + isTabbed, null, 'user', 'info', 'hookLoadlist');
+                // Cache of { stackId, containerIds[] } built from the DOM once after
+                // composeLoadlist() and reused until the row count changes.
+                // Avoids O(stacks) DOM traversal + string splits on every stats tick.
+                var composeStackIndex = null;
+                var composeLoadById = {};
+                var composeLoadStaleMs = 15000;
+
+                function isComposeLoadVisible() {
+                    if (!isComposeAdvancedMode()) return false;
+                    if (document.visibilityState === 'hidden') return false;
+                    var $table = $('#compose_stacks');
+                    if (!$table.length) return false;
+                    var $tabPanel = $table.closest('[role="tabpanel"]');
+                    if ($tabPanel.length && $tabPanel[0].style.display === 'none') return false;
                     return true;
                 }
-                return false;
-            }
 
-            // loadlist may not exist yet — retry every 500ms
-            if (!wrapLoadlist()) {
-                var hookInterval = setInterval(function() {
-                    if (wrapLoadlist()) clearInterval(hookInterval);
-                }, 500);
-                // Give up after 30s
-                setTimeout(function() {
-                    clearInterval(hookInterval);
-                }, 30000);
-            }
+                function clearContainerLoad(shortId) {
+                    $('.compose-cpu-' + shortId).addClass('compose-text-muted').text('-');
+                    $('#compose-cpu-' + shortId).css('width', '0');
+                    $('.compose-mem-' + shortId).hide();
+                }
 
-            // Tabbed mode: watch for tab switches to flush stale data
-            if (isTabbed) {
-                var panelObserver = new MutationObserver(function(mutations) {
-                    mutations.forEach(function(mutation) {
-                        if (mutation.attributeName === 'style' && isComposePanelVisible() && composeDataStale) {
-                            composeDataStale = false;
-                            composeLoadlist();
-                        }
+                function buildComposeStackIndex() {
+                    composeStackIndex = [];
+                    $('#compose_stacks tr.compose-sortable').each(function() {
+                        var stackId = ($(this).attr('id') || '').replace('stack-row-', '');
+                        if (!stackId) return;
+                        var ctidsAttr = $(this).attr('data-ctids') || '';
+                        composeStackIndex.push({
+                            stackId: stackId,
+                            containerIds: ctidsAttr ? ctidsAttr.split(',') : []
+                        });
                     });
-                });
-                panelObserver.observe(tabPanel, {
-                    attributes: true,
-                    attributeFilter: ['style']
-                });
-            }
-        })();
-
-        // ── CPU & Memory load via dockerload Nchan channel ─────────────
-        // Only runs in advanced view (load column is hidden in basic view).
-        // composeDockerLoadToggle(true/false) is called from applyListView()
-        // so the socket starts/stops whenever the user switches view modes.
-        function initComposeDockerLoadSubscriber() {
-            if (typeof NchanSubscriber !== 'function') {
-                composeLogger('NchanSubscriber not available yet', null, 'user', 'debug', 'dockerload');
-                return false;
-            }
-
-            // Tear down previous subscriber if page was re-navigated (Unraid
-            // AJAX navigation preserves window globals but old closures/sockets
-            // become stale).  Always create a fresh subscriber.
-            if (window._composeDockerLoad) {
-                composeLogger('tearing down previous subscriber', null, 'user', 'info', 'dockerload');
-                try { window._composeDockerLoad.stop(); } catch (e) {}
-            }
-            if (window._composeDockerLoadStaleTimer) {
-                clearInterval(window._composeDockerLoadStaleTimer);
-            }
-            if (window._composeDockerLoadVisHandler) {
-                document.removeEventListener('visibilitychange', window._composeDockerLoadVisHandler);
-            }
-            if (window._composeDockerLoadPanelObserver) {
-                window._composeDockerLoadPanelObserver.disconnect();
-            }
-            $(document).off('composeListRefreshed.dockerload');
-
-            composeLogger('initializing subscriber, composeListReady=' + composeListReady, null, 'user', 'info', 'dockerload');
-
-            var composeDockerLoad = new NchanSubscriber('/sub/dockerload', {subscriber: 'websocket', reconnectTimeout: 5000});
-            window._composeDockerLoad = composeDockerLoad;
-            var composeDockerLoadRunning = false;
-            var composeDockerLoadDropped = 0;
-
-            // Cache of { stackId, containerIds[] } built from the DOM once after
-            // composeLoadlist() and reused until the row count changes.
-            // Avoids O(stacks) DOM traversal + string splits on every stats tick.
-            var composeStackIndex = null;
-            var composeLoadById = {};
-            var composeLoadStaleMs = 15000;
-
-            function isComposeLoadVisible() {
-                if (!isComposeAdvancedMode()) return false;
-                if (document.visibilityState === 'hidden') return false;
-                var $table = $('#compose_stacks');
-                if (!$table.length) return false;
-                var $tabPanel = $table.closest('[role="tabpanel"]');
-                if ($tabPanel.length && $tabPanel[0].style.display === 'none') return false;
-                return true;
-            }
-
-            function clearContainerLoad(shortId) {
-                $('.compose-cpu-' + shortId).addClass('compose-text-muted').text('-');
-                $('#compose-cpu-' + shortId).css('width', '0');
-                $('.compose-mem-' + shortId).hide();
-            }
-
-            function buildComposeStackIndex() {
-                composeStackIndex = [];
-                $('#compose_stacks tr.compose-sortable').each(function() {
-                    var stackId = ($(this).attr('id') || '').replace('stack-row-', '');
-                    if (!stackId) return;
-                    var ctidsAttr = $(this).attr('data-ctids') || '';
-                    composeStackIndex.push({
-                        stackId: stackId,
-                        containerIds: ctidsAttr ? ctidsAttr.split(',') : []
-                    });
-                });
-                composeLogger('buildComposeStackIndex complete, stacks=' + composeStackIndex.length, null, 'user', 'debug', 'dockerload');
-            }
-
-            // Invalidate the cache when the list refreshes so that added/removed
-            // stacks are picked up on the next stats tick.
-            $(document).on('composeListRefreshed.dockerload', function() {
-                composeLogger('composeListRefreshed — invalidating stack index and load cache', null, 'user', 'debug', 'dockerload');
-                composeStackIndex = null;
-                composeLoadById = {};
-            });
-
-            window.composeDockerLoadToggle = function(enable) {
-                if (enable && !composeDockerLoadRunning) {
-                    composeLogger('starting WebSocket', null, 'user', 'info', 'dockerload');
-                    composeDockerLoad.start();
-                    composeDockerLoadRunning = true;
-                } else if (!enable && composeDockerLoadRunning) {
-                    composeLogger('stopping WebSocket', null, 'user', 'info', 'dockerload');
-                    composeDockerLoad.stop();
-                    composeDockerLoadRunning = false;
-                }
-            };
-
-            function pruneStaleLoadEntries(now) {
-                var staleIds = [];
-                for (var knownId in composeLoadById) {
-                    if ((now - composeLoadById[knownId].ts) > composeLoadStaleMs) {
-                        staleIds.push(knownId);
-                    }
-                }
-                if (staleIds.length > 0) {
-                    composeLogger('pruning ' + staleIds.length + ' stale container(s)', { ids: staleIds }, 'user', 'debug', 'dockerload');
-                }
-                staleIds.forEach(function(staleId) {
-                    delete composeLoadById[staleId];
-                    clearContainerLoad(staleId);
-                });
-                return staleIds.length > 0;
-            }
-
-            function renderStackAggregates() {
-                // Aggregate per-stack totals and update stack-level cells.
-                // Build (or reuse) the stack→container index.
-                var currentRowCount = $('#compose_stacks tr.compose-sortable').length;
-                if (!composeStackIndex || composeStackIndex.length !== currentRowCount) {
-                    buildComposeStackIndex();
+                    composeLogger('buildComposeStackIndex complete, stacks=' + composeStackIndex.length, null, 'user', 'debug', 'dockerload');
                 }
 
-                composeStackIndex.forEach(function(entry) {
-                    // Primary: short IDs baked into the row by ComposeList.php
-                    var idList = entry.containerIds.slice();
-
-                    // Fallback: if the detail panel was expanded, stackContainersCache
-                    // may have fresher IDs (e.g. after a compose up added a service)
-                    if (idList.length === 0) {
-                        var containers = stackContainersCache[entry.stackId];
-                        if (containers && containers.length > 0) {
-                            containers.forEach(function(ct) {
-                                var ctId = String(ct.id || '').substring(0, 12);
-                                if (ctId) idList.push(ctId);
-                            });
-                        }
-                    }
-                    if (idList.length === 0) return;
-
-                    var totalCpu = 0;
-                    var totalMemUsedBytes = 0;
-                    var totalMemLimitBytes = 0;
-                    var matched = 0;
-                    idList.forEach(function(ctId) {
-                        if (ctId && composeLoadById[ctId]) {
-                            totalCpu += composeLoadById[ctId].cpu;
-                            totalMemUsedBytes += composeLoadById[ctId].memUsedBytes || 0;
-                            totalMemLimitBytes += composeLoadById[ctId].memLimitBytes || 0;
-                            matched++;
-                        }
-                    });
-
-                    if (matched > 0) {
-                        var aggCpu = formatCpuPercent(totalCpu);
-                        var stackMemTotalBytes = 0;
-                        if (totalMemLimitBytes > 0 && composeSystemMemBytes > 0) {
-                            stackMemTotalBytes = Math.min(totalMemLimitBytes, composeSystemMemBytes);
-                        } else if (totalMemLimitBytes > 0) {
-                            stackMemTotalBytes = totalMemLimitBytes;
-                        } else if (composeSystemMemBytes > 0) {
-                            stackMemTotalBytes = composeSystemMemBytes;
-                        }
-                        var aggMem = formatMemUsageText(totalMemUsedBytes, stackMemTotalBytes);
-                        $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
-                        $('#compose-stack-cpu-' + entry.stackId).css('width', Math.min(totalCpu, 100).toFixed(2) + '%');
-                        $('.compose-stack-mem-' + entry.stackId).show().text(aggMem);
-                    } else {
-                        $('.compose-stack-cpu-' + entry.stackId).addClass('compose-text-muted').text('-');
-                        $('#compose-stack-cpu-' + entry.stackId).css('width', '0');
-                        $('.compose-stack-mem-' + entry.stackId).hide();
-                    }
-                });
-            }
-
-            composeDockerLoad.on('message', function(msg) {
-                var now = Date.now();
-                var data = msg.split('\n');
-                var i = 0;
-                var row = data[i];
-                while (row) {
-                    var parts = row.split(';');
-                    if (parts.length >= 3) {
-                        var cpuRaw = parseFloat(parts[1]) || 0;
-                        var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
-                        var memPair = parseMemUsagePair(parts[2]);
-                        composeLoadById[parts[0]] = {
-                            cpu: cpuNorm,
-                            cpuText: formatCpuPercent(cpuNorm),
-                            mem: formatMemUsageText(memPair.used, memPair.limit),
-                            memUsedBytes: memPair.used,
-                            memLimitBytes: memPair.limit,
-                            ts: now
-                        };
-                    }
-                    i++;
-                    row = data[i];
-                }
-
-                pruneStaleLoadEntries(now);
-
-                // Skip DOM updates when the page isn't visible — the cache
-                // stays warm so we can render instantly on return.
-                if (!isComposeLoadVisible()) {
-                    composeDockerLoadDropped++;
-                    return;
-                }
-
-                // Update per-container CPU & MEM elements in expanded detail tables
-                for (var shortId in composeLoadById) {
-                    var info = composeLoadById[shortId];
-                    $('.compose-cpu-' + shortId).removeClass('compose-text-muted').text(info.cpuText);
-                    $('.compose-mem-' + shortId).show().text(info.mem);
-                    $('#compose-cpu-' + shortId).css('width', info.cpuText);
-                }
-
-                renderStackAggregates();
-            });
-
-            composeDockerLoad.on('error', function(code, desc) {
-                composeLogger('WebSocket error', { code: code, desc: desc }, 'user', 'warn', 'dockerload');
-            });
-
-            // If dockerload pauses/stalls, drop stale values on a timer so the UI
-            // falls back to placeholders instead of showing frozen metrics forever.
-            window._composeDockerLoadStaleTimer = setInterval(function() {
-                if (!isComposeLoadVisible()) {
-                    return;
-                }
-                if (pruneStaleLoadEntries(Date.now())) {
-                    renderStackAggregates();
-                }
-            }, 3000);
-
-            // When the browser tab becomes visible again, invalidate the
-            // stack index so the next WebSocket message rebuilds it from
-            // the current DOM.  This prevents permanently stale data when
-            // the page loaded or sat in a background tab.
-            window._composeDockerLoadVisHandler = function() {
-                if (document.visibilityState === 'visible' && composeDockerLoadRunning) {
-                    if (composeDockerLoadDropped > 0) {
-                        composeLogger('browser tab became visible — skipped ' + composeDockerLoadDropped + ' messages while hidden, rendering cached data', null, 'user', 'debug', 'dockerload');
-                        composeDockerLoadDropped = 0;
-                    }
+                // Invalidate the cache when the list refreshes so that added/removed
+                // stacks are picked up on the next stats tick.
+                $(document).on('composeListRefreshed.dockerload', function() {
+                    composeLogger('composeListRefreshed — invalidating stack index and load cache', null, 'user', 'debug', 'dockerload');
                     composeStackIndex = null;
+                    composeLoadById = {};
+                });
 
-                    // Immediately render the cached load data so the UI
-                    // shows current metrics without waiting for the next tick.
+                window.composeDockerLoadToggle = function(enable) {
+                    if (enable && !composeDockerLoadRunning) {
+                        composeLogger('starting WebSocket', null, 'user', 'info', 'dockerload');
+                        composeDockerLoad.start();
+                        composeDockerLoadRunning = true;
+                    } else if (!enable && composeDockerLoadRunning) {
+                        composeLogger('stopping WebSocket', null, 'user', 'info', 'dockerload');
+                        composeDockerLoad.stop();
+                        composeDockerLoadRunning = false;
+                    }
+                };
+
+                function pruneStaleLoadEntries(now) {
+                    var staleIds = [];
+                    for (var knownId in composeLoadById) {
+                        if ((now - composeLoadById[knownId].ts) > composeLoadStaleMs) {
+                            staleIds.push(knownId);
+                        }
+                    }
+                    if (staleIds.length > 0) {
+                        composeLogger('pruning ' + staleIds.length + ' stale container(s)', {
+                            ids: staleIds
+                        }, 'user', 'debug', 'dockerload');
+                    }
+                    staleIds.forEach(function(staleId) {
+                        delete composeLoadById[staleId];
+                        clearContainerLoad(staleId);
+                    });
+                    return staleIds.length > 0;
+                }
+
+                function renderStackAggregates() {
+                    // Aggregate per-stack totals and update stack-level cells.
+                    // Build (or reuse) the stack→container index.
+                    var currentRowCount = $('#compose_stacks tr.compose-sortable').length;
+                    if (!composeStackIndex || composeStackIndex.length !== currentRowCount) {
+                        buildComposeStackIndex();
+                    }
+
+                    composeStackIndex.forEach(function(entry) {
+                        // Primary: short IDs baked into the row by ComposeList.php
+                        var idList = entry.containerIds.slice();
+
+                        // Fallback: if the detail panel was expanded, stackContainersCache
+                        // may have fresher IDs (e.g. after a compose up added a service)
+                        if (idList.length === 0) {
+                            var containers = stackContainersCache[entry.stackId];
+                            if (containers && containers.length > 0) {
+                                containers.forEach(function(ct) {
+                                    var ctId = String(ct.id || '').substring(0, 12);
+                                    if (ctId) idList.push(ctId);
+                                });
+                            }
+                        }
+                        if (idList.length === 0) return;
+
+                        var totalCpu = 0;
+                        var totalMemUsedBytes = 0;
+                        var totalMemLimitBytes = 0;
+                        var matched = 0;
+                        idList.forEach(function(ctId) {
+                            if (ctId && composeLoadById[ctId]) {
+                                totalCpu += composeLoadById[ctId].cpu;
+                                totalMemUsedBytes += composeLoadById[ctId].memUsedBytes || 0;
+                                totalMemLimitBytes += composeLoadById[ctId].memLimitBytes || 0;
+                                matched++;
+                            }
+                        });
+
+                        if (matched > 0) {
+                            var aggCpu = formatCpuPercent(totalCpu);
+                            var stackMemTotalBytes = 0;
+                            if (totalMemLimitBytes > 0 && composeSystemMemBytes > 0) {
+                                stackMemTotalBytes = Math.min(totalMemLimitBytes, composeSystemMemBytes);
+                            } else if (totalMemLimitBytes > 0) {
+                                stackMemTotalBytes = totalMemLimitBytes;
+                            } else if (composeSystemMemBytes > 0) {
+                                stackMemTotalBytes = composeSystemMemBytes;
+                            }
+                            var aggMem = formatMemUsageText(totalMemUsedBytes, stackMemTotalBytes);
+                            $('.compose-stack-cpu-' + entry.stackId).removeClass('compose-text-muted').text(aggCpu);
+                            $('#compose-stack-cpu-' + entry.stackId).css('width', Math.min(totalCpu, 100).toFixed(2) + '%');
+                            $('.compose-stack-mem-' + entry.stackId).show().text(aggMem);
+                        } else {
+                            $('.compose-stack-cpu-' + entry.stackId).addClass('compose-text-muted').text('-');
+                            $('#compose-stack-cpu-' + entry.stackId).css('width', '0');
+                            $('.compose-stack-mem-' + entry.stackId).hide();
+                        }
+                    });
+                }
+
+                composeDockerLoad.on('message', function(msg) {
+                    var now = Date.now();
+                    var data = msg.split('\n');
+                    var i = 0;
+                    var row = data[i];
+                    while (row) {
+                        var parts = row.split(';');
+                        if (parts.length >= 3) {
+                            var cpuRaw = parseFloat(parts[1]) || 0;
+                            var cpuNorm = Math.round(Math.min(cpuRaw / Math.max(composeCpuCount, 1), 100) * 100) / 100;
+                            var memPair = parseMemUsagePair(parts[2]);
+                            composeLoadById[parts[0]] = {
+                                cpu: cpuNorm,
+                                cpuText: formatCpuPercent(cpuNorm),
+                                mem: formatMemUsageText(memPair.used, memPair.limit),
+                                memUsedBytes: memPair.used,
+                                memLimitBytes: memPair.limit,
+                                ts: now
+                            };
+                        }
+                        i++;
+                        row = data[i];
+                    }
+
+                    pruneStaleLoadEntries(now);
+
+                    // Skip DOM updates when the page isn't visible — the cache
+                    // stays warm so we can render instantly on return.
+                    if (!isComposeLoadVisible()) {
+                        composeDockerLoadDropped++;
+                        return;
+                    }
+
+                    // Update per-container CPU & MEM elements in expanded detail tables
                     for (var shortId in composeLoadById) {
                         var info = composeLoadById[shortId];
                         $('.compose-cpu-' + shortId).removeClass('compose-text-muted').text(info.cpuText);
                         $('.compose-mem-' + shortId).show().text(info.mem);
                         $('#compose-cpu-' + shortId).css('width', info.cpuText);
                     }
+
                     renderStackAggregates();
-                }
-            };
-            document.addEventListener('visibilitychange', window._composeDockerLoadVisHandler);
-
-            // In tabbed mode, also invalidate the cache when the compose
-            // panel becomes visible (user switches tabs) so stale entries
-            // don't linger from when the panel was hidden.
-            var $loadTable = $('#compose_stacks');
-            var $loadTabPanel = $loadTable.length ? $loadTable.closest('[role="tabpanel"]') : $();
-            if ($loadTabPanel.length) {
-                composeLogger('tabbed mode detected — observing panel visibility', {}, 'user', 'debug', 'dockerload');
-                window._composeDockerLoadPanelObserver = new MutationObserver(function() {
-                    if ($loadTabPanel[0].style.display !== 'none' && composeDockerLoadRunning) {
-                        composeLogger('compose tab became visible — invalidating stack index', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'user', 'debug', 'dockerload');
-                        composeStackIndex = null;
-                    }
                 });
-                window._composeDockerLoadPanelObserver.observe($loadTabPanel[0], { attributes: true, attributeFilter: ['style'] });
-            }
 
-            // Only auto-start the socket if the stack list is already
-            // loaded (composeListReady is true).  Otherwise the
-            // composeLoadlist().then() callback will start it.
-            if (composeListReady && isComposeAdvancedMode()) {
-                composeLogger('auto-starting socket', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'user', 'info', 'dockerload');
-                composeDockerLoad.start();
-                composeDockerLoadRunning = true;
-            } else {
-                composeLogger('deferring socket start', {'listReady': composeListReady, 'advanced': isComposeAdvancedMode()}, 'user', 'debug', 'dockerload');
-            }
-            return true;
-        }
+                composeDockerLoad.on('error', function(code, desc) {
+                    composeLogger('WebSocket error', {
+                        code: code,
+                        desc: desc
+                    }, 'user', 'warn', 'dockerload');
+                });
 
-        // Standalone compose mode can race script load order; retry briefly
-        // so delayed NchanSubscriber availability still initializes dockerload.
-        if (!initComposeDockerLoadSubscriber()) {
-            composeLogger('subscriber init deferred — will retry every 250ms', null, 'user', 'debug', 'dockerload');
-            var composeDockerLoadInitAttempts = 0;
-            var composeDockerLoadInitTimer = setInterval(function() {
-                composeDockerLoadInitAttempts++;
-                if (initComposeDockerLoadSubscriber()) {
-                    composeLogger('subscriber initialized on retry #' + composeDockerLoadInitAttempts, null, 'user', 'info', 'dockerload');
-                    clearInterval(composeDockerLoadInitTimer);
-                } else if (composeDockerLoadInitAttempts >= 40) {
-                    composeLogger('subscriber init gave up after ' + composeDockerLoadInitAttempts + ' attempts', null, 'user', 'warn', 'dockerload');
-                    clearInterval(composeDockerLoadInitTimer);
+                // If dockerload pauses/stalls, drop stale values on a timer so the UI
+                // falls back to placeholders instead of showing frozen metrics forever.
+                window._composeDockerLoadStaleTimer = setInterval(function() {
+                    if (!isComposeLoadVisible()) {
+                        return;
+                    }
+                    if (pruneStaleLoadEntries(Date.now())) {
+                        renderStackAggregates();
+                    }
+                }, 3000);
+
+                // When the browser tab becomes visible again, invalidate the
+                // stack index so the next WebSocket message rebuilds it from
+                // the current DOM.  This prevents permanently stale data when
+                // the page loaded or sat in a background tab.
+                window._composeDockerLoadVisHandler = function() {
+                    if (document.visibilityState === 'visible' && composeDockerLoadRunning) {
+                        if (composeDockerLoadDropped > 0) {
+                            composeLogger('browser tab became visible — skipped ' + composeDockerLoadDropped + ' messages while hidden, rendering cached data', null, 'user', 'debug', 'dockerload');
+                            composeDockerLoadDropped = 0;
+                        }
+                        composeStackIndex = null;
+
+                        // Immediately render the cached load data so the UI
+                        // shows current metrics without waiting for the next tick.
+                        for (var shortId in composeLoadById) {
+                            var info = composeLoadById[shortId];
+                            $('.compose-cpu-' + shortId).removeClass('compose-text-muted').text(info.cpuText);
+                            $('.compose-mem-' + shortId).show().text(info.mem);
+                            $('#compose-cpu-' + shortId).css('width', info.cpuText);
+                        }
+                        renderStackAggregates();
+                    }
+                };
+                document.addEventListener('visibilitychange', window._composeDockerLoadVisHandler);
+
+                // In tabbed mode, also invalidate the cache when the compose
+                // panel becomes visible (user switches tabs) so stale entries
+                // don't linger from when the panel was hidden.
+                var $loadTable = $('#compose_stacks');
+                var $loadTabPanel = $loadTable.length ? $loadTable.closest('[role="tabpanel"]') : $();
+                if ($loadTabPanel.length) {
+                    composeLogger('tabbed mode detected — observing panel visibility', {}, 'user', 'debug', 'dockerload');
+                    window._composeDockerLoadPanelObserver = new MutationObserver(function() {
+                        if ($loadTabPanel[0].style.display !== 'none' && composeDockerLoadRunning) {
+                            composeLogger('compose tab became visible — invalidating stack index', {
+                                'listReady': composeListReady,
+                                'advanced': isComposeAdvancedMode()
+                            }, 'user', 'debug', 'dockerload');
+                            composeStackIndex = null;
+                        }
+                    });
+                    window._composeDockerLoadPanelObserver.observe($loadTabPanel[0], {
+                        attributes: true,
+                        attributeFilter: ['style']
+                    });
                 }
-            }, 250);
-        }
+
+                // Only auto-start the socket if the stack list is already
+                // loaded (composeListReady is true).  Otherwise the
+                // composeLoadlist().then() callback will start it.
+                if (composeListReady && isComposeAdvancedMode()) {
+                    composeLogger('auto-starting socket', {
+                        'listReady': composeListReady,
+                        'advanced': isComposeAdvancedMode()
+                    }, 'user', 'info', 'dockerload');
+                    composeDockerLoad.start();
+                    composeDockerLoadRunning = true;
+                } else {
+                    composeLogger('deferring socket start', {
+                        'listReady': composeListReady,
+                        'advanced': isComposeAdvancedMode()
+                    }, 'user', 'debug', 'dockerload');
+                }
+                return true;
+            }
+
+            // Standalone compose mode can race script load order; retry briefly
+            // so delayed NchanSubscriber availability still initializes dockerload.
+            if (!initComposeDockerLoadSubscriber()) {
+                composeLogger('subscriber init deferred — will retry every 250ms', null, 'user', 'debug', 'dockerload');
+                var composeDockerLoadInitAttempts = 0;
+                var composeDockerLoadInitTimer = setInterval(function() {
+                    composeDockerLoadInitAttempts++;
+                    if (initComposeDockerLoadSubscriber()) {
+                        composeLogger('subscriber initialized on retry #' + composeDockerLoadInitAttempts, null, 'user', 'info', 'dockerload');
+                        clearInterval(composeDockerLoadInitTimer);
+                    } else if (composeDockerLoadInitAttempts >= 40) {
+                        composeLogger('subscriber init gave up after ' + composeDockerLoadInitAttempts + ' attempts', null, 'user', 'warn', 'dockerload');
+                        clearInterval(composeDockerLoadInitTimer);
+                    }
+                }, 250);
+            }
+        });
     });
 
     function addStack() {
@@ -2192,7 +2308,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                             response = JSON.parse(data);
                         } catch (e) {
                             // Handle invalid or unexpected JSON response
-                            composeLogger('Failed to parse addStack response', {error: e && e.toString(), data: data}, 'user', 'error', 'addStack');
+                            composeLogger('Failed to parse addStack response', {
+                                error: e && e.toString(),
+                                data: data
+                            }, 'user', 'error', 'addStack');
                             swal({
                                 title: "Failed to create stack",
                                 text: "Unexpected response from server",
@@ -2370,6 +2489,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }
         return yamlLib.load(input);
     }
+
     function applyDesc(myID) {
         var newDesc = $("#newDesc" + myID).val();
         var project = $("#" + myID).attr("data-scriptname");
@@ -2562,7 +2682,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 if (elapsed < 1800) {
                     timeoutHandle = setTimeout(check, interval);
                 } else {
-                    composeLogger('Timeout after 30m', {stack: stackName}, 'user', 'warn', 'poll');
+                    composeLogger('Timeout after 30m', {
+                        stack: stackName
+                    }, 'user', 'warn', 'poll');
                     setStackActionInProgress(stackName, false);
                 }
             });
@@ -2694,7 +2816,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             actionName: 'up',
             titlePrefix: 'Compose Up',
             requestUrl: compURL,
-            payload: { action: 'composeUp', path: path, profile: profile },
+            payload: {
+                action: 'composeUp',
+                path: path,
+                profile: profile
+            },
             background: background,
             suppressBackgroundNotification: suppressBackgroundNotification,
             pendingReload: true
@@ -2726,7 +2852,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             actionName: 'down',
             titlePrefix: 'Compose Down',
             requestUrl: compURL,
-            payload: { action: 'composeDown', path: path, profile: profile },
+            payload: {
+                action: 'composeDown',
+                path: path,
+                profile: profile
+            },
             background: background,
             suppressBackgroundNotification: suppressBackgroundNotification,
             pendingReload: true
@@ -2743,7 +2873,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             actionName: 'stop',
             titlePrefix: 'Compose Stop',
             requestUrl: compURL,
-            payload: { action: 'composeStop', path: path, profile: profile },
+            payload: {
+                action: 'composeStop',
+                path: path,
+                profile: profile
+            },
             background: background,
             suppressBackgroundNotification: suppressBackgroundNotification,
             pendingReload: true
@@ -2760,7 +2894,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             actionName: 'restart',
             titlePrefix: 'Compose Restart',
             requestUrl: compURL,
-            payload: { action: 'composeUpRecreate', path: path, profile: profile },
+            payload: {
+                action: 'composeUpRecreate',
+                path: path,
+                profile: profile
+            },
             background: background,
             suppressBackgroundNotification: suppressBackgroundNotification,
             pendingReload: true,
@@ -2789,7 +2927,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             actionName: 'forceUpdate',
             titlePrefix: 'Force Update',
             requestUrl: compURL,
-            payload: { action: 'composeUpPullBuild', path: path, profile: profile },
+            payload: {
+                action: 'composeUpPullBuild',
+                path: path,
+                profile: profile
+            },
             background: background,
             suppressBackgroundNotification: suppressBackgroundNotification,
             pendingReload: true
@@ -3111,7 +3253,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             actionName: 'update',
             titlePrefix: 'Update',
             requestUrl: compURL,
-            payload: { action: 'composeUpPullBuild', path: path, profile: profile },
+            payload: {
+                action: 'composeUpPullBuild',
+                path: path,
+                profile: profile
+            },
             background: background,
             suppressBackgroundNotification: suppressBackgroundNotification,
             pendingReload: true
@@ -3396,7 +3542,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
         // Always use getProfileServices for both profile and no-profile cases
         var cachedContainers = (stackId && stackContainersCache[stackId]) ? stackContainersCache[stackId] : [];
-        composeLogger('profile/unified AJAX start', {action, path, profile, stackId, cachedContainers}, 'user', 'debug', 'showStackActionDialog');
+        composeLogger('profile/unified AJAX start', {
+            action,
+            path,
+            profile,
+            stackId,
+            cachedContainers
+        }, 'user', 'debug', 'showStackActionDialog');
         $.post(caURL, {
             action: 'getProfileServices',
             script: project,
@@ -3408,10 +3560,16 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 if (response.result === 'success') {
                     profileServices = response.services || [];
                 } else {
-                    composeLogger('getProfileServices result!=success', {response, data}, 'user', 'error', 'showStackActionDialog');
+                    composeLogger('getProfileServices result!=success', {
+                        response,
+                        data
+                    }, 'user', 'error', 'showStackActionDialog');
                 }
             } catch (e) {
-                composeLogger('getProfileServices JSON parse error', {e, data}, 'user', 'error', 'showStackActionDialog');
+                composeLogger('getProfileServices JSON parse error', {
+                    e,
+                    data
+                }, 'user', 'error', 'showStackActionDialog');
             }
 
             // Build a lookup of running containers by service name
@@ -3433,17 +3591,31 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     }
                 }
                 if (!container) {
-                    container = { service: svc, name: svc, state: 'stopped', image: '' };
+                    container = {
+                        service: svc,
+                        name: svc,
+                        state: 'stopped',
+                        image: ''
+                    };
                 }
                 containers.push(container);
             });
 
-            composeLogger('profile/unified AJAX done', {profileServices, containers, cachedContainers}, 'user', 'debug', 'showStackActionDialog');
+            composeLogger('profile/unified AJAX done', {
+                profileServices,
+                containers,
+                cachedContainers
+            }, 'user', 'debug', 'showStackActionDialog');
             containers = mergeUpdateStatus(containers, project);
             renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
         }).fail(function(xhr, status, error) {
             // Fallback: if profile resolution fails, show cached container metadata
-            composeLogger('getProfileServices AJAX fail', {xhr, status, error, cachedContainers}, 'user', 'error', 'showStackActionDialog');
+            composeLogger('getProfileServices AJAX fail', {
+                xhr,
+                status,
+                error,
+                cachedContainers
+            }, 'user', 'error', 'showStackActionDialog');
             var containers = [];
             if (cachedContainers.length > 0) {
                 containers = mergeUpdateStatus(cachedContainers, project);
@@ -3671,11 +3843,19 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }, function(response) {
             var parsed = tryParseJson(response);
             if (!parsed || parsed.result !== 'success') {
-                swal({ title: 'Error', text: 'Could not retrieve the log.', type: 'error' });
+                swal({
+                    title: 'Error',
+                    text: 'Could not retrieve the log.',
+                    type: 'error'
+                });
                 return;
             }
             if (!parsed.log) {
-                swal({ title: 'No log available', text: 'No command log has been saved for ' + composeEscapeHtml(displayName) + ' yet.\nRun a command to generate one.', type: 'info' });
+                swal({
+                    title: 'No log available',
+                    text: 'No command log has been saved for ' + composeEscapeHtml(displayName) + ' yet.\nRun a command to generate one.',
+                    type: 'info'
+                });
                 return;
             }
             // Show log in a swal with a scrollable pre block
@@ -4055,8 +4235,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }).then(function(data) {
             if (data) {
                 try {
-                var response = JSON.parse(data);
-                } catch (e) { return; }
+                    var response = JSON.parse(data);
+                } catch (e) {
+                    return;
+                }
                 if (response.result === 'success') {
                     // Icon URL
                     var iconUrl = response.iconUrl || '';
@@ -4076,8 +4258,15 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                     // Detect suggested WebUI URL
                     $('#settings-webui-suggestion').hide();
-                    $.post(caURL, { action: 'detectWebui', script: project }).then(function(detectData) {
-                        try { var dr = JSON.parse(detectData); } catch(e) { return; }
+                    $.post(caURL, {
+                        action: 'detectWebui',
+                        script: project
+                    }).then(function(detectData) {
+                        try {
+                            var dr = JSON.parse(detectData);
+                        } catch (e) {
+                            return;
+                        }
                         if (dr.result === 'success' && dr.detected && dr.detected.url) {
                             var currentVal = $('#settings-webui-url').val();
                             if (currentVal === dr.detected.url) return; // already set to detected value
@@ -4198,7 +4387,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 renderLabelsUI(mainDoc, overrideDoc);
 
             } catch (e) {
-                composeLogger('Failed to parse compose files for labels', {error: e && e.toString()}, 'user', 'error', 'loadLabelsData');
+                composeLogger('Failed to parse compose files for labels', {
+                    error: e && e.toString()
+                }, 'user', 'error', 'loadLabelsData');
                 $('#labels-services-container').html('<div class="labels-empty-state"><i class="fa fa-exclamation-triangle"></i> Error loading services: ' + composeEscapeHtml(e.message) + '</div>');
             }
         }).fail(function() {
@@ -4611,11 +4802,19 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var iconUrl = $('#settings-icon-url').val();
             var webuiUrl = $('#settings-webui-url').val();
             if (webuiUrl && !isValidWebUIUrl(webuiUrl)) {
-                swal({type: 'error', title: 'Save Failed', text: 'Invalid WebUI URL. Must be http:// or https:// (supports [IP] and [PORT:xxxx] placeholders).'});
+                swal({
+                    type: 'error',
+                    title: 'Save Failed',
+                    text: 'Invalid WebUI URL. Must be http:// or https:// (supports [IP] and [PORT:xxxx] placeholders).'
+                });
                 return;
             }
             if (webuiUrl && /\[PORT\]/i.test(webuiUrl)) {
-                swal({type: 'error', title: 'Save Failed', text: 'Bare [PORT] placeholder is not supported at stack level. Use [PORT:xxxx] with a default port instead (e.g. [PORT:8080]).'});
+                swal({
+                    type: 'error',
+                    title: 'Save Failed',
+                    text: 'Bare [PORT] placeholder is not supported at stack level. Use [PORT:xxxx] with a default port instead (e.g. [PORT:8080]).'
+                });
                 return;
             }
             var envPath = $('#settings-env-path').val();
@@ -5390,7 +5589,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                             else if (days < 14) uptimeText = days + ' day' + (days !== 1 ? 's' : '');
                             else if (weeks < 8) uptimeText = weeks + ' week' + (weeks !== 1 ? 's' : '');
                             else if (months < 24) uptimeText = months + ' month' + (months !== 1 ? 's' : '');
-                            else { var years = Math.floor(days / 365); uptimeText = years + ' year' + (years !== 1 ? 's' : ''); }
+                            else {
+                                var years = Math.floor(days / 365);
+                                uptimeText = years + ' year' + (years !== 1 ? 's' : '');
+                            }
                         } else {
                             uptimeText = 'running';
                         }
@@ -5618,7 +5820,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             if (data) {
                 try {
                     var response = JSON.parse(data);
-                } catch (e) { return; }
+                } catch (e) {
+                    return;
+                }
                 if (response.result === 'success') {
                     // Refresh the container details
                     // Also mark the parent stack for a compose-list reload so the stack-level
@@ -5787,7 +5991,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         }
                     }
                 });
-                opts.push({ divider: true });
+                opts.push({
+                    divider: true
+                });
             }
 
             // Compose Up (allows starting additional profile-scoped services)
@@ -5846,7 +6052,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 }
             });
 
-            opts.push({ divider: true });
+            opts.push({
+                divider: true
+            });
 
             // Update options based on whether updates are available
             if (hasUpdates) {
@@ -5881,7 +6089,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 });
             }
 
-        // ===== STACK IS STOPPED =====
+            // ===== STACK IS STOPPED =====
         } else {
             // Compose Up
             opts.push({
@@ -5913,7 +6121,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 });
             }
 
-            opts.push({ divider: true });
+            opts.push({
+                divider: true
+            });
 
             // Pull/Build only (without starting)
             var pullOnlyLabel = hasBuild ? 'Build' : 'Pull';
@@ -5946,7 +6156,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             });
         }
 
-        opts.push({ divider: true });
+        opts.push({
+            divider: true
+        });
 
         // Check for Updates (always available)
         opts.push({
@@ -5968,7 +6180,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             }
         });
 
-        opts.push({ divider: true });
+        opts.push({
+            divider: true
+        });
 
         // View Logs (always available)
         opts.push({
@@ -5990,7 +6204,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             }
         });
 
-        opts.push({ divider: true });
+        opts.push({
+            divider: true
+        });
 
         // Delete Stack
         if (!isUp) {
@@ -6061,7 +6277,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var $icon = $(this).find('[data-stackid]').first();
         if ($icon.length) {
             e.preventDefault();
-            $icon.trigger($.Event('click', { pageX: e.pageX, pageY: e.pageY }));
+            $icon.trigger($.Event('click', {
+                pageX: e.pageX,
+                pageY: e.pageY
+            }));
         }
     });
 
@@ -6070,7 +6289,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var $icon = $(this).find('.hand[id^="ct-"]').first();
         if ($icon.length) {
             e.preventDefault();
-            $icon.trigger($.Event('click', { pageX: e.pageX, pageY: e.pageY }));
+            $icon.trigger($.Event('click', {
+                pageX: e.pageX,
+                pageY: e.pageY
+            }));
         }
     });
 
@@ -6387,7 +6609,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 $(window).on('resize', updateModalOffset);
                 initEditorModal();
             } catch (e) {
-                composeLogger('Editor init error (non-fatal)', {error: e && e.toString()}, 'user', 'warn', 'editorInit');
+                composeLogger('Editor init error (non-fatal)', {
+                    error: e && e.toString()
+                }, 'user', 'warn', 'editorInit');
             }
             // Attach Unraid folder/file browser to all path inputs on the page.
             // The picker popup needs manual positioning for modals and overlay stacks.
@@ -6423,7 +6647,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 });
 
                 if (!$dockerTitle || !$composeTitle) {
-                    composeLogger('Reorder Compose above Docker skipped', {dockerTitle: !!$dockerTitle, composeTitle: !!$composeTitle}, 'user', 'warn', 'reorderComposeAboveDocker');
+                    composeLogger('Reorder Compose above Docker skipped', {
+                        dockerTitle: !!$dockerTitle,
+                        composeTitle: !!$composeTitle
+                    }, 'user', 'warn', 'reorderComposeAboveDocker');
                     return;
                 }
 
@@ -6447,6 +6674,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         $(function() {
             (function hideComposeContainersFromDocker() {
                 if (!hideComposeFromDocker) return;
+
                 function getComposeContainerNames() {
                     var names = {};
                     // Primary source: data-containers attribute on stack rows
