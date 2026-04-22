@@ -640,6 +640,11 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => "$fileName saved"]);
         break;
     case 'getStackContainers':
+        composeLogger('getStackContainers start', [
+            'script' => $script,
+            'post' => $_POST,
+            'caller' => $_SERVER['REMOTE_ADDR'] ?? 'cli',
+        ], 'user', 'debug', 'getStackContainers');
         $script = getPostScript();
         if (!$script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
@@ -648,10 +653,8 @@ switch ($_POST['action']) {
 
         // Resolve stack identity and compose CLI arguments via StackInfo
         $stackInfo = StackInfo::fromProject($compose_root, $script);
-
         // Get container details in JSON format (all states)
         $rows = $stackInfo->getContainerList();
-
         // Hard dependency on Docker manager: use shared helpers directly.
         $networkDrivers = DockerUtil::driver();
         $hostIP = trim((string) DockerUtil::host());
@@ -668,6 +671,9 @@ switch ($_POST['action']) {
         $stackState = $stackInfo->getStackState();
 
         foreach ($rows as $rawContainer) {
+            composeLogger('getStackContainers found container row', [
+                'rawContainer' => $rawContainer
+            ], 'user', 'debug', 'getStackContainers');
             // Get additional details using docker inspect
             $ctName = $rawContainer['Name'] ?? '';
             if ($ctName) {
@@ -813,6 +819,13 @@ switch ($_POST['action']) {
         }
 
         echo json_encode(['result' => 'success', 'containers' => $containers, 'stackState' => $stackState, 'projectName' => $stackInfo->projectFolder, 'startedAt' => $stackInfo->getStartedAt()]);
+                composeLogger('getStackContainers done', [
+                    'script' => $script,
+                    'containersCount' => count($containers),
+                    'containerNames' => array_map(function($c){return $c['name']??($c['Name']??'');}, $containers),
+                    'stackState' => $stackState,
+                    'projectName' => $stackInfo->projectFolder,
+                ], 'user', 'debug', 'getStackContainers');
         break;
     case 'getProfileServices':
         // Returns the list of services that docker compose would act on for the

@@ -3371,84 +3371,55 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             hasBuild = $stackRow.data('hasbuild') == "1";
         }
 
-        // When profiles are selected, ask compose for the authoritative service
-        // list so the dialog shows profile-scoped services that may not be
-        // running yet.  We fetch both the profile service list and the running
-        // containers in parallel, then merge them.
-        if (profile) {
-            var cachedContainers = (stackId && stackContainersCache[stackId]) ? stackContainersCache[stackId] : [];
-            $.post(caURL, {
-                action: 'getProfileServices',
-                script: project,
-                profiles: profile
-            }, function(data) {
-                var profileServices = [];
-                try {
-                    var response = JSON.parse(data);
-                    if (response.result === 'success') {
-                        profileServices = response.services || [];
-                    }
-                } catch (e) {}
-
-                // Build a lookup of running containers by service name
-                var containersByService = {};
-                cachedContainers.forEach(function(ct) {
-                    var svc = ct.service || '';
-                    if (svc) containersByService[svc] = ct;
-                });
-
-                // Build the container list: use real container data when
-                // available, otherwise create a minimal placeholder so the
-                // service still appears in the dialog.
-                var containers = [];
-                profileServices.forEach(function(svc) {
-                    if (containersByService[svc]) {
-                        containers.push(containersByService[svc]);
-                    } else {
-                        containers.push({ service: svc, name: svc, state: 'stopped', image: '' });
-                    }
-                });
-
-                containers = mergeUpdateStatus(containers, project);
-                renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
-            }).fail(function() {
-                // Fallback: show whatever we have cached
-                var containers = mergeUpdateStatus(cachedContainers, project);
-                renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
-            });
-            return;
-        }
-
-        // No profile — use cached or fetched running containers as before
-        if (stackId && stackContainersCache[stackId] && stackContainersCache[stackId].length > 0) {
-            // Merge update status into cached data before rendering
-            var containers = mergeUpdateStatus(stackContainersCache[stackId], project);
-            renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
-        } else {
-            // Fetch container details first
-            $.post(caURL, {
-                action: 'getStackContainers',
-                script: project
-            }, function(data) {
-                var containers = [];
-                if (data) {
-                    try {
-                        var response = JSON.parse(data);
-                        if (response.result === 'success' && response.containers) {
-                            containers = response.containers;
-                            if (stackId) {
-                                stackContainersCache[stackId] = containers;
-                            }
-                        }
-                    } catch (e) {}
+        // Always use getProfileServices for both profile and no-profile cases
+        var cachedContainers = (stackId && stackContainersCache[stackId]) ? stackContainersCache[stackId] : [];
+        composeLogger('profile/unified AJAX start', {action, path, profile, stackId, cachedContainers}, 'user', 'debug', 'showStackActionDialog');
+        $.post(caURL, {
+            action: 'getProfileServices',
+            script: project,
+            profiles: profile || ''
+        }, function(data) {
+            var profileServices = [];
+            try {
+                var response = JSON.parse(data);
+                if (response.result === 'success') {
+                    profileServices = response.services || [];
+                } else {
+                    composeLogger('getProfileServices result!=success', {response, data}, 'user', 'error', 'showStackActionDialog');
                 }
-                // Merge update status into freshly fetched data
-                containers = mergeUpdateStatus(containers, project);
-                renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
-            }).fail(function() {
-                renderStackActionDialog(action, displayName, path, profile, [], hasBuild);
+            } catch (e) {
+                composeLogger('getProfileServices JSON parse error', {e, data}, 'user', 'error', 'showStackActionDialog');
+            }
+
+            // Build a lookup of running containers by service name
+            var containersByService = {};
+            cachedContainers.forEach(function(ct) {
+                var svc = ct.service || '';
+                if (svc) containersByService[svc] = ct;
             });
-        }
+
+            // Build the container list: use real container data when
+            // available, otherwise create a minimal placeholder so the
+            // service still appears in the dialog.
+            var containers = [];
+            profileServices.forEach(function(svc) {
+                if (containersByService[svc]) {
+                    containers.push(containersByService[svc]);
+                } else {
+                    containers.push({ service: svc, name: svc, state: 'stopped', image: '' });
+                }
+            });
+
+            composeLogger('profile/unified AJAX done', {profileServices, containers, cachedContainers}, 'user', 'debug', 'showStackActionDialog');
+            containers = mergeUpdateStatus(containers, project);
+            renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
+        }).fail(function(xhr, status, error) {
+            // Fallback: show whatever we have cached
+            composeLogger('getProfileServices AJAX fail', {xhr, status, error, cachedContainers}, 'user', 'error', 'showStackActionDialog');
+            var containers = mergeUpdateStatus(cachedContainers, project);
+            renderStackActionDialog(action, displayName, path, profile, containers, hasBuild);
+        });
+        return;
     }
 
     function renderStackActionDialog(action, displayName, path, profile, containers, hasBuild) {
