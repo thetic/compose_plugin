@@ -818,14 +818,27 @@ switch ($_POST['action']) {
             $containers[] = ContainerInfo::fromDockerInspect($rawContainer)->toArray();
         }
 
+        // --- Persistent container metadata cache ---
+        $cacheFile = '/boot/config/plugins/compose.manager/containers.cache.json';
+        $cache = is_file($cacheFile) ? json_decode(file_get_contents($cacheFile), true) : [];
+        $stackKey = $stackInfo->projectFolder;
+        if (!isset($cache[$stackKey])) $cache[$stackKey] = [];
+        foreach ($containers as $ct) {
+            $service = $ct['service'] ?? $ct['Name'] ?? '';
+            if ($service) {
+                $cache[$stackKey][$service] = $ct;
+            }
+        }
+        file_put_contents($cacheFile, json_encode($cache, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+
         echo json_encode(['result' => 'success', 'containers' => $containers, 'stackState' => $stackState, 'projectName' => $stackInfo->projectFolder, 'startedAt' => $stackInfo->getStartedAt()]);
-                composeLogger('getStackContainers done', [
-                    'script' => $script,
-                    'containersCount' => count($containers),
-                    'containerNames' => array_map(function($c){return $c['name']??($c['Name']??'');}, $containers),
-                    'stackState' => $stackState,
-                    'projectName' => $stackInfo->projectFolder,
-                ], 'user', 'debug', 'getStackContainers');
+        composeLogger('getStackContainers done', [
+            'script' => $script,
+            'containersCount' => count($containers),
+            'containerNames' => array_map(function($c){return $c['name']??($c['Name']??'');}, $containers),
+            'stackState' => $stackState,
+            'projectName' => $stackInfo->projectFolder,
+        ], 'user', 'debug', 'getStackContainers');
         break;
     case 'getProfileServices':
         // Returns the list of services that docker compose would act on for the
