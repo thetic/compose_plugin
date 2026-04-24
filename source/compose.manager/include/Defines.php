@@ -18,8 +18,10 @@ $compose_root = locate_compose_root($sName);
 
 // Centralised file-path constants — avoid scattering identical literals
 define('COMPOSE_UPDATE_STATUS_FILE', '/boot/config/plugins/compose.manager/update-status.json');
+define('COMPOSE_STACK_ORDER_FILE', '/boot/config/plugins/compose.manager/stack-order.json');
 define('UNRAID_UPDATE_STATUS_FILE', '/var/lib/docker/unraid-update-status.json');
 define('PENDING_RECHECK_FILE', '/boot/config/plugins/compose.manager/pending-recheck.json');
+define('COMPOSE_TTYD_SOCKET_DIR', '/var/tmp');
 
 /**
  * Reserved filename at the compose root level used by the plugin installer

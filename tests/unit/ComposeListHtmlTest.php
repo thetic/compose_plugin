@@ -3,7 +3,7 @@
 /**
  * Unit Tests for Compose List HTML Structure
  * 
- * Tests the HTML output structure in compose_list.php, verifying column classes,
+ * Tests the HTML output structure in ComposeList.php, verifying column classes,
  * update column selector, expand arrow spacing, and autostart cell class.
  * These are source-level tests that verify the PHP template markup.
  */
@@ -21,8 +21,8 @@ class ComposeListHtmlTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->listPagePath = __DIR__ . '/../../source/compose.manager/php/compose_list.php';
-        $this->assertFileExists($this->listPagePath, 'compose_list.php must exist');
+        $this->listPagePath = __DIR__ . '/../../source/compose.manager/include/ComposeList.php';
+        $this->assertFileExists($this->listPagePath, 'ComposeList.php must exist');
     }
 
     private function getPageSource(): string
@@ -162,5 +162,23 @@ class ComposeListHtmlTest extends TestCase
         // Status icon should have data-status for debugging
         $this->assertStringContainsString("data-status='", $source);
         $this->assertStringContainsString('compose-status-icon', $source);
+    }
+
+    // ===========================================
+    // Regression Tests
+    // ===========================================
+
+    /**
+     * Regression: Container ID/name collection must use $stackInfo->getContainerList(),
+     * not an undefined $projectContainers variable. Without this, data-ctids is empty
+     * and CPU/memory stats don't display on page load.
+     */
+    public function testContainerIterationUsesStackInfoGetContainerList(): void
+    {
+        $source = $this->getPageSource();
+        $this->assertStringContainsString('$stackInfo->getContainerList()', $source,
+            'Container loop must use $stackInfo->getContainerList(), not $projectContainers');
+        $this->assertStringNotContainsString('$projectContainers', $source,
+            '$projectContainers is undefined in ComposeList.php — use $stackInfo->getContainerList()');
     }
 }

@@ -4,6 +4,9 @@ export HOME=/root
 # Compose Manager - Docker Compose wrapper script
 # Provides error handling, result tracking, and operation locking
 
+# shellcheck disable=SC1091
+. "$(dirname "$0")/common.sh"
+
 # Configuration - can be overridden via environment
 LOCK_TIMEOUT=${COMPOSE_LOCK_TIMEOUT:-30}
 LOCK_DIR="/var/run/compose.manager"
@@ -17,17 +20,19 @@ eval set -- "$OPTS"
 envFile=""
 env_args=()
 file_args=()
+profile_names=()
 profile_args=()
 cmd_args=()
 stack_path=""
 debug=false
 lock_fd=""
 
-# Logging helper
+
+# Logging helper — delegates to shared composeLogger, adds console echo in debug mode
 log_msg() {
     local level="$1"
     local msg="$2"
-    logger -t "compose.manager" "[$level] $msg"
+    composeLogger "$msg" "${level,,}" compose
     if [ "$debug" = true ]; then
         echo "[$level] $msg"
     fi
@@ -91,6 +96,19 @@ save_result() {
     fi
 }
 
+# Persist selected profile names for later operations (e.g. update target scope).
+persist_running_profiles() {
+  if [ -z "$stack_path" ] || [ ! -d "$stack_path" ]; then
+    return
+  fi
+
+  if [ ${#profile_names[@]} -gt 0 ]; then
+    printf '%s\n' "$(IFS=,; echo "${profile_names[*]}")" > "$stack_path/running_profiles"
+  else
+    rm -f "$stack_path/running_profiles"
+  fi
+}
+
 while :
 do
   case "$1" in
@@ -128,7 +146,7 @@ do
       shift 2
       ;;
     -g | --profile )
-      profile_args+=("--profile" "$2")
+      profile_names+=("$2")
       shift 2
       ;;
     --recreate )
@@ -152,6 +170,11 @@ do
       shift
       ;;
   esac
+done
+
+# Build docker compose profile flags from canonical profile names.
+for profile_name in "${profile_names[@]}"; do
+  profile_args+=("--profile" "$profile_name")
 done
 
 # Build the compose base command as an array (no eval needed)
@@ -182,9 +205,10 @@ case $command in
     exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
-      # Save stack started timestamp
+      # Save stack started timestamp and running profiles
       if [ -n "$stack_path" ] && [ -d "$stack_path" ]; then
         date -Iseconds > "$stack_path/started_at"
+        persist_running_profiles
       fi
       save_result "success" $exit_code "up"
       echo ""
@@ -206,6 +230,10 @@ case $command in
     exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
+      # Clear running profiles on successful down
+      if [ -n "$stack_path" ] && [ -d "$stack_path" ]; then
+        rm -f "$stack_path/running_profiles"
+      fi
       save_result "success" $exit_code "down"
       echo ""
       echo "✓ Stack $name stopped successfully"
@@ -219,10 +247,10 @@ case $command in
 
   pull)
     if [ "$debug" = true ]; then
-      log_msg "DEBUG" "${compose_base[*]} -p $name pull"
+      log_msg "DEBUG" "${compose_base[*]} -p $name pull --ignore-buildable"
     fi
     
-    "${compose_base[@]}" -p "$name" pull
+    "${compose_base[@]}" -p "$name" pull --ignore-buildable
     exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
@@ -240,7 +268,7 @@ case $command in
   update)
     if [ "$debug" = true ]; then
       log_msg "DEBUG" "${compose_base[*]} -p $name images -q"
-      log_msg "DEBUG" "${compose_base[*]} -p $name pull"
+      log_msg "DEBUG" "${compose_base[*]} -p $name pull --ignore-buildable"
       log_msg "DEBUG" "${compose_base[*]} -p $name up -d --build"
     fi
 
@@ -267,9 +295,9 @@ case $command in
       images=( "${images[@]##sha256:}" )
     fi
     
-    # Pull latest images
+    # Pull latest images (--ignore-buildable: skip services with build sections, they are rebuilt by up --build)
     echo "Pulling latest images..."
-    "${compose_base[@]}" -p "$name" pull
+    "${compose_base[@]}" -p "$name" pull --ignore-buildable
     pull_exit=$?
     
     if [ $pull_exit -ne 0 ]; then
@@ -306,9 +334,10 @@ case $command in
         docker rmi "${images[@]}" 2>/dev/null || true
       fi
       
-      # Save stack started timestamp after update
+      # Save stack started timestamp and running profiles after update
       if [ -n "$stack_path" ] && [ -d "$stack_path" ]; then
         date -Iseconds > "$stack_path/started_at"
+        persist_running_profiles
       fi
       save_result "success" 0 "update"
       echo ""

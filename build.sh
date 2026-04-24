@@ -42,7 +42,7 @@ if [[ -z "$COMPOSE_VERSION" && -f "$VERSIONS_FILE" ]]; then
         fi
     done < "$VERSIONS_FILE"
 fi
-: "${COMPOSE_VERSION:=5.0.2}"
+: "${COMPOSE_VERSION:=5.1.2}"
 
 # Generate dev version with timestamp if requested
 if [[ "$DEV" = true ]]; then
@@ -89,8 +89,9 @@ s|^\s*<!ENTITY[[:space:]]+pkgBUILD[[:space:]]+"[^"]*"|<!ENTITY pkgBUILD "$BUILD_
 s|^\s*<!ENTITY[[:space:]]+packageName[[:space:]]+"[^"]*"|<!ENTITY packageName "$PACKAGE_BASENAME"|
 s|^\s*<!ENTITY[[:space:]]+packagefile[[:space:]]+"[^"]*"|<!ENTITY packagefile "$PACKAGE_NAME"|
 s|^\s*<!ENTITY[[:space:]]+packageURL[[:space:]]+"[^"]*"|<!ENTITY packageURL "file:///tmp/$PACKAGE_NAME"|
-s|^\s*<FILE[[:space:]]+Name=['"]?[^'">]+['"]?.*|<FILE Name='/tmp/$PACKAGE_NAME' Run='upgradepkg --install-new'>|
-s|^\s*<URL>.*</URL>|<URL>file:///tmp/$PACKAGE_NAME</URL>|
+# Only rewrite the package-install FILE block (the one with upgradepkg), not Ace or other FILE blocks
+s|^\s*<FILE[[:space:]]+Name=['"]?[^'">]+['"]?[[:space:]]+Run=['"]upgradepkg[^'"]*['"]>|<FILE Name='/tmp/$PACKAGE_NAME' Run='upgradepkg --install-new'>|
+/upgradepkg/,/<\/FILE>/{ s|^\s*<URL>.*</URL>|<URL>file:///tmp/$PACKAGE_NAME</URL>| }
 SEDEOF
 sed -E -f "$SED_SCRIPT" "$PLG_FILE" > "$TEMP_PLG"
 rm -f "$SED_SCRIPT"
@@ -298,7 +299,7 @@ if [[ -f "$PACKAGE_PATH" ]]; then
     SED_MD5=$(mktemp)
     cat > "$SED_MD5" << SEDEOF
 s|^\s*<!ENTITY[[:space:]]+packageMD5[[:space:]]+"[^"]*"|<!ENTITY packageMD5 "$MD5"|
-s|^\s*<MD5>.*</MD5>|<MD5>$MD5</MD5>|
+/upgradepkg/,/<\/FILE>/{ s|^\s*<MD5>.*</MD5>|<MD5>$MD5</MD5>| }
 SEDEOF
     sed -i -E -f "$SED_MD5" "$TEMP_PLG"
     rm -f "$SED_MD5"

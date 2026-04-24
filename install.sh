@@ -1,15 +1,17 @@
 #!/bin/bash
 echo "=== Starting plugin installation script ==="
 
-set -euo pipefail
+set -eo pipefail
 
-PACKAGE_TAR="$1"
-PLUGIN_FILE="$2"
+PACKAGE_TAR="${1:-}"
+PLUGIN_FILE="${2:-}"
 
 if [ -z "$PACKAGE_TAR" ] || [ -z "$PLUGIN_FILE" ]; then
   echo "Usage: $0 <package_tar> <plugin_plg>"
   exit 2
 fi
+
+set -u
 
 # This script is expected to run on the remote unRAID host.
 mkdir -p /boot/config/plugins

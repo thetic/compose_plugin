@@ -57,8 +57,12 @@ wget_args() {
 }
 
 echo "Installing unzip dependency..."
-run_quiet wget $(wget_args) https://slackware.uk/slackware/slackware64-14.2/slackware64/a/infozip-6.0-x86_64-3.txz
-run_quiet upgradepkg --install-new infozip-6.0-x86_64-3.txz
+INFOZIP_PKG="infozip-6.0-x86_64-8.txz"
+run_quiet wget $(wget_args) "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}"
+run_quiet wget $(wget_args) "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}.sha256"
+run_quiet sha256sum -c "${INFOZIP_PKG}.sha256"
+run_quiet rm -f "${INFOZIP_PKG}.sha256"
+run_quiet upgradepkg --install-new "${INFOZIP_PKG}"
 
 echo "Creating temporary package structure at $tmpdir..."
 run_quiet mkdir -p "$tmpdir"
@@ -73,7 +77,7 @@ cd $tmpdir || exit 1
 echo "Marking plugin scripts and PHP executable..."
 run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/event/"
 run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/scripts/"
-run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/php/"
+run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/include/"
 
 echo "Downloading Docker Compose CLI plugin v${COMPOSE_VERSION}..."
 run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64"
@@ -105,7 +109,8 @@ compose.manager: https://github.com/mstrhakr/compose_plugin
 EOF
 
 # Build the package (Slackware convention: NAME-VERSION-ARCH-BUILD)
-run_quiet makepkg -l y -c y "$OUTPUT_FOLDER/compose.manager-${version}-noarch-${build}.txz"
+# Force a non-interactive yes for makepkg prompts in CI/container builds.
+run_quiet bash -lc "yes y | makepkg -l y -c y \"$OUTPUT_FOLDER/compose.manager-${version}-noarch-${build}.txz\""
 
 # Copy build log into output folder for debugging archives
 if [ -d "$OUTPUT_FOLDER" ]; then

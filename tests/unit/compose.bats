@@ -28,7 +28,13 @@ test_setup() {
 # ============================================================
 
 @test "log_msg function logs to logger" {
-    # Source just the log_msg function
+    # Stub composeLogger so the extracted log_msg can call it
+    composeLogger() { logger -t 'compose.manager' -p "daemon.${2:-info}" "[${3:-compose}] $1"; }
+    export -f composeLogger
+
+    # Extract only log_msg to avoid sourcing compose.sh top-level side effects in tests.
+    # shellcheck disable=SC1090
+    # shellcheck source=/dev/null
     source <(sed -n '/^log_msg()/,/^}/p' "$COMPOSE_SCRIPT")
     
     log_msg "INFO" "Test message"
@@ -37,7 +43,10 @@ test_setup() {
 }
 
 @test "log_msg with debug mode echoes output" {
+    # shellcheck disable=SC1090
+    # shellcheck source=/dev/null
     source <(sed -n '/^log_msg()/,/^}/p' "$COMPOSE_SCRIPT")
+    # shellcheck disable=SC2034
     debug=true
     
     run log_msg "DEBUG" "Debug message"
@@ -77,6 +86,32 @@ test_setup() {
     run docker compose up -d
     
     assert_failure
+}
+
+# ============================================================
+# --ignore-buildable Flag Tests
+# ============================================================
+
+@test "compose.sh pull action uses --ignore-buildable" {
+    # Ensure the pull action always passes --ignore-buildable to skip build-only services
+    run grep -E '^\s*"\$\{compose_base\[@\]\}" -p "\$name" pull --ignore-buildable' "$COMPOSE_SCRIPT"
+    assert_success
+}
+
+@test "compose.sh update action pull step uses --ignore-buildable" {
+    # The update action pulls before 'up -d --build'; buildable services are handled by --build
+    run grep -E 'pull --ignore-buildable' "$COMPOSE_SCRIPT"
+    assert_success
+    # Should appear at least twice (pull action + update action)
+    local count
+    count=$(grep -cE 'pull --ignore-buildable' "$COMPOSE_SCRIPT")
+    [ "$count" -ge 2 ]
+}
+
+@test "compose_autoupdate.sh uses --ignore-buildable" {
+    local autoupdate_script="$BATS_TEST_DIRNAME/../../source/compose.manager/scripts/compose_autoupdate.sh"
+    run grep -E 'pull --ignore-buildable' "$autoupdate_script"
+    assert_success
 }
 
 # ============================================================

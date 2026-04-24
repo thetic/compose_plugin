@@ -1,9 +1,9 @@
 <?php
 
 /**
- * Unit Tests for backup_functions.php
+ * Unit Tests for BackupFunctions.php
  * 
- * Tests the backup/restore helper functions in source/compose.manager/php/backup_functions.php.
+ * Tests the backup/restore helper functions in source/compose.manager/include/BackupFunctions.php.
  * These functions handle creating, listing, restoring, and managing backup archives.
  */
 
@@ -14,10 +14,10 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 use PluginTests\Mocks\FunctionMocks;
 
-// Load backup_functions.php only if not already loaded (avoids logger() redeclaration
-// conflict with compose_util_functions.php which also defines logger()).
+// Load BackupFunctions.php only if not already loaded (avoids logger() redeclaration
+// conflict with Helpers.php which also defines logger()).
 if (!function_exists('getBackupDestination')) {
-    require_once '/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php';
+    require_once '/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php';
 }
 
 class BackupFunctionsTest extends TestCase
@@ -552,106 +552,68 @@ class BackupFunctionsTest extends TestCase
      */
     public function testUpdateBackupCronCreatesFileWhenEnabled(): void
     {
-        $cronFile = '/tmp/test_compose_cron_' . getmypid();
-        $cronDir = dirname($cronFile);
-        
-        // Override the cron file location using a mock
-        $testFunction = function() use ($cronFile, $cronDir) {
-            $cfg = parse_plugin_cfg('compose.manager');
-            $script = '/usr/local/emhttp/plugins/compose.manager/scripts/backup_cron.sh';
-            
-            $enabled = ($cfg['BACKUP_SCHEDULE_ENABLED'] ?? 'false') === 'true';
-            
-            if (!$enabled) {
-                if (file_exists($cronFile)) {
-                    @unlink($cronFile);
-                    touch($cronDir);
-                }
-                return;
-            }
-            
-            $frequency = $cfg['BACKUP_SCHEDULE_FREQUENCY'] ?? 'daily';
-            $time = $cfg['BACKUP_SCHEDULE_TIME'] ?? '03:00';
-            $dayOfWeek = $cfg['BACKUP_SCHEDULE_DAY'] ?? '1';
-            
-            $parts = explode(':', $time);
-            $hour = isset($parts[0]) ? intval($parts[0]) : 3;
-            $minute = isset($parts[1]) ? intval($parts[1]) : 0;
-            
-            if ($frequency === 'weekly') {
-                $cronLine = "{$minute} {$hour} * * {$dayOfWeek} root {$script} >/dev/null 2>&1";
-            } else {
-                $cronLine = "{$minute} {$hour} * * * root {$script} >/dev/null 2>&1";
-            }
-            
-            file_put_contents($cronFile, $cronLine . "\n");
-            chmod($cronFile, 0644);
-            touch($cronDir);
-        };
-        
+        $cronFile = sys_get_temp_dir() . '/test_compose_cron_' . getmypid() . '.cron';
+        if (is_file($cronFile)) @unlink($cronFile);
+
+        // Set env vars so CronManager writes to our test file and skips update_cron
+        putenv('COMPOSE_MANAGER_CRON_FILE=' . $cronFile);
+        putenv('COMPOSE_MANAGER_CRON_NOSYNC=1');
+
         // Set backup schedule enabled
         FunctionMocks::setPluginConfig('compose.manager', [
             'BACKUP_SCHEDULE_ENABLED' => 'true',
             'BACKUP_SCHEDULE_FREQUENCY' => 'daily',
             'BACKUP_SCHEDULE_TIME' => '02:30',
         ]);
-        
-        // Record directory mtime before
-        $mtimeBefore = filemtime($cronDir);
-        sleep(1); // Ensure time difference
-        
+
         // Execute
-        $testFunction();
-        
-        // Verify cron file created
+        updateBackupCron();
+
+        // Verify cron file created with backup line
         $this->assertFileExists($cronFile);
         $content = file_get_contents($cronFile);
         $this->assertStringContainsString('30 2 * * *', $content);
         $this->assertStringContainsString('backup_cron.sh', $content);
-        
-        // Verify directory was touched (mtime updated)
-        $mtimeAfter = filemtime($cronDir);
-        $this->assertGreaterThan($mtimeBefore, $mtimeAfter);
-        
+        $this->assertStringContainsString('#compose-backup', $content);
+        // No stray 'root' user field
+        $this->assertStringNotContainsString('* root ', $content);
+
         // Cleanup
         @unlink($cronFile);
+        putenv('COMPOSE_MANAGER_CRON_FILE');
+        putenv('COMPOSE_MANAGER_CRON_NOSYNC');
     }
 
     /**
      * @requires OS Linux
      */
-    public function testUpdateBackupCronRemovesFileWhenDisabled(): void
+    public function testUpdateBackupCronRemovesLineWhenDisabled(): void
     {
-        $cronFile = '/tmp/test_compose_cron_disabled_' . getmypid();
-        $cronDir = dirname($cronFile);
-        
-        // Create a fake cron file
-        file_put_contents($cronFile, "0 3 * * * root /some/script.sh\n");
+        $cronFile = sys_get_temp_dir() . '/test_compose_cron_disabled_' . getmypid() . '.cron';
+        if (is_file($cronFile)) @unlink($cronFile);
+
+        putenv('COMPOSE_MANAGER_CRON_FILE=' . $cronFile);
+        putenv('COMPOSE_MANAGER_CRON_NOSYNC=1');
+
+        // First enable backup to create the file
+        FunctionMocks::setPluginConfig('compose.manager', [
+            'BACKUP_SCHEDULE_ENABLED' => 'true',
+            'BACKUP_SCHEDULE_FREQUENCY' => 'daily',
+            'BACKUP_SCHEDULE_TIME' => '03:00',
+        ]);
+        updateBackupCron();
         $this->assertFileExists($cronFile);
-        
-        // Set backup schedule disabled
+
+        // Now disable backup
         FunctionMocks::setPluginConfig('compose.manager', [
             'BACKUP_SCHEDULE_ENABLED' => 'false',
         ]);
-        
-        // Record directory mtime before
-        $mtimeBefore = filemtime($cronDir);
-        sleep(1);
-        
-        // Execute removal logic
-        $cfg = parse_plugin_cfg('compose.manager');
-        $enabled = ($cfg['BACKUP_SCHEDULE_ENABLED'] ?? 'false') === 'true';
-        
-        if (!$enabled && file_exists($cronFile)) {
-            @unlink($cronFile);
-            touch($cronDir);
-        }
-        
-        // Verify cron file removed
+        updateBackupCron();
+
+        // Cron file should be removed (no entries left)
         $this->assertFileDoesNotExist($cronFile);
-        
-        // Verify directory was touched
-        $mtimeAfter = filemtime($cronDir);
-        $this->assertGreaterThan($mtimeBefore, $mtimeAfter);
+
+        putenv('COMPOSE_MANAGER_CRON_FILE');
+        putenv('COMPOSE_MANAGER_CRON_NOSYNC');
     }
 }

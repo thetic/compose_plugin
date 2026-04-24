@@ -66,7 +66,7 @@ param(
 	[string]$RemoteDir = "/tmp",
 	[string]$PackagePath,
 	[switch]$SkipBuild,
-	[string]$ComposeVersion = "5.0.2",
+	[string]$ComposeVersion = "5.1.2",
 	[string]$AceVersion = "1.43.5",
 	[switch]$Quick
 )

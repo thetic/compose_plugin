@@ -1,14 +1,7 @@
 <?php
 
 /**
- * Unit Tests for exec_functions.php (REAL SOURCE)
- * 
- * Tests the actual source functions from source/compose.manager/php/exec_functions.php
- * 
- * exec_functions.php contains these functions:
- * - getElement($element) - converts element name to safe HTML ID
- * - normalizeImageForUpdateCheck($image) - normalizes Docker image names for update checking
- * - sanitizeFolderName($stackName) - sanitizes stack names for folder creation
+ * Unit tests for utility helpers in Util.php (REAL SOURCE).
  */
 
 declare(strict_types=1);
@@ -18,12 +11,11 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 
 // Load the actual source functions file directly (no switch statement to bypass)
-require_once '/usr/local/emhttp/plugins/compose.manager/php/exec_functions.php';
+require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 
 /**
  * @covers ::getElement
- * @covers ::normalizeImageForUpdateCheck
- * @covers ::sanitizeFolderName
+ * @covers \ContainerInfo::normalizeImageForUpdateCheck
  */
 class ExecFunctionsTest extends TestCase
 {
@@ -103,7 +95,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageStripsDockerIoPrefix(): void
     {
-        $result = normalizeImageForUpdateCheck('docker.io/library/nginx:latest');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('docker.io/library/nginx:latest');
         $this->assertEquals('library/nginx:latest', $result);
     }
 
@@ -112,7 +104,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageStripsSha256Digest(): void
     {
-        $result = normalizeImageForUpdateCheck('nginx:latest@sha256:abc123def456');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('nginx:latest@sha256:abc123def456');
         $this->assertEquals('library/nginx:latest', $result);
     }
 
@@ -122,7 +114,7 @@ class ExecFunctionsTest extends TestCase
     public function testNormalizeImageHandlesOfficialImages(): void
     {
         // Official images should get library/ prefix added
-        $result = normalizeImageForUpdateCheck('nginx');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('nginx');
         $this->assertEquals('library/nginx:latest', $result);
     }
 
@@ -131,7 +123,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageAddsLatestTag(): void
     {
-        $result = normalizeImageForUpdateCheck('myuser/myapp');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('myuser/myapp');
         $this->assertEquals('myuser/myapp:latest', $result);
     }
 
@@ -140,7 +132,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageCombined(): void
     {
-        $result = normalizeImageForUpdateCheck('docker.io/myuser/myapp:v1.0@sha256:abc123');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('docker.io/myuser/myapp:v1.0@sha256:abc123');
         $this->assertEquals('myuser/myapp:v1.0', $result);
     }
 
@@ -149,7 +141,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImagePreservesCustomRegistry(): void
     {
-        $result = normalizeImageForUpdateCheck('ghcr.io/owner/repo:tag');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('ghcr.io/owner/repo:tag');
         $this->assertEquals('ghcr.io/owner/repo:tag', $result);
     }
 
@@ -158,7 +150,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageFullDockerHub(): void
     {
-        $result = normalizeImageForUpdateCheck('docker.io/nginx');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('docker.io/nginx');
         $this->assertEquals('library/nginx:latest', $result);
     }
 
@@ -167,7 +159,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageVersionedTag(): void
     {
-        $result = normalizeImageForUpdateCheck('nginx:1.25.0');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('nginx:1.25.0');
         $this->assertEquals('library/nginx:1.25.0', $result);
     }
 
@@ -176,7 +168,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageUserWithTag(): void
     {
-        $result = normalizeImageForUpdateCheck('linuxserver/plex:latest');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('linuxserver/plex:latest');
         $this->assertEquals('linuxserver/plex:latest', $result);
     }
 
@@ -185,7 +177,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageQuayRegistry(): void
     {
-        $result = normalizeImageForUpdateCheck('quay.io/prometheus/alertmanager:v0.25.0');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('quay.io/prometheus/alertmanager:v0.25.0');
         $this->assertEquals('quay.io/prometheus/alertmanager:v0.25.0', $result);
     }
 
@@ -195,7 +187,7 @@ class ExecFunctionsTest extends TestCase
     public function testNormalizeImageDigestOnly(): void
     {
         // docker.io/library/nginx@sha256:abc123... -> library/nginx:latest
-        $result = normalizeImageForUpdateCheck('docker.io/library/nginx@sha256:abc123def456');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('docker.io/library/nginx@sha256:abc123def456');
         $this->assertEquals('library/nginx:latest', $result);
     }
 
@@ -204,7 +196,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageLscrRegistry(): void
     {
-        $result = normalizeImageForUpdateCheck('lscr.io/linuxserver/plex:latest');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('lscr.io/linuxserver/plex:latest');
         $this->assertEquals('lscr.io/linuxserver/plex:latest', $result);
     }
 
@@ -213,7 +205,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageRegistryWithPort(): void
     {
-        $result = normalizeImageForUpdateCheck('registry.local:5000/myapp:v1');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('registry.local:5000/myapp:v1');
         $this->assertEquals('registry.local:5000/myapp:v1', $result);
     }
 
@@ -222,7 +214,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageDeepPath(): void
     {
-        $result = normalizeImageForUpdateCheck('gcr.io/google-containers/kube-apiserver:v1.28.0');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('gcr.io/google-containers/kube-apiserver:v1.28.0');
         $this->assertEquals('gcr.io/google-containers/kube-apiserver:v1.28.0', $result);
     }
 
@@ -232,7 +224,7 @@ class ExecFunctionsTest extends TestCase
     public function testNormalizeImageSha256InTag(): void
     {
         // A tag that happens to contain "sha256" shouldn't be stripped
-        $result = normalizeImageForUpdateCheck('myuser/myapp:sha256test');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('myuser/myapp:sha256test');
         $this->assertEquals('myuser/myapp:sha256test', $result);
     }
 
@@ -241,7 +233,7 @@ class ExecFunctionsTest extends TestCase
      */
     public function testNormalizeImageEmptyString(): void
     {
-        $result = normalizeImageForUpdateCheck('');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('');
         $this->assertEquals('library/:latest', $result);
     }
 
@@ -251,7 +243,7 @@ class ExecFunctionsTest extends TestCase
     public function testNormalizeImageUppercase(): void
     {
         // Docker image names should be lowercase but we don't change case
-        $result = normalizeImageForUpdateCheck('MyUser/MyApp:Latest');
+        $result = \ContainerInfo::normalizeImageForUpdateCheck('MyUser/MyApp:Latest');
         $this->assertEquals('MyUser/MyApp:Latest', $result);
     }
 }

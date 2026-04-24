@@ -3,7 +3,7 @@
 /**
  * Unit Tests for Compose Utility Functions (REAL SOURCE)
  * 
- * Tests the actual source: source/compose.manager/php/compose_util_functions.php
+ * Tests the actual source: source/compose.manager/include/Helpers.php
  * Functions are now in a separate file for testability.
  */
 
@@ -16,15 +16,14 @@ use PluginTests\TestCase;
 use PluginTests\Mocks\FunctionMocks;
 
 // Load the functions file directly (no switch statement)
-require_once '/usr/local/emhttp/plugins/compose.manager/php/compose_util_functions.php';
-require_once '/usr/local/emhttp/plugins/compose.manager/php/util.php';
-require_once '/usr/local/emhttp/plugins/compose.manager/php/defines.php';
-require_once '/usr/local/emhttp/plugins/compose.manager/php/exec_functions.php';
+require_once '/usr/local/emhttp/plugins/compose.manager/include/Helpers.php';
+require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
+require_once '/usr/local/emhttp/plugins/compose.manager/include/Defines.php';
 
 /**
  * Tests for compose_util.php functions
  * 
- * Note: compose_util.php contains these functions:
+ * Note: ComposeUtil.php contains these functions:
  * - logger($string) - calls system logger
  * - execComposeCommandInTTY($cmd, $debug) - runs ttyd
  * - echoComposeCommand($action) - echoes compose command
@@ -275,7 +274,7 @@ class ComposeUtilTest extends TestCase
         $overrideInfo = OverrideInfo::fromStack($tempDir, $stackName);
         file_put_contents($overrideInfo->getOverridePath(), "services:\n  web:\n    ports:\n      - 80:80\n");
                 
-        $sanitizedStackName = sanitizeFolderName($stackName);
+        $sanitizedStackName = \StackInfo::sanitizeProjectString($stackName);
         file_put_contents("$stackDir/name", $sanitizedStackName);
         
         // Ensure array is started
