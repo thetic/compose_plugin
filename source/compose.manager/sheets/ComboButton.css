@@ -42,13 +42,16 @@
     color: var(--text-color);
     border-radius: 8px;
     min-width: 350px;
-    max-width: 400px;
+    max-width: 90vw;
     width: 100%;
+    max-height: 80vh;
     padding: 0;
     overflow: hidden;
     font-family: inherit;
     border: 1px solid var(--border-color);
     box-shadow: var(--panel-box-shadow);
+    display: flex;
+    flex-direction: column;
   }
 
   .compose-modal-header {
@@ -64,7 +67,20 @@
 
   .compose-modal-body {
     padding: 24px;
+    overflow-y: auto;
+    max-height: 60vh;
+    min-height: 40px;
+    /* If body has a list, let it scroll inside */
+    display: flex;
+    flex-direction: column;
   }
+  /* Helper: scrollable container list inside modal body */
+  .compose-modal-list {
+    overflow-y: auto;
+    max-height: 40vh;
+    margin-bottom: 16px;
+  }
+  
 
   .compose-modal-footer {
     background: var(--alt-background-color);

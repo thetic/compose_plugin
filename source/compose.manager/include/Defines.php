@@ -1,7 +1,8 @@
 <?php
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 
-function locate_compose_root($name) {
+function locate_compose_root($name)
+{
     $cfg = parse_plugin_cfg($name);
     return $cfg['PROJECTS_FOLDER'] ?? "/boot/config/plugins/compose.manager/projects";
 }
@@ -39,5 +40,3 @@ define('COMPOSE_FILE_NAMES', [
     'docker-compose.yaml',
     'docker-compose.yml',
 ]);
-
-?>

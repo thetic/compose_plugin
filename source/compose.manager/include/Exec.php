@@ -90,8 +90,35 @@ switch ($_POST['action']) {
         $isInvalidIndirect = !$isIndirect && is_file("$folderName/indirect.invalid");
         $filesRemain = $isIndirect ? file_get_contents("$folderName/indirect")
             : ($isInvalidIndirect ? file_get_contents("$folderName/indirect.invalid") : "");
-        composeLogger("Deleting stack: $stackName", null, 'user', 'info', 'stack');
-        exec("rm -rf " . escapeshellarg($folderName));
+        composeLogger("Deleting stack: $stackName", [
+            'folderName' => $folderName,
+            'isIndirect' => $isIndirect,
+            'isInvalidIndirect' => $isInvalidIndirect,
+            'filesRemain' => $filesRemain
+        ], 'user', 'debug', 'stack');
+
+        $execOutput = [];
+        $execRc = 0;
+        exec("rm -rf " . escapeshellarg($folderName), $execOutput, $execRc);
+
+        $folderStillExists = is_dir($folderName);
+        if ($execRc !== 0 || $folderStillExists) {
+            composeLogger("Stack folder delete failed", [
+                'stackName' => $stackName,
+                'folderName' => $folderName,
+                'execRc' => $execRc,
+                'execOutput' => $execOutput,
+                'folderStillExists' => $folderStillExists,
+                'filesRemain' => $filesRemain
+            ], 'user', 'error', 'stack');
+            $msg = "Failed to delete stack folder. " .
+                ($execRc !== 0 ? "rm exit code: $execRc. " : "") .
+                ($folderStillExists ? "Folder still exists after rm. " : "") .
+                (count($execOutput) ? "Output: " . implode("; ", $execOutput) : "");
+            echo json_encode(['result' => 'error', 'message' => $msg]);
+            break;
+        }
+
         if ($filesRemain == "") {
             composeLogger("Deleted stack: $stackName", null, 'user', 'info', 'stack');
             echo json_encode(['result' => 'success', 'message' => '']);
@@ -613,6 +640,11 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => "$fileName saved"]);
         break;
     case 'getStackContainers':
+        composeLogger('getStackContainers start', [
+            'script' => $script,
+            'post' => $_POST,
+            'caller' => $_SERVER['REMOTE_ADDR'] ?? 'cli',
+        ], 'user', 'debug', 'getStackContainers');
         $script = getPostScript();
         if (!$script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
@@ -621,10 +653,8 @@ switch ($_POST['action']) {
 
         // Resolve stack identity and compose CLI arguments via StackInfo
         $stackInfo = StackInfo::fromProject($compose_root, $script);
-
         // Get container details in JSON format (all states)
         $rows = $stackInfo->getContainerList();
-
         // Hard dependency on Docker manager: use shared helpers directly.
         $networkDrivers = DockerUtil::driver();
         $hostIP = trim((string) DockerUtil::host());
@@ -641,6 +671,9 @@ switch ($_POST['action']) {
         $stackState = $stackInfo->getStackState();
 
         foreach ($rows as $rawContainer) {
+            composeLogger('getStackContainers found container row', [
+                'rawContainer' => $rawContainer
+            ], 'user', 'debug', 'getStackContainers');
             // Get additional details using docker inspect
             $ctName = $rawContainer['Name'] ?? '';
             if ($ctName) {
@@ -785,7 +818,29 @@ switch ($_POST['action']) {
             $containers[] = ContainerInfo::fromDockerInspect($rawContainer)->toArray();
         }
 
+        // --- Persistent container metadata cache ---
+        $cacheFile = '/boot/config/plugins/compose.manager/containers.cache.json';
+        $cache = is_file($cacheFile) ? json_decode(file_get_contents($cacheFile), true) : [];
+        $stackKey = $stackInfo->projectFolder;
+        if (!isset($cache[$stackKey])) $cache[$stackKey] = [];
+        foreach ($containers as $ct) {
+            $service = $ct['service'] ?? $ct['Name'] ?? '';
+            if ($service) {
+                $cache[$stackKey][$service] = $ct;
+            }
+        }
+        file_put_contents($cacheFile, json_encode($cache, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
         echo json_encode(['result' => 'success', 'containers' => $containers, 'stackState' => $stackState, 'projectName' => $stackInfo->projectFolder, 'startedAt' => $stackInfo->getStartedAt()]);
+        composeLogger('getStackContainers done', [
+            'script' => $script,
+            'containersCount' => count($containers),
+            'containerNames' => array_map(function ($c) {
+                return $c['name'] ?? ($c['Name'] ?? '');
+            }, $containers),
+            'stackState' => $stackState,
+            'projectName' => $stackInfo->projectFolder,
+        ], 'user', 'debug', 'getStackContainers');
         break;
     case 'getProfileServices':
         // Returns the list of services that docker compose would act on for the

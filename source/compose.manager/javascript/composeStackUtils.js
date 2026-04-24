@@ -34,7 +34,7 @@ function deriveStackState(containers) {
         state = 'started';
     } else {
         // Check for paused containers
-        var anyPaused = containers.some(function(c) {
+        var anyPaused = containers.some(function (c) {
             return c && !c.isRunning && c.state === 'paused';
         });
         state = (anyPaused && totalCount > 0) ? 'paused' : 'stopped';

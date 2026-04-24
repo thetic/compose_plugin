@@ -110,8 +110,11 @@ $themeSheetJson = json_encode("themes/{$themeFile}.css");
         function suppressBeforeUnload(win) {
             try {
                 Object.defineProperty(win, 'onbeforeunload', {
-                    get: function() { return null; },
-                    set: function() { /* swallow ttyd's assignment */ },
+                    get: function() {
+                        return null;
+                    },
+                    set: function() {
+                        /* swallow ttyd's assignment */ },
                     configurable: true
                 });
                 var origAdd = win.addEventListener.bind(win);
@@ -158,8 +161,12 @@ $themeSheetJson = json_encode("themes/{$themeFile}.css");
         window.addEventListener('load', function() {
             <?php if ($showDone): ?>
                 document.getElementById('done-btn').addEventListener('click', function() {
-                    try { top.Shadowbox.close(); } catch (e) {}
-                    try { window.close(); } catch (e) {}
+                    try {
+                        top.Shadowbox.close();
+                    } catch (e) {}
+                    try {
+                        window.close();
+                    } catch (e) {}
                 });
             <?php endif; ?>
 
@@ -176,7 +183,9 @@ $themeSheetJson = json_encode("themes/{$themeFile}.css");
             setupFrame(frame);
 
             // Re-attach for any subsequent navigations within the iframe.
-            frame.addEventListener('load', function() { setupFrame(frame); });
+            frame.addEventListener('load', function() {
+                setupFrame(frame);
+            });
         });
     </script>
 </body>
