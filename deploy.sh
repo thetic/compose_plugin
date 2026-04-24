@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+trap 'echo "ERROR: command failed on line $LINENO" >&2' ERR
 
 # Default values
 VERSION=""
@@ -157,23 +158,33 @@ else
     fi
     echo "Checking archive directory: $ARCHIVE_DIR"
     ls -al "$ARCHIVE_DIR"
-    PACKAGE_PATH=$(printf '%s\n' "${files[@]}" | sort -r | head -n1)
+    PACKAGE_PATH=$(printf '%s\n' "${files[@]}" | sort -r | head -n1 || true)
     echo "Candidate package path: $PACKAGE_PATH"
-    if [[ -z "$PACKAGE_PATH" ]]; then
-      echo "Build completed but package not found"
+    if [[ -z "$PACKAGE_PATH" || ! -f "$PACKAGE_PATH" ]]; then
+      echo "Build completed but package not found or package path is invalid"
       echo "Archive dir content:"
       ls -al "$ARCHIVE_DIR"
       exit 1
     fi
+    PACKAGE_PATH=$(realpath "$PACKAGE_PATH")
+    echo "Resolved package path: $PACKAGE_PATH"
   fi
 fi
 
 PACKAGE_NAME=$(basename "$PACKAGE_PATH")
 
+echo "Remote hosts: ${REMOTE_HOSTS[*]:-none}"
 if [[ ${#REMOTE_HOSTS[@]} -eq 0 ]]; then
   echo "No RemoteHost specified — build only, skipping deploy. Package: $PACKAGE_PATH"
   exit 0
 fi
+
+for cmd in ssh scp; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "Required command not found: $cmd" >&2
+    exit 1
+  fi
+ done
 
 PLUGIN_PATH="$SCRIPT_DIR/archive/compose.manager.plg"
 if [[ ! -f "$PLUGIN_PATH" ]]; then
