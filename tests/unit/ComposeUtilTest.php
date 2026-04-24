@@ -373,8 +373,8 @@ class ComposeUtilTest extends TestCase
         $this->assertSame('/test-stack/last_cmd.log', getLastCmdLogFileForComposeAction('down', $path));
     }
 
+    #[\PHPUnit\Framework\Attributes\DataProvider('actionsProvider')]
     /**
-     * @dataProvider actionsProvider
      * Test various compose actions
      */
     public function testEchoComposeCommandActions(string $action, string $expectedArg): void
