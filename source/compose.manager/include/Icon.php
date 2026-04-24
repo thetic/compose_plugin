@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Serve project icons for Compose Manager
  */
@@ -32,7 +33,7 @@ foreach ($iconFiles as $iconFile) {
     $testPath = "$projectPath/$iconFile";
     if (is_file($testPath)) {
         $iconPath = $testPath;
-        
+
         // Determine mime type
         $ext = strtolower(pathinfo($iconFile, PATHINFO_EXTENSION));
         switch ($ext) {

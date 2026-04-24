@@ -302,7 +302,8 @@ const NON_WEBUI_PORTS = [
     22,    // SSH
     25,    // SMTP
     53,    // DNS
-    67, 68, // DHCP
+    67,    // DHCP
+    68,    // DHCP
     69,    // TFTP
     123,   // NTP
     143,   // IMAP
@@ -641,18 +642,18 @@ class OverrideInfo
         return self::resolveOverride($projectPath, $indirectPath, $composeFilePath);
     }
 
-     /**
-      * Core override resolution logic shared by both factories.
-      *
-      * Computes the override filename from the compose file, resolves project
-      * and indirect override paths while preserving legacy filenames as-is,
-      * and auto-creates a project override template if needed.
-      *
-      * @param string      $projectPath     Full path to the stack directory
-      * @param string|null $indirectPath     Indirect target directory, or null if not indirect
-      * @param string|null $composeFilePath  Resolved main compose file path, or null if none
-      * @return OverrideInfo
-      */
+    /**
+     * Core override resolution logic shared by both factories.
+     *
+     * Computes the override filename from the compose file, resolves project
+     * and indirect override paths while preserving legacy filenames as-is,
+     * and auto-creates a project override template if needed.
+     *
+     * @param string      $projectPath     Full path to the stack directory
+     * @param string|null $indirectPath     Indirect target directory, or null if not indirect
+     * @param string|null $composeFilePath  Resolved main compose file path, or null if none
+     * @return OverrideInfo
+     */
     private static function resolveOverride(string $projectPath, ?string $indirectPath, ?string $composeFilePath): self
     {
         $info = new self();
@@ -1877,9 +1878,9 @@ class StackInfo
      * Get the list of services defined in the main compose file only (without override).
      *
      * Used internally by pruneOrphanOverrideServices() to determine which services
-        * are valid. Excludes the override file so orphaned override services are not
-        * counted as valid, but enables all profiles so profile-tagged services remain
-        * valid targets for Unraid label metadata stored in the override file.
+     * are valid. Excludes the override file so orphaned override services are not
+     * counted as valid, but enables all profiles so profile-tagged services remain
+     * valid targets for Unraid label metadata stored in the override file.
      *
      * External callers should typically use getDefinedServices() which includes
      * the override file for a complete picture.

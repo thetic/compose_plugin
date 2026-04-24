@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Runner invoked by cron to check autoupdate.json and run updates when scheduled
  */
@@ -46,17 +47,17 @@ foreach ($data as $path => $entry) {
     if ($path === 'defaults') continue;
     if (!is_array($entry)) continue;
     if (empty($entry['enabled'])) continue;
-    
+
     // Validate path is within allowed locations for security
     if (!isAllowedAutoUpdatePath($path)) {
         composeLogger('Skipping disallowed path: ' . sanitizeLogText($path), null, 'daemon', 'warn', 'autoupdate');
         continue;
     }
-    
+
     $schedule = isset($entry['schedule']) ? $entry['schedule'] : 'daily';
     $defaultTime = '02:00';
     $time = isset($entry['time']) ? $entry['time'] : $defaultTime;
-    
+
     // Validate time format (H:MM or HH:MM) and bounds; fall back to safe default on invalid
     $sh = 2; // default hour from 02:00
     $sm = 0; // default minute from 02:00
@@ -74,7 +75,7 @@ foreach ($data as $path => $entry) {
     // Using last_run tracking to handle non-15-minute-boundary times
     $scheduledToday = mktime($sh, $sm, 0);
     $lastRun = isset($entry['last_run']) ? intval($entry['last_run']) : 0;
-    
+
     $shouldRun = false;
     // Check if current time is past the scheduled time and we haven't run yet today
     if ($now >= $scheduledToday && $lastRun < $scheduledToday) {

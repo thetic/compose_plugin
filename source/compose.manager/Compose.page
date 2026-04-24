@@ -15,8 +15,8 @@ Cond="$var['fsState'] == 'Started' && exec('/etc/rc.d/rc.docker status | grep -v
 <script src="<?php autov('/webGui/javascript/jquery.filetree.js'); ?>" charset="utf-8"></script>
 <script src="<?php autov('/plugins/dynamix.docker.manager/javascript/docker.js'); ?>"></script>
 <style>
-table tbody td {
-	line-height:normal
-}
+	table tbody td {
+		line-height: normal
+	}
 </style>
-<?php include '/usr/local/emhttp/plugins/compose.manager/include/ComposeManager.php';?>
+<?php include '/usr/local/emhttp/plugins/compose.manager/include/ComposeManager.php'; ?>

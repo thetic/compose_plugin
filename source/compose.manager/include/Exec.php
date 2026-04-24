@@ -829,13 +829,15 @@ switch ($_POST['action']) {
                 $cache[$stackKey][$service] = $ct;
             }
         }
-        file_put_contents($cacheFile, json_encode($cache, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+        file_put_contents($cacheFile, json_encode($cache, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
         echo json_encode(['result' => 'success', 'containers' => $containers, 'stackState' => $stackState, 'projectName' => $stackInfo->projectFolder, 'startedAt' => $stackInfo->getStartedAt()]);
         composeLogger('getStackContainers done', [
             'script' => $script,
             'containersCount' => count($containers),
-            'containerNames' => array_map(function($c){return $c['name']??($c['Name']??'');}, $containers),
+            'containerNames' => array_map(function ($c) {
+                return $c['name'] ?? ($c['Name'] ?? '');
+            }, $containers),
             'stackState' => $stackState,
             'projectName' => $stackInfo->projectFolder,
         ], 'user', 'debug', 'getStackContainers');

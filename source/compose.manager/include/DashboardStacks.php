@@ -1,4 +1,5 @@
 <?PHP
+
 /**
  * AJAX endpoint for dashboard tile - returns compose stacks data
  * Called asynchronously to avoid blocking dashboard load
@@ -88,4 +89,3 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
 header('Content-Type: application/json');
 
 echo json_encode($summary);
-?>

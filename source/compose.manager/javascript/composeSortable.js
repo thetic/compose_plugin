@@ -37,14 +37,14 @@ function updateComposeLockButtonUI() {
 // ── Persist sort order ─────────────────────────────────────────────
 
 function saveComposeSortOrder() {
-    var projects = $('#compose_list > tr.compose-sortable').map(function() {
+    var projects = $('#compose_list > tr.compose-sortable').map(function () {
         return $(this).data('project');
     }).get();
 
     return $.post(caURL, {
         action: 'saveStackOrder',
         projects: projects
-    }).fail(function(xhr) {
+    }).fail(function (xhr) {
         composeLogger('failed', {
             status: xhr.status,
             response: xhr.responseText
@@ -80,7 +80,7 @@ function normalizeComposeDetailsRowOrder($tbody) {
         return;
     }
 
-    $tbody.children('tr.compose-sortable').each(function() {
+    $tbody.children('tr.compose-sortable').each(function () {
         var $stackRow = $(this);
         var $detailsRow = getComposeDetailsRowForItem($stackRow);
         if ($detailsRow.length) {
@@ -118,16 +118,16 @@ function initComposeSortable() {
         opacity: 0.5,
         zIndex: 9999,
         forcePlaceholderSize: true,
-        start: function(event, ui) {
+        start: function (event, ui) {
             var $detailsRow = getComposeDetailsRowForItem(ui.item);
             if ($detailsRow.length) {
                 ui.item.data('compose-details-row', $detailsRow.detach());
             }
         },
-        update: function() {
+        update: function () {
             saveComposeSortOrder();
         },
-        stop: function(event, ui) {
+        stop: function (event, ui) {
             reattachComposeDetailsRow(ui.item);
             normalizeComposeDetailsRowOrder($tbody);
         }
@@ -138,7 +138,7 @@ function initComposeSortable() {
 
 function syncComposeSortModeUI() {
     var unlocked = isComposeSortModeEnabled();
-    $('#compose_stacks tr.compose-sortable').each(function() {
+    $('#compose_stacks tr.compose-sortable').each(function () {
         var $row = $(this);
         $row.find('.expand-icon').toggle(!unlocked);
         $row.find('.mover').toggle(unlocked);

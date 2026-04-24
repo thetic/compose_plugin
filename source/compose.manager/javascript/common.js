@@ -214,7 +214,7 @@ function composeTrackFileTreeForInput($input, options) {
     var scrollContainer = composeGetScrollContainer($input[0]);
     var $scrollTarget = (scrollContainer === window) ? $(window) : $(scrollContainer);
 
-    var updatePosition = function() {
+    var updatePosition = function () {
         composePositionFileTreeForInput($input, options);
     };
 
@@ -224,7 +224,7 @@ function composeTrackFileTreeForInput($input, options) {
     var tracker = {
         $input: $input,
         update: updatePosition,
-        cleanup: function() {
+        cleanup: function () {
             $scrollTarget.off('.composeFileTree');
             $input.removeData('composeFileTreeTrackId');
             $input.removeData('composeFileTreeTrackHandlers');
@@ -244,9 +244,9 @@ function composeBindFileTreeInputs($inputs, options) {
     if (!$.fn.fileTreeAttach || !$inputs || !$inputs.length) return;
 
     $inputs.fileTreeAttach();
-    $inputs.off('click.composeFileTree focus.composeFileTree').on('click.composeFileTree focus.composeFileTree', function() {
+    $inputs.off('click.composeFileTree focus.composeFileTree').on('click.composeFileTree focus.composeFileTree', function () {
         var $input = $(this);
-        setTimeout(function() {
+        setTimeout(function () {
             composePositionFileTreeForInput($input, options);
         }, FILE_TREE_POSITION_DELAY_MS);
     });

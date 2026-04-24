@@ -31,7 +31,6 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 <script src="<?php autov('/webGui/javascript/jquery.filetree.js'); ?>" charset="utf-8"></script>
 <script src="<?php autov('/plugins/compose.manager/javascript/common.js'); ?>" type="text/javascript"></script>
 <style>
-
     /* Toggle switch overrides */
     #compose-tab-settings .switch-button-background,
     #compose-tab-backup .switch-button-background {
@@ -119,7 +118,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         border: 1px solid var(--dynamix-jquery-ui-border-color);
         color: var(--action-primary-color);
         font-weight: 600;
-        text-shadow: 0 0 2px rgba(0,0,0,0.45);
+        text-shadow: 0 0 2px rgba(0, 0, 0, 0.45);
     }
 
     #compose-tab-settings .orange-button:hover,
@@ -168,7 +167,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     }
 
     #compose-tab-settings form {
-        padding-bottom: 85px; /* keep content from hiding under fixed action bar */
+        padding-bottom: 85px;
+        /* keep content from hiding under fixed action bar */
     }
 
     /* Disabled input styling */
@@ -2100,17 +2100,17 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         </dl>
 
         <?php if (!$option_patch_ui): ?>
-        <dl>
-            <dt style="cursor: help;" onclick="toggleHelp(this)">_(Patch Docker Page)_:</dt>
-            <dd>
-                <input type="checkbox" name="PATCH_UI" class="compose-toggle" <?= $cfg['PATCH_UI'] == 'true' ? 'checked' : '' ?> >
-                <input type="button" value="_(Patch Now)_" onclick="patchWebui()" class="slim-button" style="margin-left:15px;">
-                <input type="button" value="_(Unpatch)_" onclick="unpatchWebui()" class="slim-button" style="margin-left:15px;">
-                <blockquote class="inline_help">
-                    <strong>(Unraid 6.11 and earlier only)</strong> Patch the Docker page to better display compose-managed containers.
-                </blockquote>
-            </dd>
-        </dl>
+            <dl>
+                <dt style="cursor: help;" onclick="toggleHelp(this)">_(Patch Docker Page)_:</dt>
+                <dd>
+                    <input type="checkbox" name="PATCH_UI" class="compose-toggle" <?= $cfg['PATCH_UI'] == 'true' ? 'checked' : '' ?>>
+                    <input type="button" value="_(Patch Now)_" onclick="patchWebui()" class="slim-button" style="margin-left:15px;">
+                    <input type="button" value="_(Unpatch)_" onclick="unpatchWebui()" class="slim-button" style="margin-left:15px;">
+                    <blockquote class="inline_help">
+                        <strong>(Unraid 6.11 and earlier only)</strong> Patch the Docker page to better display compose-managed containers.
+                    </blockquote>
+                </dd>
+            </dl>
         <?php endif; ?>
 
         <dl class="settings-actions">
@@ -2120,95 +2120,100 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 </div>
 
 <script>
-(function(){
-    var cookieName = 'compose_manager_settings_return';
-    function getSafeReturnPath(existingPath) {
-        if (!document.referrer || document.referrer === window.location.href) {
-            return null;
-        }
-        try {
-            var ref = new URL(document.referrer, window.location.origin);
-            if (ref.origin !== window.location.origin) return null;
-            var p = ref.pathname.replace(/\/+$/, '');
-            if (p === '' || p === '/') return '/Settings';
+    (function() {
+        var cookieName = 'compose_manager_settings_return';
 
-            var allowed = [
-                '/Settings',
-                '/Plugins',
-                '/Docker',
-                '/Compose',
-                '/Dashboard',
-                '/Favorites',
-            ];
-
-            for (var i = 0; i < allowed.length; i++) {
-                var cfg = <?= json_encode($cfg); ?>;
-                var showCompose = (cfg['SHOW_COMPOSE_IN_HEADER_MENU'] || '').toString().toLowerCase();
-                if (existingPath && existingPath.toLowerCase() === '/docker' && showCompose === 'true') {
-                    composeLogger('Referrer is /Docker and showCompose is true, returning /Compose', null, 'user', 'warn', 'settings');
-                    return '/Compose' + (ref.search || '');
-                } else if (existingPath && existingPath.toLowerCase() === '/compose' && showCompose === 'false') {
-                    composeLogger('Referrer is /Compose and showCompose is false, returning /Docker', null, 'user', 'warn', 'settings');
-                    return '/Docker' + (ref.search || '');
-                }
-                if (p.toLowerCase() === allowed[i].toLowerCase()) {
-                    composeLogger('Referrer matches allowed path ' + allowed[i], null, 'user', 'debug', 'settings');
-                    return ref.pathname + (ref.search || '');
-                }
-                if (allowed[i].toLowerCase().endsWith('/') && p.toLowerCase().startsWith(allowed[i].toLowerCase())) {
-                    composeLogger('Referrer matches allowed path prefix ' + allowed[i], null, 'user', 'debug', 'settings');
-                    return ref.pathname + (ref.search || '');
-                }
+        function getSafeReturnPath(existingPath) {
+            if (!document.referrer || document.referrer === window.location.href) {
+                return null;
             }
-            composeLogger('Referrer path ' + ref.pathname + ' does not match any allowed paths', null, 'user', 'warn', 'settings');
-            return null;
-        } catch (e) {
-            composeLogger('Error parsing referrer URL: ' + e.message, null, 'user', 'error', 'settings');
-            return null;
-        }
-    }
+            try {
+                var ref = new URL(document.referrer, window.location.origin);
+                if (ref.origin !== window.location.origin) return null;
+                var p = ref.pathname.replace(/\/+$/, '');
+                if (p === '' || p === '/') return '/Settings';
 
-    var existingPath = $.cookie(cookieName);
-    var safePath = getSafeReturnPath(existingPath);
-    var returnPath;
+                var allowed = [
+                    '/Settings',
+                    '/Plugins',
+                    '/Docker',
+                    '/Compose',
+                    '/Dashboard',
+                    '/Favorites',
+                ];
 
-    if (safePath) {
-        returnPath = safePath;
-    } else if (existingPath) {
-        returnPath = existingPath;
-    } else {
-        returnPath = '/Settings';
-    }
-
-    $.cookie(cookieName, returnPath, { path: '/' });
-
-    var originalDone = window.done;
-    window.done = function(k) {
-        var saved = $.cookie(cookieName);
-        if (saved) {
-            $.removeCookie(cookieName, { path: '/' });
-            if (saved !== '' && saved !== window.location.pathname) {
-                location.replace(saved);
-                return;
+                for (var i = 0; i < allowed.length; i++) {
+                    var cfg = <?= json_encode($cfg); ?>;
+                    var showCompose = (cfg['SHOW_COMPOSE_IN_HEADER_MENU'] || '').toString().toLowerCase();
+                    if (existingPath && existingPath.toLowerCase() === '/docker' && showCompose === 'true') {
+                        composeLogger('Referrer is /Docker and showCompose is true, returning /Compose', null, 'user', 'warn', 'settings');
+                        return '/Compose' + (ref.search || '');
+                    } else if (existingPath && existingPath.toLowerCase() === '/compose' && showCompose === 'false') {
+                        composeLogger('Referrer is /Compose and showCompose is false, returning /Docker', null, 'user', 'warn', 'settings');
+                        return '/Docker' + (ref.search || '');
+                    }
+                    if (p.toLowerCase() === allowed[i].toLowerCase()) {
+                        composeLogger('Referrer matches allowed path ' + allowed[i], null, 'user', 'debug', 'settings');
+                        return ref.pathname + (ref.search || '');
+                    }
+                    if (allowed[i].toLowerCase().endsWith('/') && p.toLowerCase().startsWith(allowed[i].toLowerCase())) {
+                        composeLogger('Referrer matches allowed path prefix ' + allowed[i], null, 'user', 'debug', 'settings');
+                        return ref.pathname + (ref.search || '');
+                    }
+                }
+                composeLogger('Referrer path ' + ref.pathname + ' does not match any allowed paths', null, 'user', 'warn', 'settings');
+                return null;
+            } catch (e) {
+                composeLogger('Error parsing referrer URL: ' + e.message, null, 'user', 'error', 'settings');
+                return null;
             }
         }
-        if (typeof originalDone === 'function') {
-            originalDone(k);
-        } else if (k) {
-            var url = location.pathname.split('/');
-            var path = '/' + url[1];
-            for (var i = 2; i < url.length; i++) {
-                if (url[i] == k) break;
-                path += '/' + url[i];
-            }
-            $.removeCookie('one');
-            location.replace(path);
+
+        var existingPath = $.cookie(cookieName);
+        var safePath = getSafeReturnPath(existingPath);
+        var returnPath;
+
+        if (safePath) {
+            returnPath = safePath;
+        } else if (existingPath) {
+            returnPath = existingPath;
         } else {
-            $.removeCookie('one');
-            location.replace('/Settings');
+            returnPath = '/Settings';
         }
-    };
-})();
+
+        $.cookie(cookieName, returnPath, {
+            path: '/'
+        });
+
+        var originalDone = window.done;
+        window.done = function(k) {
+            var saved = $.cookie(cookieName);
+            if (saved) {
+                $.removeCookie(cookieName, {
+                    path: '/'
+                });
+                if (saved !== '' && saved !== window.location.pathname) {
+                    location.replace(saved);
+                    return;
+                }
+            }
+            if (typeof originalDone === 'function') {
+                originalDone(k);
+            } else if (k) {
+                var url = location.pathname.split('/');
+                var path = '/' + url[1];
+                for (var i = 2; i < url.length; i++) {
+                    if (url[i] == k) break;
+                    path += '/' + url[i];
+                }
+                $.removeCookie('one');
+                location.replace(path);
+            } else {
+                $.removeCookie('one');
+                location.replace('/Settings');
+            }
+        };
+    })();
 </script>
 
 <!-- Updates Tab -->
@@ -2482,7 +2487,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     <div class="credits-section" style="padding:16px 12px;border-bottom:1px solid var(--dynamix-sb-border-color, #ccc);">
         <span style="font-size:1.2em;font-weight:bold;">Plugin Version: <?= htmlspecialchars($pluginVersion) ?></span><br>
         <?php if ($composeCliVersion): ?>
-        <span style="font-size:1.2em;font-weight:bold;">Docker Compose: v<?= htmlspecialchars($composeCliVersion) ?></span>
+            <span style="font-size:1.2em;font-weight:bold;">Docker Compose: v<?= htmlspecialchars($composeCliVersion) ?></span>
         <?php endif; ?>
     </div>
 
