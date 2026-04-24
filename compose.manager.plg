@@ -10,7 +10,7 @@
 <!ENTITY packageName "&name;-&packageVER;-noarch-&pkgBUILD;">
 <!ENTITY packagefile "&packageName;.txz">
 <!ENTITY github "mstrhakr/compose_plugin">
-<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
 <!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
 <!ENTITY pluginsPATH "/boot/config/plugins">
 <!ENTITY pluginLOC "&pluginsPATH;/&name;">
@@ -36,11 +36,87 @@
 >
 
 <CHANGES>
-###2026.04.20.1923
+###2026.04.24
+- Features: implement centralized cron management with CronManager for autoupdate and backup tasks
+- Features: enhance WebUI URL validation and detection with placeholder support
+- Features: add clearIconCache action to remove service icons from cache
+- Features: display plugin and Docker Compose versions in the credits section
+- Features (version): update default Docker Compose version to 5.1.2 across build and deploy scripts
+- Features (install): add informational messages for Ace editor and patch utility installation
+- Features (tests): add unit tests for top-level dev scripts
+- Features (compose): add profile name persistence for stack operations
+- Features (stack): centralize profile management by introducing effective profiles and persist running profiles
+- Features (stack): centralize container counts and stack state management
+- Features (sortable): add normalizeComposeDetailsRowOrder function to reorder detail rows
+- Features (sortable): update mover icon style to enhance visibility in stack list
+- Features (sortable): load sortable functions from external composeSortable.js
+- Features (sortable): implement sortable stacks with lock functionality and save order feature
 - Bug Fixes (ui): update placeholder for WebUI URL input for stack
 - Bug Fixes (tests): correct expected log format in composeLogger test for category messages
-- [PR #93](https://github.com/mstrhakr/compose_plugin/pull/93)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.10...v2026.04.20.1923)
+- Bug Fixes (pkg_build): force non-interactive yes for makepkg prompts in CI/container builds
+- Bug Fixes (autoupdate): update project name resolution to use sanitized lowercase projectName instead of raw projectFolder
+- Bug Fixes (autoupdate): enhance logging in compose_autoupdate.sh for error and success messages
+- Bug Fixes: remove redundant 'root' user specification in cron job entries; fixes #99
+- Bug Fixes: add --ignore-buildable option to pull command to skip services with build sections
+- Bug Fixes (helpers): add socket override for command execution and logging to prevent lost/missing ttyd windows
+- Bug Fixes (pkg_build): update unzip download mirror and validate checksum on download
+- Bug Fixes (install): enhance messaging for Ace editor and patches installation based on Unraid version
+- Bug Fixes (ace): update Ace editor version limits for fallback installations
+- Bug Fixes (install): update variable assignment syntax for PACKAGE_TAR and PLUGIN_FILE
+- Bug Fixes (tests): update docker command assertion to match image format
+- Bug Fixes (tests): remove ExecHelpers.php dependency and update function calls to use ContainerInfo
+- Bug Fixes: update socket handling to use COMPOSE_TTYD_SOCKET_DIR for consistency
+- Bug Fixes (docs): enhance comments for LockButton chaining contract in composeSortable.js
+- Bug Fixes (docs): update file and module annotations in composeStackUtils.js
+- Bug Fixes (tests): update comments to clarify source command
+- Bug Fixes (styles): enhance comments for ComboButton and EditorModal CSS files
+- Bug Fixes (install-ace): improve error handling for directory creation and command checks
+- Bug Fixes (build): sed was too broad and messed up plg when doing local dev
+- Bug Fixes (plugin): update paths for plugin and emhttp locations to use variables
+- Bug Fixes (patch): update patch setup in plg and remove deprecated patches
+- Bug Fixes (stack): centralize container counts and optimize state retrieval
+- Bug Fixes (profiles): fix profile selection logic for compose actions
+- Bug Fixes (dashboard): map paused stacks into partial summary bucket
+- Bug Fixes (state): count non-running unknown container states as stopped
+- Bug Fixes (profiles): prefer running profiles for multi-stack up/update
+- Bug Fixes (tests): centralize shell wrapper for autoupdate tests
+- Bug Fixes (auto-update): revert some changes and improve test environment setup
+- Bug Fixes (auto-update): centralize shell command resolution for auto-update scripts
+- Bug Fixes (submodule): update tests/framework submodule branch to main
+- Bug Fixes (tests): correct string escaping in checkStackUpdates onclick handler
+- Bug Fixes (stack): update container ID collection to use getContainerList method
+- Bug Fixes (stack): simplify stack status display logic and update prompt for checks
+- Bug Fixes (stack): derive running state from DOM and remove stale isRunning flag
+- Bug Fixes (stack): derive running state from DOM instead of stale server response
+- Bug Fixes (tests): enhance PHPUnit and BATS configurations, improve test setup and teardown
+- Bug Fixes (yaml): harden js-yaml loading and prevent tagged override data loss
+- Bug Fixes (yaml): remove fallback from custom tags and surface errors to user instead
+- Bug Fixes (yaml): enhance support for custom YAML tags and add corresponding unit tests
+- Bug Fixes: add custom YAML tags support and improve YAML loading functionality
+- Bug Fixes (icon): enhance icon URL handling to accept data:image URLs and add corresponding regression/unit tests
+- Bug Fixes (exec): update Docker network handling and utilize shared helpers to fix wrong ip issues in issue 86 Fixes mstrhakr/compose_plugin#86
+- Bug Fixes (tests): correct casing in test descriptions for ComposeListHtmlTest and StackInfoSourceTest
+- Bug Fixes (sortable): update LockButton assignment to prevent hoisting issues
+- Bug Fixes (sortable): extract js to own file
+- Refactoring (logging): enhance logging display levels in composeLogger() for improved clarity
+- Refactoring (logging): replace logger calls in scripts with new composeLogger() func for consistent logging across scripts + tests
+- Refactoring (logging): renamed composeClientDebug() and clientDebug() funcs to composeLogger()
+- Refactoring (logging): add explicit category handling and align clientDebug facilities (user for UI/AJAX, daemon for cron)
+- Refactoring (exec): move utility functions to Util.php and move image normalization method to ContainerInfo; removed ExecHelpers.php
+- Refactoring (plg): extract Ace editor installation and patch utility scripts
+- Refactoring (tests): update utilPath in StackInfoSourceTest to reflect folder structure changes
+- Refactoring (structure): update all path references for include/ and sheets/
+- Refactoring (structure): rename php/-&gt;include/, styles/-&gt;sheets/, PascalCase files
+- Tests (StackInfoTest): add tests for indirect project handling with existing compose files
+- Chores: update changelog for v2026.04.20.1923 [skip ci]
+- Chores: update changelog for v2026.04.20.1510 [skip ci]
+- Chores: update changelog for v2026.04.16.0728 [skip ci]
+- Chores: update changelog for v2026.04.15.1634 [skip ci]
+- Chores: update changelog for v2026.04.13.1951 [skip ci]
+- Chores: update changelog for v2026.04.13.1913 [skip ci]
+- Chores (versions): update COMPOSE_VERSION to 5.1.2
+- Chores (submodule): pin tests/framework to v0.2
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.10...v2026.04.24)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
