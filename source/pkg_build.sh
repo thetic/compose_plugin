@@ -58,7 +58,9 @@ wget_args() {
 
 echo "Installing unzip dependency..."
 INFOZIP_PKG="infozip-6.0-x86_64-8.txz"
+# shellcheck disable=SC2046
 run_quiet wget $(wget_args) "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}"
+# shellcheck disable=SC2046
 run_quiet wget $(wget_args) "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}.sha256"
 run_quiet sha256sum -c "${INFOZIP_PKG}.sha256"
 run_quiet rm -f "${INFOZIP_PKG}.sha256"
@@ -80,7 +82,9 @@ run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/scripts/
 run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/include/"
 
 echo "Downloading Docker Compose CLI plugin v${COMPOSE_VERSION}..."
+# shellcheck disable=SC2046
 run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64"
+# shellcheck disable=SC2046
 run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64.sha256"
 run_quiet sha256sum -c docker-compose-linux-x86_64.sha256 | grep -q OK || exit 4
 run_quiet rm docker-compose-linux-x86_64.sha256
