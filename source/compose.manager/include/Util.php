@@ -1,6 +1,6 @@
 <?php
 
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 
 /**
@@ -13,47 +13,134 @@ require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
  * main plugin code and the AJAX action handlers.
  */
 
-if (!function_exists('clientDebug')) {
-    function clientDebug($message, $data = null, $type = 'daemon', $level = 'info')
+if (!function_exists('composeLogger')) {
+    function composeLogger($message, $data = null, $type = 'user', $level = 'info', $category = '')
     {
+        $message = (string) $message;
         if ($type == '' || $type == null) {
-            $type = 'daemon';
+            $type = 'user';
         }
         switch ($level) {
             case 'debug':
                 $logLevel = "$type.debug";
+                $displayLevel = '[DEBUG]';
                 break;
             case 'error':
             case 'err':
                 $logLevel = "$type.err";
+                $displayLevel = '[ERROR]';
                 break;
             case 'warning':
             case 'warn':
                 $logLevel = "$type.warning";
+                $displayLevel = '[WARN]';
                 break;
             case 'info':
             default:
                 $logLevel = "$type.info";
+                $displayLevel = '[INFO]';
         }
         $cfg = @parse_ini_file("/boot/config/plugins/compose.manager/compose.manager.cfg", true, INI_SCANNER_RAW);
+        $debugMode = ((($cfg['DEBUG_TO_LOG'] ?? 'false') == 'true'));
         // Skip debug messages if debug logging is disabled in plugin settings
-        if ((($cfg['DEBUG_TO_LOG'] ?? 'false') == 'false') && $level == 'debug') {
+        if (!$debugMode && $level == 'debug') {
             return;
         }
+
+        $category = trim((string) $category);
+        if ($category !== '') {
+            $category = preg_replace('/[^A-Za-z0-9_.-]+/', '-', $category) ?? '';
+            $category = trim($category, '-');
+        }
+        if ($debugMode) {
+            $messageParts = ["[$logLevel]"];
+        } else {
+            $messageParts = [$displayLevel];
+        }
+        if ($category !== '') {
+            $messageParts[] = '[' . $category . ']';
+        }
+        $messageParts[] = $message;
+
         if ($data !== null && $data !== '' && $data !== 'null') {
             if (is_array($data) || is_object($data)) {
                 $data = json_encode($data);
             }
-            exec("logger -t 'compose.manager' -p '$logLevel' " . escapeshellarg($message) . ' - Data: ' . escapeshellarg($data));
-        } else {
-            exec("logger -t 'compose.manager' -p '$logLevel' " . escapeshellarg($message));
+            $messageParts[] = ' - Data: ' . (string) $data;
         }
+
+        $formattedMessage = implode(' ', $messageParts);
+        $logCmd = "logger -t 'compose.manager' -p '$logLevel' " . escapeshellarg($formattedMessage);
+        exec($logCmd);
     }
 }
 
 function sanitizeLogText(string $text): string
 {
     return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+if (!function_exists('getElement')) {
+    /**
+     * Convert an element name to a safe HTML ID.
+     * Replaces dots with dashes and removes spaces.
+     */
+    function getElement($element)
+    {
+        $return = str_replace('.', '-', $element);
+        $return = str_replace(' ', '', $return);
+        return $return;
+    }
+}
+
+function getComposeStackOrderKey(string $composeRoot): string
+{
+    $normalized = realpath($composeRoot);
+    if ($normalized === false || $normalized === null) {
+        $normalized = rtrim($composeRoot, '/');
+    }
+    return (string) $normalized;
+}
+
+function getComposeStackOrderMap(): array
+{
+    if (!is_file(COMPOSE_STACK_ORDER_FILE)) {
+        return [];
+    }
+
+    $json = @file_get_contents(COMPOSE_STACK_ORDER_FILE);
+    if ($json === false || $json === '') {
+        return [];
+    }
+
+    $decoded = json_decode($json, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function getComposeStackOrder(string $composeRoot): array
+{
+    $map = getComposeStackOrderMap();
+    $key = getComposeStackOrderKey($composeRoot);
+    $order = $map[$key] ?? [];
+    return is_array($order) ? array_values(array_filter($order, 'is_string')) : [];
+}
+
+function saveComposeStackOrder(string $composeRoot, array $projects): bool
+{
+    $map = getComposeStackOrderMap();
+    $map[getComposeStackOrderKey($composeRoot)] = array_values($projects);
+
+    $dir = dirname(COMPOSE_STACK_ORDER_FILE);
+    if (!is_dir($dir) && !@mkdir($dir, 0777, true) && !is_dir($dir)) {
+        return false;
+    }
+
+    $json = json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+
+    return @file_put_contents(COMPOSE_STACK_ORDER_FILE, $json . "\n", LOCK_EX) !== false;
 }
 
 /**
@@ -176,6 +263,167 @@ class Path
     }
 }
 
+/**
+ * Validate a WebUI URL, allowing [IP] and [PORT]/[PORT:xxxx] placeholders.
+ */
+function isValidWebuiUrl(string $url): bool
+{
+    if ($url === '') {
+        return false;
+    }
+    // Replace placeholders with dummy values so the URL can be validated structurally
+    $normalized = preg_replace(
+        ['/\[IP\]/i', '/\[PORT:\d+\]/i', '/\[PORT\]/i'],
+        ['localhost', '8080', '8080'],
+        $url
+    );
+    if ($normalized === null) {
+        return false;
+    }
+    return (bool) filter_var($normalized, FILTER_VALIDATE_URL)
+        && (strpos($normalized, 'http://') === 0 || strpos($normalized, 'https://') === 0);
+}
+
+/**
+ * Ports that are reliably not associated with HTTP-based WebUI endpoints.
+ *
+ * This blocklist is used as a conservative exclusion step during WebUI detection to
+ * avoid treating well-known infrastructure and database ports as browser-accessible
+ * interfaces. A blocklist is preferred here because many applications expose WebUIs on
+ * arbitrary high ports, so an allowlist of "known good" ports would create too many
+ * false negatives.
+ *
+ * Extend this list only for ports that are consistently reserved for non-WebUI
+ * protocols across common deployments. If a port is sometimes used by application
+ * dashboards or other HTTP services, leave it out so detection can continue to inspect
+ * it normally.
+ */
+const NON_WEBUI_PORTS = [
+    22,    // SSH
+    25,    // SMTP
+    53,    // DNS
+    67, 68, // DHCP
+    69,    // TFTP
+    123,   // NTP
+    143,   // IMAP
+    161,   // SNMP
+    389,   // LDAP
+    465,   // SMTPS
+    514,   // Syslog
+    587,   // SMTP submission
+    636,   // LDAPS
+    993,   // IMAPS
+    995,   // POP3S
+    1194,  // OpenVPN
+    1883,  // MQTT
+    3306,  // MySQL
+    5432,  // PostgreSQL
+    5672,  // AMQP/RabbitMQ
+    6379,  // Redis
+    6881,  // BitTorrent
+    11211, // Memcached
+    27017, // MongoDB
+    51820, // WireGuard
+];
+
+/** Ports that imply HTTPS rather than HTTP. */
+const HTTPS_PORTS = [443, 8443];
+
+/**
+ * Detect a likely WebUI URL from a stack's compose file and override labels.
+ *
+ * Uses a blocklist approach: any TCP port NOT in NON_WEBUI_PORTS is a candidate.
+ * First candidate wins; use the first service's first eligible port.
+ *
+ * @param string $composeRoot Compose projects root directory
+ * @param string $project     Stack folder name
+ * @return array{url: string, source: string}|null Detected URL template + source description, or null
+ */
+function detectWebuiUrl(string $composeRoot, string $project): ?array
+{
+    if (!function_exists('yaml_parse')) {
+        return null;
+    }
+
+    try {
+        $stackInfo = \StackInfo::fromProject($composeRoot, $project);
+    } catch (\Throwable $e) {
+        return null;
+    }
+
+    // 1. Check override labels for explicit net.unraid.docker.webui
+    $overridePath = $stackInfo->getOverridePath();
+    if ($overridePath && is_file($overridePath)) {
+        $overrideContent = @file_get_contents($overridePath);
+        if ($overrideContent !== false) {
+            $override = @yaml_parse($overrideContent);
+            if (is_array($override) && !empty($override['services'])) {
+                foreach ($override['services'] as $svcName => $svc) {
+                    $webui = $svc['labels']['net.unraid.docker.webui'] ?? null;
+                    if (is_string($webui) && $webui !== '' && isValidWebuiUrl($webui)) {
+                        return ['url' => $webui, 'source' => "label on service '$svcName'"];
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Parse main compose file for port mappings
+    $composePath = $stackInfo->composeFilePath;
+    if (!$composePath || !is_file($composePath)) {
+        return null;
+    }
+    $content = @file_get_contents($composePath);
+    if ($content === false) {
+        return null;
+    }
+    $parsed = @yaml_parse($content);
+    if (!is_array($parsed) || empty($parsed['services'])) {
+        return null;
+    }
+
+    // Collect all services with eligible port mappings (not in blocklist)
+    $candidates = [];
+    foreach ($parsed['services'] as $svcName => $svc) {
+        if (empty($svc['ports']) || !is_array($svc['ports'])) {
+            continue;
+        }
+        foreach ($svc['ports'] as $portEntry) {
+            $proto = 'tcp';
+            if (is_string($portEntry)) {
+                if (preg_match('/\/udp$/i', $portEntry)) {
+                    continue; // skip UDP-only ports
+                }
+                $clean = preg_replace('/\/\w+$/', '', $portEntry);
+                $parts = explode(':', $clean);
+                $containerPort = (int) end($parts);
+            } elseif (is_array($portEntry) && isset($portEntry['target'])) {
+                $proto = $portEntry['protocol'] ?? 'tcp';
+                if ($proto !== 'tcp') {
+                    continue;
+                }
+                $containerPort = (int) $portEntry['target'];
+            } else {
+                continue;
+            }
+            if ($containerPort > 0 && !in_array($containerPort, NON_WEBUI_PORTS, true)) {
+                $candidates[] = ['service' => $svcName, 'port' => $containerPort];
+            }
+        }
+    }
+
+    if (empty($candidates)) {
+        return null;
+    }
+
+    // 3. First eligible candidate wins
+    $c = $candidates[0];
+    $scheme = in_array($c['port'], HTTPS_PORTS, true) ? 'https' : 'http';
+    return [
+        'url' => "{$scheme}://[IP]:[PORT:{$c['port']}]/",
+        'source' => "port {$c['port']} on service '{$c['service']}'"
+    ];
+}
 
 function pruneOverrideContentServices(string $overrideContent, array $validServices): array
 {
@@ -443,7 +691,7 @@ class OverrideInfo
             $overrideContent .= "# This file is managed by Compose Manager\n";
             $overrideContent .= "services: {}\n";
             file_put_contents($info->projectOverride, $overrideContent);
-            clientDebug("[override] Created missing project override template at $info->projectOverride", null, 'daemon', 'info');
+            composeLogger("Created missing project override template at $info->projectOverride", null, 'user', 'info', 'override');
         }
 
         return $info;
@@ -493,11 +741,12 @@ class OverrideInfo
 
         $removedServices = $result['removed'] ?? [];
         if (!empty($removedServices)) {
-            clientDebug(
-                "[override] Pruned orphaned override services from " . basename($overridePath) . ": " . implode(', ', $removedServices),
+            composeLogger(
+                "Pruned orphaned override services from " . basename($overridePath) . ": " . implode(', ', $removedServices),
                 null,
-                'daemon',
-                'info'
+                'user',
+                'info',
+                'override'
             );
         }
 
@@ -608,11 +857,12 @@ class OverrideInfo
             $result['migrated'] = true;
 
             $migrationLog = array_map(fn($m) => "{$m['from']} -> {$m['to']}", $result['migrations']);
-            clientDebug(
-                "[override] Migrated renamed services: " . implode(', ', $migrationLog),
+            composeLogger(
+                "Migrated renamed services: " . implode(', ', $migrationLog),
                 null,
-                'daemon',
-                'info'
+                'user',
+                'info',
+                'override'
             );
         }
 
@@ -749,6 +999,23 @@ class ContainerInfo
     public string $startedAt = '';
 
     private function __construct() {}
+
+    /**
+     * Normalize Docker image name for update checking.
+     *
+     * Strips docker.io/ prefix and @sha256 digest suffix, then applies
+     * DockerUtil::ensureImageTag() to match Unraid's update-status keys.
+     */
+    public static function normalizeImageForUpdateCheck(string $image): string
+    {
+        if (strpos($image, 'docker.io/') === 0) {
+            $image = substr($image, 10);
+        }
+        if (($digestPos = strpos($image, '@sha256:')) !== false) {
+            $image = substr($image, 0, $digestPos);
+        }
+        return DockerUtil::ensureImageTag($image);
+    }
 
     /**
      * Create a ContainerInfo from a fully-assembled docker inspect + compose ps result.
@@ -994,6 +1261,9 @@ class StackInfo
     /** @var array[]|null Per-instance lazy cache of docker compose ps rows (null = not yet fetched) */
     private ?array $cachedContainerList = null;
 
+    /** @var array|null Cached aggregate container state counts */
+    private ?array $cachedContainerCounts = null;
+
     /**
      * Pre-populate the container list cache for this stack.
      *
@@ -1005,6 +1275,7 @@ class StackInfo
     public function setContainerList(array $containers): void
     {
         $this->cachedContainerList = $containers;
+        $this->cachedContainerCounts = null; // invalidate derived cache
     }
 
     /**
@@ -1045,7 +1316,7 @@ class StackInfo
             if ($this->invalidIndirectPath !== null) {
                 // Stack has a broken indirect reference — allow degraded construction
                 // so the user can fix it in the Settings editor.
-                clientDebug("[stack] Stack $this->projectFolder has an invalid indirect path; loading in degraded mode", null, 'daemon', 'warning');
+                composeLogger("Stack $this->projectFolder has an invalid indirect path; loading in degraded mode", null, 'user', 'warning', 'stack');
                 $this->overrideInfo = OverrideInfo::fromStackInfo($this);
                 return;
             }
@@ -1130,13 +1401,13 @@ class StackInfo
                 || Path::hasTraversal($indirectPath)
             ) {
                 // Path is structurally invalid — ignore it and keep stack local without mutating files.
-                clientDebug("[stack] Ignoring structurally invalid indirect path at $this->path/indirect: " . sanitizeLogText($indirectPath), null, 'daemon', 'warning');
+                composeLogger("Ignoring structurally invalid indirect path at $this->path/indirect: " . sanitizeLogText($indirectPath), null, 'user', 'warning', 'stack');
                 return false;
             }
             if (!is_dir($indirectPath)) {
                 // Directory doesn't exist — may be a temporarily unmounted share (NFS, etc.).
                 // Ignore it and keep stack local without mutating files.
-                clientDebug("[stack] Ignoring unavailable indirect path (may be temporarily unavailable): " . sanitizeLogText($indirectPath), null, 'daemon', 'warning');
+                composeLogger("Ignoring unavailable indirect path (may be temporarily unavailable): " . sanitizeLogText($indirectPath), null, 'user', 'warning', 'stack');
                 return false;
             }
             return true;
@@ -1191,7 +1462,7 @@ class StackInfo
 
         // If the result is empty, default to 'compose' to ensure a valid project name.
         if ($sanitizedProjectString === '') {
-            clientDebug("Sanitized project string is empty after processing; defaulting to 'compose'", ['input' => $rawProjectString], 'daemon', 'warning');
+            composeLogger("Sanitized project string is empty after processing; defaulting to 'compose'", ['input' => $rawProjectString], 'user', 'warning', 'stack');
             return 'compose';
         }
 
@@ -1213,7 +1484,7 @@ class StackInfo
             // If no display name is set, initialize it from the project folder name.
             $displayName = $this->projectFolder;
             $this->writeMetadata('name', $displayName);
-            clientDebug("Initialized missing display name from project folder: '$displayName'", ['project' => $this->projectFolder, 'displayName' => $displayName], 'daemon', 'warning');
+            composeLogger("Initialized missing display name from project folder: '$displayName'", ['project' => $this->projectFolder, 'displayName' => $displayName], 'user', 'warning', 'stack');
         }
         $this->displayName = $displayName;
         return $this->displayName;
@@ -1264,6 +1535,10 @@ class StackInfo
         ) {
             return $url;
         }
+        // Accept image data URLs used by custom inline SVG/PNG icons
+        if (preg_match('/^data:image\/[a-z0-9.+-]+(?:;[a-z0-9.+-]+=[^;,]+)*(?:;base64)?,.+$/i', $url) === 1) {
+            return $url;
+        }
         // Accept local server paths under allowed prefixes
         if (
             strpos($url, '/') === 0
@@ -1282,10 +1557,7 @@ class StackInfo
     public function getWebUIUrl(): ?string
     {
         $url = $this->readMetadata('webui_url');
-        if (
-            $url !== null && filter_var($url, FILTER_VALIDATE_URL)
-            && (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0)
-        ) {
+        if ($url !== null && isValidWebuiUrl($url)) {
             return $url;
         }
         return null;
@@ -1298,6 +1570,23 @@ class StackInfo
     public function getDefaultProfiles(): array
     {
         $raw = $this->readMetadata('default_profile');
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        return array_values(array_filter(array_map('trim', explode(',', $raw))));
+    }
+
+    /**
+     * Get the profiles that were active when the stack was last started/updated.
+     *
+     * Reads the `running_profiles` metadata file written by compose.sh on
+     * successful `up` or `update` operations.
+     *
+     * @return string[]
+     */
+    public function getRunningProfiles(): array
+    {
+        $raw = $this->readMetadata('running_profiles');
         if ($raw === null || $raw === '') {
             return [];
         }
@@ -1842,7 +2131,7 @@ class StackInfo
 
         // Validate stack name is not empty
         if (trim($stackName) === '') {
-            clientDebug("Attempted to create a new stack with an empty name, which is not allowed.", null, 'daemon', 'error');
+            composeLogger("Attempted to create a new stack with an empty name, which is not allowed.", null, 'user', 'error', 'stack');
             throw new \RuntimeException("Stack name cannot be empty");
         }
         $projectName = $stackName;
@@ -1850,7 +2139,7 @@ class StackInfo
         // Set the project name to the folder-and-project sanitized version of the display name.
         $project = self::sanitizeProjectString($stackName);
         if ($project === '') {
-            clientDebug("Sanitized stack name is empty, cannot create stack directory.", ['stackName' => $stackName], 'daemon', 'error');
+            composeLogger("Sanitized stack name is empty, cannot create stack directory.", ['stackName' => $stackName], 'user', 'error', 'stack');
             throw new \RuntimeException("Stack name produced an empty folder name after sanitization.");
         }
 
@@ -1860,14 +2149,14 @@ class StackInfo
         // Verify the resolved path stays within composeRoot (defense-in-depth)
         $realComposeRoot = realpath($composeRoot);
         if ($realComposeRoot === false) {
-            clientDebug("Failed to resolve real path for compose root.", ['composeRoot' => $composeRoot], 'daemon', 'error');
+            composeLogger("Failed to resolve real path for compose root.", ['composeRoot' => $composeRoot], 'user', 'error', 'stack');
             throw new \RuntimeException("Invalid compose root directory.");
         }
 
         // For new folders, check that the parent resolves correctly
         $resolvedParent = realpath(dirname($path));
         if ($resolvedParent === false || strpos($resolvedParent, $realComposeRoot) !== 0) {
-            clientDebug("Invalid stack name: path would escape compose root.", ['stackName' => $stackName, 'resolvedParent' => $resolvedParent, 'realComposeRoot' => $realComposeRoot], 'daemon', 'error');
+            composeLogger("Invalid stack name: path would escape compose root.", ['stackName' => $stackName, 'resolvedParent' => $resolvedParent, 'realComposeRoot' => $realComposeRoot], 'user', 'error', 'stack');
             throw new \RuntimeException("Invalid stack name: path would escape compose root.");
         }
 
@@ -1875,13 +2164,13 @@ class StackInfo
             // Ensure the project folder is available, handling collisions by appending suffixes if needed (e.g. "my-stack-001", "my-stack-002", etc.)
             $path = self::getAvailablePath($composeRoot, $project);
         } catch (\RuntimeException $e) {
-            clientDebug("Failed to get available path for stack.", ['stackName' => $stackName, 'error' => $e->getMessage()], 'daemon', 'error');
+            composeLogger("Failed to get available path for stack.", ['stackName' => $stackName, 'error' => $e->getMessage()], 'user', 'error', 'stack');
             throw new \RuntimeException("Failed to create stack: " . $e->getMessage());
         }
 
         // Create the directory
         if (!mkdir($path, 0755, true) && !is_dir($path)) {
-            clientDebug("Failed to create stack directory.", ['path' => $path], 'daemon', 'error');
+            composeLogger("Failed to create stack directory.", ['path' => $path], 'user', 'error', 'stack');
             throw new \RuntimeException("Failed to create stack directory: $path");
         }
 
@@ -1945,13 +2234,13 @@ class StackInfo
             $attempts = 0;
             do {
                 if ($attempts < 1) {
-                    clientDebug("Name collision detected for preferred folder, '$candidate', attempting to find an available name.", ['candidate' => $candidate], 'daemon', 'info');
+                    composeLogger("Name collision detected for preferred folder, '$candidate', attempting to find an available name.", ['candidate' => $candidate], 'user', 'info', 'stack');
                 } else {
-                    clientDebug("Name collision detected for suffixed name, '$candidate'.", ['candidate' => $candidate], 'daemon', 'info');
+                    composeLogger("Name collision detected for suffixed name, '$candidate'.", ['candidate' => $candidate], 'user', 'info', 'stack');
                 }
                 $attempts++;
                 $candidate = $composeRoot . '/' . $project . '-' . sprintf('%03d', $attempts);
-                clientDebug("Checking candidate stack name: '$candidate'", ['candidate' => $candidate], 'daemon', 'debug');
+                composeLogger("Checking candidate stack name: '$candidate'", ['candidate' => $candidate], 'user', 'debug', 'stack');
                 if ($attempts > $maxAttempts) {
                     throw new \RuntimeException("Unable to find a unique folder name for stack '$baseName' after $maxAttempts attempts");
                 }
@@ -1985,6 +2274,20 @@ class StackInfo
                 $result[] = $entry;
             }
         }
+
+        $savedOrder = getComposeStackOrder($composeRoot);
+        if ($savedOrder) {
+            $positions = array_flip($savedOrder);
+            usort($result, function ($left, $right) use ($positions) {
+                $leftPos = $positions[$left] ?? PHP_INT_MAX;
+                $rightPos = $positions[$right] ?? PHP_INT_MAX;
+                if ($leftPos === $rightPos) {
+                    return strnatcasecmp($left, $right);
+                }
+                return $leftPos <=> $rightPos;
+            });
+        }
+
         return $result;
     }
 
@@ -2008,7 +2311,7 @@ class StackInfo
                 $stacks[] = self::fromProject($composeRoot, $project);
             } catch (\Throwable $e) {
                 // skip non-stack directories (no compose file, invalid structure, etc.)
-                clientDebug("[allFromRoot] Skipped project '$project': " . $e->getMessage(), null, 'daemon', 'debug');
+                composeLogger("Skipped project '$project': " . $e->getMessage(), null, 'user', 'debug', 'allFromRoot');
             }
         }
 
@@ -2097,6 +2400,101 @@ class StackInfo
             fn($raw) => ContainerInfo::fromDockerPs($raw),
             $this->getContainerList()
         );
+    }
+
+    /**
+     * Get aggregate container state counts for this stack.
+     *
+     * Counts are based on actually created containers (from docker ps),
+     * not on the services defined in the compose file. This means
+     * services in inactive profiles are excluded from the total.
+     *
+     * @return array{running: int, stopped: int, paused: int, restarting: int, total: int}
+     */
+    public function getContainerCounts(): array
+    {
+        if ($this->cachedContainerCounts !== null) {
+            return $this->cachedContainerCounts;
+        }
+
+        $counts = ['running' => 0, 'stopped' => 0, 'paused' => 0, 'restarting' => 0, 'total' => 0];
+
+        foreach ($this->getContainerList() as $ct) {
+            $counts['total']++;
+            $state = $ct['State'] ?? '';
+            if ($state === 'running') {
+                $counts['running']++;
+            } elseif ($state === 'paused') {
+                $counts['paused']++;
+            } elseif ($state === 'restarting') {
+                $counts['restarting']++;
+            } else {
+                // Any created but non-running/non-paused/non-restarting
+                // container state is treated as stopped.
+                $counts['stopped']++;
+            }
+        }
+
+        $this->cachedContainerCounts = $counts;
+        return $counts;
+    }
+
+    /**
+     * Derive the display state of this stack from its container counts.
+     *
+     * Returns everything needed to render the status icon, label, and
+     * colour class in both the stack list and the dashboard tile.
+     *
+     * @return array{state: string, label: string, shape: string, color: string, running: int, total: int}
+     */
+    public function getStackState(): array
+    {
+        $counts = $this->getContainerCounts();
+        $running = $counts['running'];
+        $total   = $counts['total'];
+
+        if ($running > 0 && $running < $total) {
+            $state = 'partial';
+        } elseif ($running > 0) {
+            $state = 'started';
+        } elseif ($counts['paused'] > 0 && $total > 0) {
+            $state = 'paused';
+        } else {
+            $state = 'stopped';
+        }
+
+        $label = $state;
+        if ($state === 'partial') {
+            $label = "partial ($running/$total)";
+        }
+
+        switch ($state) {
+            case 'started':
+                $shape = 'play';
+                $color = 'green-text';
+                break;
+            case 'partial':
+                $shape = 'exclamation-circle';
+                $color = 'orange-text';
+                break;
+            case 'paused':
+                $shape = 'pause';
+                $color = 'orange-text';
+                break;
+            default: // stopped
+                $shape = 'square';
+                $color = 'grey-text';
+                break;
+        }
+
+        return [
+            'state'   => $state,
+            'label'   => $label,
+            'shape'   => $shape,
+            'color'   => $color,
+            'running' => $running,
+            'total'   => $total,
+        ];
     }
 
     /**

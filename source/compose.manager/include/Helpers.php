@@ -3,12 +3,12 @@
 /**
  * Compose Util Functions for Compose Manager
  *
- * Contains utility functions used by compose_util.php for compose command execution.
- * Separated from compose_util.php to allow unit testing without triggering the switch statement.
+ * Contains utility functions used by ComposeUtil.php for compose command execution.
+ * Separated from ComposeUtil.php to allow unit testing without triggering the switch statement.
  */
 
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 
 /**
@@ -19,19 +19,19 @@ require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
  * @param int $intervalMs Poll interval in milliseconds (default 100)
  * @return bool True if socket existed within timeout, false otherwise
  */
-function waitForTtydSocket($socketName, $timeoutMs = 2000, $intervalMs = 100, $tmpDir = '/var/tmp')
+function waitForTtydSocket($socketName, $timeoutMs = 2000, $intervalMs = 100, $tmpDir = COMPOSE_TTYD_SOCKET_DIR)
 {
 
     $socketPath = rtrim($tmpDir, '/') . "/$socketName.sock";
     $attempts = max(1, (int) ceil($timeoutMs / $intervalMs));
     for ($i = 0; $i < $attempts; $i++) {
         if (file_exists($socketPath)) {
-            clientDebug("ttyd socket ready: $socketPath", ['socket' => $socketPath, 'attempt' => $i], 'daemon', 'debug');
+            composeLogger("ttyd socket ready: $socketPath", ['socket' => $socketPath, 'attempt' => $i], 'user', 'debug', 'ttyd');
             return true;
         }
         usleep($intervalMs * 1000);
     }
-    clientDebug("ttyd socket timeout: $socketPath", ['socket' => $socketPath, 'timeoutMs' => $timeoutMs], 'daemon', 'warning');
+    composeLogger("ttyd socket timeout: $socketPath", ['socket' => $socketPath, 'timeoutMs' => $timeoutMs], 'user', 'warning', 'ttyd');
     return false;
 }
 
@@ -41,15 +41,18 @@ function waitForTtydSocket($socketName, $timeoutMs = 2000, $intervalMs = 100, $t
  * @param string $cmd The command to execute
  * @param bool $debug Whether to log debug messages
  * @param string $logFile Optional path to write a copy of the output
+ * @param string $socketOverride Optional socket name to use instead of the global default
  */
-function execComposeCommandInTTY($cmd, $debug, $logFile = '')
+function execComposeCommandInTTY($cmd, $debug, $logFile = '', $socketOverride = '')
 {
     global $socket_name;
+    $effectiveSocket = $socketOverride !== '' ? $socketOverride : $socket_name;
+    $socketFile = rtrim(COMPOSE_TTYD_SOCKET_DIR, '/') . "/$effectiveSocket.sock";
     // Use pkill -f for more robust process matching instead of pgrep|awk pipeline
-    exec("pkill -f " . escapeshellarg("$socket_name.sock") . " 2>/dev/null");
+    exec("pkill -f " . escapeshellarg("$effectiveSocket.sock") . " 2>/dev/null");
     usleep(300000); // 300ms for process to exit
-    @unlink("/var/tmp/$socket_name.sock");
-    $socketPath = escapeshellarg("/var/tmp/$socket_name.sock");
+    @unlink($socketFile);
+    $socketPath = escapeshellarg($socketFile);
     if ($logFile !== '') {
         // Preserve interactive TTY behavior by running the command under "script"
         // (PTY capture). A plain tee pipeline breaks terminal redraw/spinner output.
@@ -60,10 +63,10 @@ function execComposeCommandInTTY($cmd, $debug, $logFile = '')
         $command = "ttyd -R -o -i $socketPath $cmd > /dev/null &";
     }
     exec($command);
-    clientDebug("Executing command in ttyd: " . $cmd, ['command' => $cmd], 'daemon', 'debug');
+    composeLogger("Executing command in ttyd: " . $cmd, ['command' => $cmd], 'user', 'debug', 'ttyd');
 
     // Wait for the socket to be created to avoid 502 on first open.
-    waitForTtydSocket($socket_name);
+    waitForTtydSocket($effectiveSocket);
 }
 
 /**
@@ -110,9 +113,9 @@ function echoComposeCommand($action, $recreate = false, $background = false)
     $unRaidVars = parse_ini_file("/var/local/emhttp/var.ini");
     if ($unRaidVars['mdState'] != "STARTED") {
         echo $plugin_root . "/scripts/arrayNotStarted.sh";
-        clientDebug("Cannot perform action: array not started", ['action' => $action, 'path' => $path], 'daemon', 'debug');
+        composeLogger("Cannot perform action: array not started", ['action' => $action, 'path' => $path], 'user', 'debug', 'compose');
     } else {
-        clientDebug("Preparing compose command", ['action' => $action, 'path' => $path, 'profile' => $profile, 'recreate' => $recreate, 'background' => $background], 'daemon', 'debug');
+        composeLogger("Preparing compose command", ['action' => $action, 'path' => $path, 'profile' => $profile, 'recreate' => $recreate, 'background' => $background], 'user', 'debug', 'compose');
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
         // Resolve stack identity via StackInfo
@@ -168,7 +171,7 @@ function echoComposeCommand($action, $recreate = false, $background = false)
             }
             $bgCmd .= ' > /dev/null 2>&1 &';
             exec($bgCmd);
-            clientDebug("Background command: " . $bgCmd, ['command' => $bgCmd], 'daemon', 'debug');
+            composeLogger("Background command: " . $bgCmd, ['command' => $bgCmd], 'user', 'debug', 'compose');
             // Signal to JS that this ran in background (no terminal window to open)
             echo json_encode(['background' => true]);
         } elseif ($cfg['OUTPUTSTYLE'] == "ttyd") {
@@ -177,9 +180,19 @@ function echoComposeCommand($action, $recreate = false, $background = false)
                 return escapeshellarg($item);
             }, $composeCommand);
             $composeCommandStr = join(" ", $composeCommandEscaped);
-            execComposeCommandInTTY($composeCommandStr, $debug, $logFile);
-            clientDebug("Executing command in ttyd: " . $composeCommandStr, ['command' => $composeCommandStr], 'daemon', 'debug');
-            $composeCommand = "/plugins/compose.manager/php/show_ttyd.php" . ($action !== 'logs' ? "?done=1" : "");
+            // Use a per-stack socket for logs so viewing logs doesn't conflict
+            // with action operations (up/update/pull) that share the default socket.
+            $logsSocket = '';
+            if ($action === 'logs') {
+                $logsSocket = 'compose_logs_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', basename($path));
+            }
+            execComposeCommandInTTY($composeCommandStr, $debug, $logFile, $logsSocket);
+            composeLogger("Executing command in ttyd: " . $composeCommandStr, ['command' => $composeCommandStr], 'user', 'debug', 'compose');
+            if ($action === 'logs') {
+                $composeCommand = "/plugins/compose.manager/include/ShowTtyd.php?socket=" . urlencode($logsSocket);
+            } else {
+                $composeCommand = "/plugins/compose.manager/include/ShowTtyd.php?done=1";
+            }
             echo $composeCommand;
         } else {
             $i = 0;
@@ -193,7 +206,7 @@ function echoComposeCommand($action, $recreate = false, $background = false)
             }, "");
             echo $composeCommand;
         }
-        clientDebug("Final compose command: " . $composeCommand, ['command' => $composeCommand], 'daemon', 'debug');
+        composeLogger("Final compose command: " . $composeCommand, ['command' => $composeCommand], 'user', 'debug', 'compose');
     }
 }
 
@@ -215,7 +228,7 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
 
     if ($unRaidVars['mdState'] != "STARTED") {
         echo $plugin_root . "/scripts/arrayNotStarted.sh";
-        clientDebug("Multi Compose operation aborted: Array not started", null, 'daemon', 'warning');
+        composeLogger("Multi Compose operation aborted: Array not started", null, 'user', 'warning', 'compose-multi');
         return;
     }
 
@@ -224,7 +237,7 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
     $stackNames = array();
 
     foreach ($paths as $path) {
-        clientDebug("Processing stack for multi-compose action: " . $path, ['path' => $path, 'action' => $action], 'daemon', 'debug');
+        composeLogger("Processing stack for multi-compose action: " . $path, ['path' => $path, 'action' => $action], 'user', 'debug', 'compose-multi');
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
         $project = basename($path);
@@ -252,10 +265,28 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
             $composeCommand[] = "-e" . $envFilePath;
         }
 
-        // Add default profiles for multi-stack operations
-        $defaultProfiles = $stackInfo->getDefaultProfiles();
-        foreach ($defaultProfiles as $p) {
-            $composeCommand[] = "-g" . $p;
+        // Profile selection per action:
+        //  - up:     use user-configured default profiles (running_profiles
+        //            is stale/absent when the stack isn't running).
+        //  - update: preserve the currently active profile set so the same
+        //            services are recreated; fall back to defaults on first run.
+        //  - down:   wildcard * ensures every profiled service is torn down,
+        //            regardless of what was recorded or configured.
+        if ($action === 'down') {
+            $composeCommand[] = "-g*";
+        } elseif ($action === 'update') {
+            $profiles = $stackInfo->getRunningProfiles();
+            if (empty($profiles)) {
+                $profiles = $stackInfo->getDefaultProfiles();
+            }
+            foreach ($profiles as $p) {
+                $composeCommand[] = "-g" . $p;
+            }
+        } else {
+            // 'up' and any future actions
+            foreach ($stackInfo->getDefaultProfiles() as $p) {
+                $composeCommand[] = "-g" . $p;
+            }
         }
 
         // Pass stack path for timestamp saving
@@ -293,7 +324,7 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         file_put_contents($tmpScript, $scriptContent);
         chmod($tmpScript, 0700);
         exec(escapeshellarg($tmpScript) . ' > /dev/null 2>&1 &');
-        clientDebug("Background multi-stack queued: " . $tmpScript, ['script' => $tmpScript, 'stacks' => count($commands)], 'daemon', 'debug');
+        composeLogger("Background multi-stack queued: " . $tmpScript, ['script' => $tmpScript, 'stacks' => count($commands)], 'user', 'debug', 'compose-multi');
         echo json_encode(['background' => true]);
         return;
     }
@@ -330,8 +361,8 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
 
         $ttydCommand = "bash " . escapeshellarg($tmpScript);
         execComposeCommandInTTY($ttydCommand, $debug);
-        clientDebug("Multi-stack script created: " . $tmpScript, null, 'daemon', 'debug');
-        echo "/plugins/compose.manager/php/show_ttyd.php?done=1";
+        composeLogger("Multi-stack script created: " . $tmpScript, null, 'user', 'debug', 'compose-multi');
+        echo "/plugins/compose.manager/include/ShowTtyd.php?done=1";
     } else {
         // For nchan/traditional output, create a temporary bash script that runs all commands
         $tmpScript = "/tmp/compose_multi_" . uniqid() . ".sh";
@@ -359,7 +390,7 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         file_put_contents($tmpScript, $scriptContent);
         chmod($tmpScript, 0755);
 
-        clientDebug("Multi-stack script created: $tmpScript", null, 'daemon', 'debug');
+        composeLogger("Multi-stack script created: $tmpScript", null, 'user', 'debug', 'compose-multi');
 
         echo $tmpScript;
     }

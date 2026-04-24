@@ -1,4 +1,19 @@
-/* Editor Modal - Uses unRAID CSS variables where possible */
+/*
+ * Editor Modal stylesheet
+ *
+ * Uses Unraid®/Dynamix CSS variables where possible to match the WebUI theme.
+ *
+ * High-level structure:
+ * - Modal overlay and modal container layout
+ * - Header, title, and close button styles
+ * - Tab bar and tab state styles
+ * - Main editor/content layout and form controls
+ * - Settings panel and related option groups
+ * - Footer/actions and state-specific or responsive adjustments
+ *
+ * Keep related rules grouped by section to make this large stylesheet easier
+ * to navigate and maintain.
+ */
 .editor-modal-overlay {
   display: none;
   overflow: auto;

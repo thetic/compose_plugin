@@ -8,6 +8,56 @@
 
 set -uo pipefail
 
+# Source shared logging; fall back to inline logger if common.sh is unavailable
+# shellcheck disable=SC1091
+. "$(dirname "$0")/common.sh" 2>/dev/null || composeLogger() {
+    local level="${2:-info}"
+    local category="${3:-patch}"
+    local priority="user.info"
+    local displayLevel="[INFO]"
+    local debugMode="false"
+
+    if [ "${debug:-false}" = true ] || [ "${DEBUG_TO_LOG:-false}" = true ]; then
+        debugMode="true"
+    fi
+
+    case "$level" in
+        debug)
+            priority="user.debug"
+            if [ "$debugMode" = true ]; then
+                displayLevel="[user.debug]"
+            else
+                displayLevel="[DEBUG]"
+            fi
+            ;;
+        error|err)
+            priority="user.err"
+            if [ "$debugMode" = true ]; then
+                displayLevel="[user.err]"
+            else
+                displayLevel="[ERROR]"
+            fi
+            ;;
+        warning|warn)
+            priority="user.warning"
+            if [ "$debugMode" = true ]; then
+                displayLevel="[user.warning]"
+            else
+                displayLevel="[WARN]"
+            fi
+            ;;
+        info|*)
+            priority="user.info"
+            if [ "$debugMode" = true ]; then
+                displayLevel="[user.info]"
+            else
+                displayLevel="[INFO]"
+            fi
+            ;;
+    esac
+    logger -t 'compose.manager' -p "$priority" "${displayLevel} [${category}] $1"
+}
+
 usage() {
   cat <<EOF
 Usage: $0 [apply|remove] [--dry-run] [--verbose] [--patch-dir DIR]
@@ -145,7 +195,10 @@ parse_folder_range() {
 # Determine host Unraid version
 UNRAID_VER=$(grep -oP "\d+\.\d+\.\d+" /etc/unraid-version || true)
 if [ -z "$UNRAID_VER" ]; then
+  composeLogger "Could not detect Unraid version; including all patch folders" warning patch
   vmsg "Could not detect Unraid version; defaulting to include all patch folders"
+else
+  composeLogger "Detected Unraid version $UNRAID_VER, command=$COMMAND" debug patch
 fi
 
 # Build candidate patch directories ordered by min range
@@ -305,12 +358,14 @@ apply_patches(){
   done
 
   if [ $failed -ne 0 ]; then
+    composeLogger "Patch apply finished with $failed failure(s), $applied applied" error patch
     echo "Finished with $failed failed patches"
     echo "Failed patches":;
     for f in "${failed_list[@]}"; do echo " - $f"; done
     return 1
   fi
   echo "Finished: $applied patches applied"
+  composeLogger "Patch apply finished: $applied patches applied" info patch
   return 0
 }
 
@@ -383,10 +438,12 @@ remove_patches(){
   fi
 
   if [ $failed -ne 0 ]; then
+    composeLogger "Patch remove finished with $failed failure(s)" error patch
     echo "Remove finished with $failed failures"
     return 1
   fi
   echo "Remove finished successfully"
+  composeLogger "Patch remove finished successfully" info patch
   return 0
 }
 

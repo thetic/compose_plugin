@@ -9,7 +9,7 @@ USER_NAME="root"
 REMOTE_DIR="/tmp"
 PACKAGE_PATH=""
 SKIP_BUILD=false
-COMPOSE_VERSION="5.0.2"
+COMPOSE_VERSION="5.1.2"
 QUICK=false
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

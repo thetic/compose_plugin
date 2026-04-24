@@ -3,10 +3,11 @@ Icon="cubes"
 Author="mstrhakr"
 Title="Compose Manager Plus"
 Type="xmenu"
+Lock="true"
 ---
 <?php
 include "/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php";
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 $cfg = parse_plugin_cfg($sName);
 $ui_patch_button_type = (!$option_patch_ui && strcmp($cfg['PATCH_UI'], "true") == 0 && !isset($composemanDockerClientPatch)) ? "Button" : "Hidden";
 $ui_unpatch_button_type = (!$option_patch_ui && strcmp($cfg['PATCH_UI'], "false") == 0 && isset($composemanDockerClientPatch)) ? "Button" : "Hidden";
@@ -16,6 +17,9 @@ $ui_patch_help_class = $option_patch_ui ? "hidden" : "inline_help"; // hide help
 
 
 $projects_exist = intval(shell_exec("ls -l " . $compose_root . " | grep ^d | wc -l")) != 0;
+
+$pluginVersion = get_plugin_attr('version', '/var/log/plugins/compose.manager.plg') ?: 'unknown';
+$composeCliVersion = trim(shell_exec('docker compose version --short 2>/dev/null') ?? '');
 
 $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js')
     ? '/webGui/javascript/ace'
@@ -617,7 +621,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 </style>
 <script src="<?php autov('/plugins/compose.manager/javascript/common.js'); ?>"></script>
 <script>
-    var caURL = "/plugins/compose.manager/php/exec.php";
+    var caURL = "/plugins/compose.manager/include/Exec.php";
     var skipPatchUI = <?php echo json_encode($option_patch_ui); ?>; // true when Unraid >= 6.12
     var logRefreshInterval = null;
     var autoScroll = true;
@@ -1520,12 +1524,74 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }
     }
 
+    function updateLockButtonUI() {
+        var unlocked = $.cookie('lockbutton') != null;
+        var $lockNav = $('div.nav-item.LockButton');
+
+        if (!$lockNav.length) return;
+
+        if (unlocked) {
+            $lockNav.find('a').prop('title', "_(Lock sortable items)_");
+            $lockNav.find('b').removeClass('icon-u-lock green-text').addClass('icon-u-lock-open red-text');
+            $lockNav.find('span').text("_(Lock sortable items)_");
+        } else {
+            $lockNav.find('a').prop('title', "_(Unlock sortable items)_");
+            $lockNav.find('b').removeClass('icon-u-lock-open red-text').addClass('icon-u-lock green-text');
+            $lockNav.find('span').text("_(Unlock sortable items)_");
+        }
+    }
+
+    function initUpdatesSortable() {
+        var $tbody = $('#updates-tbody');
+        if (!$tbody.length || typeof $.fn.sortable !== 'function') return;
+
+        if ($tbody.hasClass('ui-sortable')) {
+            $tbody.sortable('destroy');
+        }
+
+        var unlocked = $.cookie('lockbutton') != null;
+        if (!unlocked) {
+            $tbody.find('tr.sortable').css({
+                cursor: 'default'
+            });
+            return;
+        }
+
+        $tbody.find('tr.sortable').css({
+            cursor: 'move'
+        });
+
+        $tbody.sortable({
+            helper: 'clone',
+            items: 'tr.sortable',
+            cursor: 'grab',
+            axis: 'y',
+            containment: 'parent',
+            cancel: 'input,select,button,a,label,.switch-button-background',
+            delay: 100,
+            opacity: 0.5,
+            zIndex: 9999,
+            forcePlaceholderSize: true
+        });
+    }
+
+    function LockButton() {
+        if ($.cookie('lockbutton') == null) {
+            $.cookie('lockbutton', 'lockbutton');
+        } else {
+            $.removeCookie('lockbutton');
+        }
+
+        updateLockButtonUI();
+        initUpdatesSortable();
+    }
+
     function loadUpdatesUI() {
         $('#updates-tbody').html('<tr><td colspan="5" class="compose-text-muted" style="text-align:center;padding:12px;">_(Loading stacks...)_</td></tr>');
-        $.post('/plugins/compose.manager/php/exec.php', {
+        $.post('/plugins/compose.manager/include/Exec.php', {
             action: 'listProjects'
         }, function(projects) {
-            $.post('/plugins/compose.manager/php/autoupdate.php', {
+            $.post('/plugins/compose.manager/include/AutoUpdate.php', {
                 action: 'getConfig'
             }, function(cfg) {
                 // Response is already parsed as JSON by jQuery due to Content-Type header
@@ -1574,6 +1640,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         off_label: ''
                     });
                 });
+
+                initUpdatesSortable();
                 // Sync toggle-all state
                 updateToggleAllState();
             }, 'json').fail(function() {
@@ -1585,7 +1653,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     }
 
     function refreshCronStatus() {
-        $.post('/plugins/compose.manager/php/autoupdate.php', {
+        $.post('/plugins/compose.manager/include/AutoUpdate.php', {
             action: 'getCronStatus'
         }, function(r) {
             // Response is already parsed as JSON by jQuery due to Content-Type header
@@ -1641,6 +1709,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
     // Initialize Updates tab when it's shown
     $(function() {
+        updateLockButtonUI();
+
         // Apply default schedule/time to all rows
         $('#apply-default').on('click', function() {
             var s = $('#default-schedule').val();
@@ -1716,7 +1786,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var schedulerEnabled = $('#AUTOUPDATE_ENABLED').is(':checked');
 
             // Save config first
-            $.post('/plugins/compose.manager/php/autoupdate.php', {
+            $.post('/plugins/compose.manager/include/AutoUpdate.php', {
                 action: 'saveConfig',
                 data: JSON.stringify(cfg)
             }, function(resp) {
@@ -1728,7 +1798,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                 // Then update scheduler
                 var schedulerAction = schedulerEnabled ? 'installCron' : 'removeCron';
-                $.post('/plugins/compose.manager/php/autoupdate.php', {
+                $.post('/plugins/compose.manager/include/AutoUpdate.php', {
                     action: schedulerAction
                 }, function(d) {
                     setUpdatesSpinner(false);
@@ -1770,7 +1840,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     return;
                 }
                 var p = paths[idx++];
-                $.post('/plugins/compose.manager/php/autoupdate.php', {
+                $.post('/plugins/compose.manager/include/AutoUpdate.php', {
                     action: 'runNow',
                     path: p
                 }, function(data) {
@@ -2074,27 +2144,27 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             for (var i = 0; i < allowed.length; i++) {
                 var cfg = <?= json_encode($cfg); ?>;
                 var showCompose = (cfg['SHOW_COMPOSE_IN_HEADER_MENU'] || '').toString().toLowerCase();
-                composeClientDebug('Checking referrer path ' + ref.pathname + ' against allowed path ' + allowed[i] + ' with showCompose=' + showCompose, null, 'debug', 'daemon');
+                composeLogger('Checking referrer path ' + ref.pathname + ' against allowed path ' + allowed[i] + ' with showCompose=' + showCompose, null, 'user', 'debug', 'settings');
                 if (existingPath && existingPath.toLowerCase() === '/docker' && showCompose === 'true') {
-                    composeClientDebug('Referrer is /Docker and showCompose is true, returning /Compose', null, 'warn', 'daemon');
+                    composeLogger('Referrer is /Docker and showCompose is true, returning /Compose', null, 'user', 'warn', 'settings');
                     return '/Compose' + (ref.search || '');
                 } else if (existingPath && existingPath.toLowerCase() === '/compose' && showCompose === 'false') {
-                    composeClientDebug('Referrer is /Compose and showCompose is false, returning /Docker', null, 'warn', 'daemon');
+                    composeLogger('Referrer is /Compose and showCompose is false, returning /Docker', null, 'user', 'warn', 'settings');
                     return '/Docker' + (ref.search || '');
                 }
                 if (p.toLowerCase() === allowed[i].toLowerCase()) {
-                    composeClientDebug('Referrer matches allowed path ' + allowed[i], null, 'debug', 'daemon');
+                    composeLogger('Referrer matches allowed path ' + allowed[i], null, 'user', 'debug', 'settings');
                     return ref.pathname + (ref.search || '');
                 }
                 if (allowed[i].toLowerCase().endsWith('/') && p.toLowerCase().startsWith(allowed[i].toLowerCase())) {
-                    composeClientDebug('Referrer matches allowed path prefix ' + allowed[i], null, 'debug', 'daemon');
+                    composeLogger('Referrer matches allowed path prefix ' + allowed[i], null, 'user', 'debug', 'settings');
                     return ref.pathname + (ref.search || '');
                 }
             }
-            composeClientDebug('Referrer path ' + ref.pathname + ' does not match any allowed paths', null, 'warn', 'daemon');
+            composeLogger('Referrer path ' + ref.pathname + ' does not match any allowed paths', null, 'user', 'warn', 'settings');
             return null;
         } catch (e) {
-            composeClientDebug('Error parsing referrer URL: ' + e.message, null, 'error', 'daemon');
+            composeLogger('Error parsing referrer URL: ' + e.message, null, 'user', 'error', 'settings');
             return null;
         }
     }
@@ -2409,6 +2479,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 <!-- Credits Tab -->
 <div id="compose-tab-credits" class="compose-tab-content">
     <div class="title"><span class="left"><i class="fa fa-star icon"></i>_(Credits)_</span></div>
+
+    <div class="credits-section" style="padding:16px 12px;border-bottom:1px solid var(--dynamix-sb-border-color, #ccc);">
+        <span style="font-size:1.2em;font-weight:bold;">Plugin Version: <?= htmlspecialchars($pluginVersion) ?></span><br>
+        <?php if ($composeCliVersion): ?>
+        <span style="font-size:1.2em;font-weight:bold;">Docker Compose: v<?= htmlspecialchars($composeCliVersion) ?></span>
+        <?php endif; ?>
+    </div>
 
     <div class="credits-section" style="padding:12px;">
         <p><strong>Original GitHub repository:</strong> <a href="https://github.com/dcflachs/compose_plugin" target="_blank" rel="noopener noreferrer">dcflachs/compose_plugin</a></p>

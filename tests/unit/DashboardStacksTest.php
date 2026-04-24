@@ -1,9 +1,9 @@
 <?php
 
 /**
- * Unit Tests for dashboard_stacks.php (REAL SOURCE)
+ * Unit Tests for DashboardStacks.php (REAL SOURCE)
  * 
- * Tests the dashboard tile data generation: source/compose.manager/php/dashboard_stacks.php
+ * Tests the dashboard tile data generation: source/compose.manager/include/DashboardStacks.php
  * This file returns JSON data for the compose manager dashboard tile.
  */
 
@@ -13,6 +13,8 @@ namespace ComposeManager\Tests;
 
 use PluginTests\TestCase;
 use PluginTests\Mocks\FunctionMocks;
+
+require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 
 class DashboardStacksTest extends TestCase
 {
@@ -190,23 +192,30 @@ class DashboardStacksTest extends TestCase
     // ===========================================
 
     /**
+     * Helper: create a StackInfo with injected container data for state tests.
+     */
+    private function createStackInfoWithContainers(array $containers): \StackInfo
+    {
+        \StackInfo::clearCache();
+        $stackName = 'dashboard-state-test';
+        $stackPath = $this->testComposeRoot . '/' . $stackName;
+        if (!is_dir($stackPath)) {
+            mkdir($stackPath, 0755, true);
+            file_put_contents($stackPath . '/compose.yaml', "services:\n  web:\n    image: nginx\n");
+        }
+        $info = \StackInfo::fromProject($this->testComposeRoot, $stackName);
+        $info->setContainerList($containers);
+        return $info;
+    }
+
+    /**
      * Test state is stopped when no containers
      */
     public function testStateIsStoppedWhenNoContainers(): void
     {
-        $runningCount = 0;
-        $totalContainers = 0;
-        
-        $state = 'stopped';
-        if ($totalContainers > 0) {
-            if ($runningCount === $totalContainers) {
-                $state = 'started';
-            } elseif ($runningCount > 0) {
-                $state = 'partial';
-            }
-        }
-        
-        $this->assertEquals('stopped', $state);
+        $info = $this->createStackInfoWithContainers([]);
+        $state = $info->getStackState();
+        $this->assertEquals('stopped', $state['state']);
     }
 
     /**
@@ -214,19 +223,15 @@ class DashboardStacksTest extends TestCase
      */
     public function testStateIsStartedWhenAllRunning(): void
     {
-        $runningCount = 3;
-        $totalContainers = 3;
-        
-        $state = 'stopped';
-        if ($totalContainers > 0) {
-            if ($runningCount === $totalContainers) {
-                $state = 'started';
-            } elseif ($runningCount > 0) {
-                $state = 'partial';
-            }
-        }
-        
-        $this->assertEquals('started', $state);
+        $info = $this->createStackInfoWithContainers([
+            ['State' => 'running'],
+            ['State' => 'running'],
+            ['State' => 'running'],
+        ]);
+        $state = $info->getStackState();
+        $this->assertEquals('started', $state['state']);
+        $this->assertSame(3, $state['running']);
+        $this->assertSame(3, $state['total']);
     }
 
     /**
@@ -234,19 +239,16 @@ class DashboardStacksTest extends TestCase
      */
     public function testStateIsPartialWhenSomeRunning(): void
     {
-        $runningCount = 2;
-        $totalContainers = 4;
-        
-        $state = 'stopped';
-        if ($totalContainers > 0) {
-            if ($runningCount === $totalContainers) {
-                $state = 'started';
-            } elseif ($runningCount > 0) {
-                $state = 'partial';
-            }
-        }
-        
-        $this->assertEquals('partial', $state);
+        $info = $this->createStackInfoWithContainers([
+            ['State' => 'running'],
+            ['State' => 'running'],
+            ['State' => 'exited'],
+            ['State' => 'exited'],
+        ]);
+        $state = $info->getStackState();
+        $this->assertEquals('partial', $state['state']);
+        $this->assertSame(2, $state['running']);
+        $this->assertSame(4, $state['total']);
     }
 
     /**
@@ -254,19 +256,37 @@ class DashboardStacksTest extends TestCase
      */
     public function testStateIsStoppedWhenNoneRunning(): void
     {
-        $runningCount = 0;
-        $totalContainers = 3;
-        
-        $state = 'stopped';
-        if ($totalContainers > 0) {
-            if ($runningCount === $totalContainers) {
-                $state = 'started';
-            } elseif ($runningCount > 0) {
-                $state = 'partial';
-            }
+        $info = $this->createStackInfoWithContainers([
+            ['State' => 'exited'],
+            ['State' => 'exited'],
+            ['State' => 'exited'],
+        ]);
+        $state = $info->getStackState();
+        $this->assertEquals('stopped', $state['state']);
+        $this->assertSame(0, $state['running']);
+        $this->assertSame(3, $state['total']);
+    }
+
+    /**
+     * Dashboard summary groups paused stacks with partial to avoid
+     * counting a non-stopped state as stopped.
+     */
+    public function testSummaryMapsPausedStateToPartialBucket(): void
+    {
+        $summary = ['started' => 0, 'partial' => 0, 'stopped' => 0];
+        $state = 'paused';
+
+        if ($state === 'started') {
+            $summary['started']++;
+        } elseif ($state === 'partial' || $state === 'paused') {
+            $summary['partial']++;
+        } else {
+            $summary['stopped']++;
         }
-        
-        $this->assertEquals('stopped', $state);
+
+        $this->assertSame(0, $summary['started']);
+        $this->assertSame(1, $summary['partial']);
+        $this->assertSame(0, $summary['stopped']);
     }
 
     // ===========================================
@@ -446,7 +466,7 @@ class DashboardStacksTest extends TestCase
      */
     public function testContentTypeForJsonResponse(): void
     {
-        // dashboard_stacks.php sets: header('Content-Type: application/json');
+        // DashboardStacks.php sets: header('Content-Type: application/json');
         $expectedHeader = 'Content-Type: application/json';
         
         // We can't actually test headers in unit tests, but we verify the format

@@ -6,8 +6,8 @@
 
 $plugin_root = "/usr/local/emhttp/plugins/compose.manager";
 
-require_once("$plugin_root/php/defines.php");
-require_once("$plugin_root/php/util.php");
+require_once("$plugin_root/include/Defines.php");
+require_once("$plugin_root/include/Util.php");
 
 $summary = [
     'total' => 0,
@@ -34,35 +34,27 @@ if (is_file($composeUpdateStatusFile)) {
 foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $summary['total']++;
 
-    $projectContainers = $stackInfo->getContainerList();
-    $runningCount = 0;
-    $totalContainers = count($projectContainers);
+    // Centralized stack state
+    $stackState = $stackInfo->getStackState();
+    $state = $stackState['state'];
+    $runningCount = $stackState['running'];
+    $totalContainers = $stackState['total'];
 
     // Read stack started_at timestamp via StackInfo
     $startedAt = $stackInfo->getStartedAt();
 
-    foreach ($projectContainers as $ct) {
-        if (($ct['State'] ?? '') === 'running') {
-            $runningCount++;
-        }
-        // Collect container names for hiding from Docker tile
+    // Collect container names for hiding from Docker tile
+    foreach ($stackInfo->getContainerList() as $ct) {
         $name = ltrim(trim($ct['Names'] ?? ''), '/');
         if ($name) {
             $summary['composeContainerNames'][] = $name;
         }
     }
 
-    $state = 'stopped';
-    if ($totalContainers > 0) {
-        if ($runningCount === $totalContainers) {
-            $state = 'started';
-            $summary['started']++;
-        } elseif ($runningCount > 0) {
-            $state = 'partial';
-            $summary['partial']++;
-        } else {
-            $summary['stopped']++;
-        }
+    if ($state === 'started') {
+        $summary['started']++;
+    } elseif ($state === 'partial' || $state === 'paused') {
+        $summary['partial']++;
     } else {
         $summary['stopped']++;
     }

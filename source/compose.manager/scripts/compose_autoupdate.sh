@@ -2,6 +2,9 @@
 # Compose auto-update runner
 # Args: <compose_yml_path> <project_name>
 
+# shellcheck disable=SC1091
+. "$(dirname "$0")/common.sh"
+
 COMPOSE_FILE="$1"
 PROJECT_NAME="$2"
 NOTIFY="/usr/local/emhttp/webGui/scripts/notify"
@@ -59,10 +62,12 @@ get_image_digests() {
 OLD_DIGESTS=$(get_image_digests || true)
 
 # Run pull and capture output (timeout prevents indefinite hangs on unresponsive registries)
-timeout "$COMMAND_TIMEOUT" docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull > "$OUT" 2>&1 || RC=$?
+# --ignore-buildable: skip services with build sections (they should be rebuilt, not pulled)
+timeout "$COMMAND_TIMEOUT" docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" pull --ignore-buildable > "$OUT" 2>&1 || RC=$?
 
 if [ "$RC" -ne 0 ]; then
   ERRMSG="Auto-update pull failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
+  composeLogger "$ERRMSG" error autoupdate daemon
   echo "$ERRMSG" >&2
   if [ -x "$NOTIFY" ]; then
     "$NOTIFY" -e 'Compose Manager' -s "Auto-update failed: $PROJECT_NAME" -d "$ERRMSG" -i 'warning'
@@ -81,6 +86,7 @@ if [ "$OLD_DIGESTS" != "$NEW_DIGESTS" ]; then
   
   if [ "$RC" -ne 0 ]; then
     ERRMSG="Auto-update up failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
+    composeLogger "$ERRMSG" error autoupdate daemon
     echo "$ERRMSG" >&2
     if [ -x "$NOTIFY" ]; then
       "$NOTIFY" -e 'Compose Manager' -s "Auto-update failed: $PROJECT_NAME" -d "$ERRMSG" -i 'warning'
@@ -90,12 +96,14 @@ if [ "$OLD_DIGESTS" != "$NEW_DIGESTS" ]; then
   fi
   
   MSG="Stack '$PROJECT_NAME' was updated successfully."
+  composeLogger "$MSG" info autoupdate daemon
   echo "$MSG"
   if [ -x "$NOTIFY" ]; then
     "$NOTIFY" -e 'Compose Manager' -s "Stack updated: $PROJECT_NAME" -d "$MSG"
   fi
 else
   MSG="No updates for stack '$PROJECT_NAME'."
+  composeLogger "$MSG" info autoupdate daemon
   echo "$MSG"
 fi
 

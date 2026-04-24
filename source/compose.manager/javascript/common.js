@@ -2,7 +2,7 @@
 // Use `getConfig().then(cfg => { ... })` to access configuration.
 var _configCache = null;
 var _configPromise = null;
-var caURL = "/plugins/compose.manager/php/exec.php";
+var caURL = "/plugins/compose.manager/include/Exec.php";
 
 // Shared HTML/attribute escape helpers (namespaced to avoid global collisions with other plugins)
 function composeEscapeHtml(text) {
@@ -77,7 +77,7 @@ function getConfig() {
                     resp = JSON.parse(resp);
                 } catch (e) {
                     _configPromise = null;
-                    composeClientDebug('getConfig returned non-JSON response; using empty config', { response: response, error: e }, 'daemon', 'error');
+                    composeLogger('getConfig returned non-JSON response; using empty config', { response: response, error: e }, 'user', 'error', 'config');
                     resolve({});
                     return;
                 }
@@ -89,12 +89,12 @@ function getConfig() {
                 resolve(_configCache);
             } else {
                 _configPromise = null;
-                composeClientDebug('getConfig returned non-success response; using empty config', resp, 'daemon', 'error');
+                composeLogger('getConfig returned non-success response; using empty config', resp, 'user', 'error', 'config');
                 resolve({});
             }
         }).fail(function () {
             _configPromise = null;
-            composeClientDebug('Network error while fetching config; using empty config', null, 'daemon', 'error');
+            composeLogger('Network error while fetching config; using empty config', null, 'user', 'error', 'config');
             resolve({});
         });
     });
@@ -103,16 +103,16 @@ function getConfig() {
 }
 
 // Client-side debug helper: logs to console and posts short messages to server syslog
-function composeClientDebug(msg, obj, type, lvl) {
-    
+function composeLogger(msg, obj, type, lvl, category) {
     // Send lightweight debug message to server for persistence (non-blocking)
     try {
         var payload = {
-            action: 'clientDebug',
+            action: 'composeLogger',
             msg: msg,
-            type: type || 'daemon',
+            type: type || 'user',
             lvl: lvl || 'info'
         };
+        if (category !== undefined && category !== null && category !== '') payload.category = String(category);
         if (obj !== undefined) payload.data = JSON.stringify(obj);
         // Fire-and-forget; no UI impact
         $.post(caURL, payload).fail(function () { });
@@ -121,26 +121,34 @@ function composeClientDebug(msg, obj, type, lvl) {
     // Use cached async getter to fetch config and decide console logging
     getConfig().then(function (cfg) {
         try {
-            switch (lvl) {
-                case 'debug':
-                    if (cfg && (cfg.DEBUG_TO_LOG === 'false' || cfg.DEBUG_TO_LOG === false)) {
-                        return; // Skip debug logs if disabled in config
-                    } else {
-                        // When config fetch fails (cfg === null), default to showing debug logs.
-                        msg = '[DEBUG] ' + msg;
-                    }
-                    break;
-                case 'err':
-                case 'error':
-                    msg = '[ERROR] ' + msg;
-                    break;
-                case 'warn':
-                case 'warning':
-                    msg = '[WARN] ' + msg;
-                    break;
-                case 'info':
-                default:
-                    msg = '[INFO] ' + msg;
+            var displayLevel;
+            var debugMode = cfg && (cfg.DEBUG_TO_LOG === 'true' || cfg.DEBUG_TO_LOG === true);
+            if (debugMode) {
+                displayLevel = '[' + (type || 'user') + '.' + (lvl || 'info') + ']';
+            } else {
+                switch (lvl) {
+                    case 'debug':
+                        if (cfg && (cfg.DEBUG_TO_LOG === 'false' || cfg.DEBUG_TO_LOG === false)) {
+                            return; // Skip debug logs if disabled in config
+                        }
+                        displayLevel = '[DEBUG]';
+                        break;
+                    case 'err':
+                    case 'error':
+                        displayLevel = '[ERROR]';
+                        break;
+                    case 'warn':
+                    case 'warning':
+                        displayLevel = '[WARN]';
+                        break;
+                    case 'info':
+                    default:
+                        displayLevel = '[INFO]';
+                }
+            }
+            msg = displayLevel + ' ' + msg;
+            if (category !== undefined && category !== null && category !== '') {
+                msg = '[' + category + '] ' + msg;
             }
             if (obj !== undefined && obj !== null && obj !== '' && obj !== 'null') {
                 console.log('compose.manager: ' + msg, obj);

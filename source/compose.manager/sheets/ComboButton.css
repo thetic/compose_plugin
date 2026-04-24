@@ -1,4 +1,17 @@
-  /* Compose Manager Custom Modal */
+  /*
+   * Compose Manager UI Styles (legacy mixed scope)
+   *
+   * This file currently contains CSS gathered from multiple Compose Manager UI
+   * areas. The filename is historical; styles are not limited to the combo
+   * button. Keep related additions grouped under the nearest section header.
+   *
+   * Sections in this file:
+   * 1) Modal overlays and base compose modal
+   * 2) Stack actions/context modal
+   * 3) Loading/error/empty states
+   * 4) SweetAlert and Shadowbox overlay integration
+   * 5) Stack table and container detail layout helpers
+   */
   .compose-modal-overlay,
   .stack-actions-overlay,
   .editor-modal-overlay {
@@ -204,7 +217,7 @@
 
   /* ── Stack table structural rules ──
    Critical layout rules (table-layout, column widths, advanced/basic
-   visibility) are inlined in compose_manager_main.php for instant
+   visibility) are inlined in ComposeManager.php for instant
    availability.  The rules below are supplemental / non-critical. */
 
   /* Update column links - ensure pointer cursor */

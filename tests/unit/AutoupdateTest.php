@@ -9,6 +9,9 @@ use PluginTests\TestCase;
 
 class AutoupdateTest extends TestCase
 {
+    private ?string $wrapperPath = null;
+    private ?string $cronFile = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -19,26 +22,37 @@ class AutoupdateTest extends TestCase
         if (is_file($plugin_root . 'autoupdate.json')) unlink($plugin_root . 'autoupdate.json');
         // Ensure scripts path exists
         if (!is_dir($plugin_root . 'scripts')) mkdir($plugin_root . 'scripts', 0755, true);
-        // Ensure php helper path exists for test shim
-        if (!is_dir($plugin_root . 'php')) mkdir($plugin_root . 'php', 0755, true);
-        // create a simple PHP shim that will be invoked instead of a real `sh` during tests
+
+        // Use a real temp file for the shell wrapper so child processes can execute it in CI.
+        $this->wrapperPath = sys_get_temp_dir() . '/autoupdate_test_wrapper_' . getmypid() . '_' . uniqid('', true) . '.php';
         $shim = <<<'PHP'
     <?php
     $marker = getenv('AUTOTEST_MARKER');
     if ($marker) file_put_contents($marker, "OK\n");
     exit(0);
     PHP;
-        file_put_contents($plugin_root . 'php/sh_wrapper.php', $shim);
-        // redirect cron writes to plugin root in tests
-        putenv('COMPOSE_MANAGER_CRON_DIR=' . $plugin_root);
+        file_put_contents($this->wrapperPath, $shim);
+        // redirect cron writes to temp file in tests
+        $this->cronFile = sys_get_temp_dir() . '/compose_cron_test_' . getmypid() . '.cron';
+        putenv('COMPOSE_MANAGER_CRON_FILE=' . $this->cronFile);
+        putenv('COMPOSE_MANAGER_CRON_NOSYNC=1');
     }
 
     protected function tearDown(): void
     {
-        putenv('COMPOSE_MANAGER_CRON_DIR');
+        putenv('COMPOSE_MANAGER_CRON_FILE');
+        putenv('COMPOSE_MANAGER_CRON_NOSYNC');
         putenv('COMPOSE_MANAGER_SH');
         putenv('AUTOTEST_MARKER');
         putenv('COMPOSE_MANAGER_AUTOUPDATE_FILE');
+        if ($this->cronFile !== null && is_file($this->cronFile)) {
+            @unlink($this->cronFile);
+        }
+        $this->cronFile = null;
+        if ($this->wrapperPath !== null && is_file($this->wrapperPath)) {
+            unlink($this->wrapperPath);
+        }
+        $this->wrapperPath = null;
         $_POST = [];
         parent::tearDown();
     }
@@ -47,7 +61,7 @@ class AutoupdateTest extends TestCase
     {
         $_POST = ['action' => 'getConfig'];
         ob_start();
-        include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php';
+        include '/usr/local/emhttp/plugins/compose.manager/include/AutoUpdate.php';
         $out = ob_get_clean();
         $json = json_decode($out, true);
         $this->assertIsArray($json);
@@ -58,7 +72,7 @@ class AutoupdateTest extends TestCase
     public function testRunNowMissingPathReturnsError(): void
     {
         $_POST = ['action' => 'runNow'];
-        ob_start(); include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php'; $out = ob_get_clean();
+        ob_start(); include '/usr/local/emhttp/plugins/compose.manager/include/AutoUpdate.php'; $out = ob_get_clean();
         $r = json_decode($out, true);
         $this->assertArrayHasKey('error', $r);
         $_POST = [];
@@ -82,11 +96,10 @@ class AutoupdateTest extends TestCase
 
         // configure test shim so the autoupdate code executes our PHP wrapper instead of a system sh
         putenv('AUTOTEST_MARKER=' . $marker);
-        $wrapper = $plugin_root . 'php/sh_wrapper.php';
-        putenv('COMPOSE_MANAGER_SH=' . PHP_BINARY . ' ' . escapeshellarg($wrapper));
+        putenv('COMPOSE_MANAGER_SH=' . PHP_BINARY . ' ' . escapeshellarg((string)$this->wrapperPath));
 
         $_POST = ['action' => 'runNow', 'path' => $tmp];
-        ob_start(); include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php'; $out = ob_get_clean();
+        ob_start(); include '/usr/local/emhttp/plugins/compose.manager/include/AutoUpdate.php'; $out = ob_get_clean();
         $r = json_decode($out, true);
         // rc should be 0 for our stub
         $this->assertEquals(0, $r['rc']);
@@ -102,31 +115,28 @@ class AutoupdateTest extends TestCase
 
     public function testInstallCronUsesAbsolutePhpBinary(): void
     {
-        global $plugin_root;
-
-        $cronFile = $plugin_root . 'compose_manager_autoupdate';
-        if (is_file($cronFile)) {
-            unlink($cronFile);
+        if (is_file($this->cronFile)) {
+            unlink($this->cronFile);
         }
 
         $_POST = ['action' => 'installCron'];
         ob_start();
-        include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php';
+        include '/usr/local/emhttp/plugins/compose.manager/include/AutoUpdate.php';
         $out = ob_get_clean();
 
         $response = json_decode($out, true);
         $this->assertIsArray($response);
         $this->assertArrayHasKey('ok', $response);
         $this->assertTrue((bool)$response['ok']);
-        $this->assertFileExists($cronFile);
+        $this->assertFileExists($this->cronFile);
 
-        $line = file_get_contents($cronFile);
-        $this->assertStringContainsString('/usr/bin/php', $line);
-        $this->assertStringContainsString('autoupdate_runner.php', $line);
+        $content = file_get_contents($this->cronFile);
+        $this->assertStringContainsString('/usr/bin/php', $content);
+        $this->assertStringContainsString('AutoUpdateRunner.php', $content);
+        $this->assertStringContainsString('#compose-autoupdate', $content);
+        // Verify no stray 'root' user field
+        $this->assertStringNotContainsString('* root ', $content);
 
-        if (is_file($cronFile)) {
-            unlink($cronFile);
-        }
         $_POST = [];
     }
 }

@@ -5,6 +5,7 @@
 
 source /usr/local/emhttp/plugins/compose.manager/default.cfg
 source /boot/config/plugins/compose.manager/compose.manager.cfg
+source /usr/local/emhttp/plugins/compose.manager/scripts/common.sh
 
 COMPOSE_ROOT=$PROJECTS_FOLDER
 COMPOSE_WRAPPER=/usr/local/emhttp/plugins/compose.manager/scripts/compose.sh
@@ -15,14 +16,13 @@ STARTUP_TIMEOUT=${AUTOSTART_TIMEOUT:-300}
 WAIT_FOR_DOCKER=${AUTOSTART_WAIT_FOR_DOCKER:-false}
 DOCKER_WAIT_TIMEOUT=${AUTOSTART_DOCKER_WAIT_TIMEOUT:-120}
 
-# Logging helper
+# Logging helper — writes to log file and delegates to shared composeLogger for syslog
 log() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
     echo "$msg" >> "$LOG_FILE"
-    logger -t "compose.manager" "$1"
+    composeLogger "$1" info autostart
 }
 
-source /usr/local/emhttp/plugins/compose.manager/scripts/common.sh
 
 # Wait for Docker autostart containers to finish starting
 wait_for_docker_autostart() {

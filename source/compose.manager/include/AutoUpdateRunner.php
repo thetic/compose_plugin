@@ -2,8 +2,8 @@
 /**
  * Runner invoked by cron to check autoupdate.json and run updates when scheduled
  */
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 
 $autofile = getAutoUpdateConfigFilePath();
 if (!is_file($autofile)) exit(0);
@@ -49,7 +49,7 @@ foreach ($data as $path => $entry) {
     
     // Validate path is within allowed locations for security
     if (!isAllowedAutoUpdatePath($path)) {
-        clientDebug("[autoupdate] Skipping disallowed path: " . sanitizeLogText($path), null, 'daemon', 'warn');
+        composeLogger('Skipping disallowed path: ' . sanitizeLogText($path), null, 'daemon', 'warn', 'autoupdate');
         continue;
     }
     
@@ -99,17 +99,17 @@ foreach ($data as $path => $entry) {
         $dataModified = true;
 
         // Resolve project name via StackInfo if possible
+        // Use projectName (sanitized lowercase) — not projectFolder or display name —
+        // because docker compose requires lowercase alphanumeric project names.
         $stackInfo = StackInfo::fromComposePath($compose_root, $path);
         if ($stackInfo !== null) {
-            $projectName = $stackInfo->projectFolder;
+            $projectName = $stackInfo->projectName;
         } else {
-            $projectName = basename($path);
-            if (is_file($path . '/name')) $projectName = trim(file_get_contents($path . '/name'));
-            $projectName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $projectName);
+            $projectName = StackInfo::sanitizeProjectString(basename($path));
         }
 
         // Log the scheduled auto-update trigger
-        clientDebug("[autoupdate] Scheduled auto-update triggered for: $projectName ($schedule)", null, 'daemon', 'info');
+        composeLogger("Scheduled auto-update triggered for: $projectName ($schedule)", null, 'daemon', 'info', 'autoupdate');
 
         $script = $plugin_root . "scripts/compose_autoupdate.sh";
         // Allow overriding the shell command via environment for tests; default to sh

@@ -18,7 +18,7 @@
     Skip running tests before building. Not recommended.
 
 .PARAMETER ComposeVersion
-    Docker Compose version to include. Default: 5.0.2
+    Docker Compose version to include. Default: 5.1.2
 
 .EXAMPLE
     ./build.ps1
@@ -58,7 +58,7 @@ if (Test-Path $versionsFile) {
         if ($_ -match '^COMPOSE_VERSION=(.+)$' -and -not $ComposeVersion) { $ComposeVersion = $Matches[1].Trim() }
     }
 }
-if (-not $ComposeVersion) { $ComposeVersion = "5.0.2" }
+if (-not $ComposeVersion) { $ComposeVersion = "5.1.2" }
 
 # Generate dev version with timestamp if -Dev flag is used
 if ($Dev) {

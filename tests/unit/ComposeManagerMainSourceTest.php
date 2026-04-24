@@ -7,7 +7,7 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 
 /**
- * Source-level tests for compose_manager_main.php.
+ * Source-level tests for ComposeManager.php.
  *
  * These verify key CPU/memory load logic markers in the page source so
  * regressions are caught even when the page cannot be executed in unit tests.
@@ -19,8 +19,8 @@ class ComposeManagerMainSourceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mainPagePath = __DIR__ . '/../../source/compose.manager/php/compose_manager_main.php';
-        $this->assertFileExists($this->mainPagePath, 'compose_manager_main.php must exist');
+        $this->mainPagePath = __DIR__ . '/../../source/compose.manager/include/ComposeManager.php';
+        $this->assertFileExists($this->mainPagePath, 'ComposeManager.php must exist');
     }
 
     private function getPageSource(): string
@@ -66,4 +66,55 @@ class ComposeManagerMainSourceTest extends TestCase
         $this->assertStringContainsString('var memPair = parseMemUsagePair(parts[2]);', $source);
         $this->assertStringContainsString('memLimitBytes: memPair.limit,', $source);
     }
+
+    public function testComposeCustomTagSchemaSupportIsDeclared(): void
+    {
+        $source = $this->getPageSource();
+        $this->assertStringContainsString("var customTags = ['!override', '!reset', '!merge'];", $source);
+        $this->assertStringContainsString('function buildComposeYamlSchema()', $source);
+        $this->assertStringContainsString("if (typeof jsyaml !== 'undefined') {", $source);
+        $this->assertStringContainsString("throw new Error('YAML parser is unavailable. Please reload the page and try again.');", $source);
+    }
+
+    public function testLabelSaveBlocksTaggedOverrideRewrite(): void
+    {
+        $source = $this->getPageSource();
+        $this->assertStringContainsString('overrideHasCustomTags: composeYamlContainsCustomTags(overrideData.content || \'\')', $source);
+        $this->assertStringContainsString('WebUI labels cannot be saved because compose.override.yaml uses !override, !reset, or !merge tags.', $source);
+    }
+
+    // ===========================================
+    // Regression Tests
+    // ===========================================
+
+    /**
+     * Regression: Running stacks with no update data must show "check for updates"
+     * (triggers checkStackUpdates) not "pull updates" (triggers showUpdateWarning).
+     */
+    public function testUncheckedRunningStackShowsCheckForUpdates(): void
+    {
+        $source = $this->getPageSource();
+        // The else branch for no containers must call checkStackUpdates
+        $this->assertStringContainsString(
+            "onclick=\"checkStackUpdates(\\'' + composeEscapeAttr(stackName) + '\\');\"",
+            $source,
+            'Unchecked running stacks must trigger checkStackUpdates, not showUpdateWarning'
+        );
+        $this->assertStringContainsString('check for updates</a>', $source);
+    }
+
+    /**
+     * Regression: Stopped stacks must always show "stopped" in the update column,
+     * regardless of whether prior update check data exists. The early return
+     * must be unconditional on !isRunning.
+     */
+    public function testStoppedStacksReturnEarlyUnconditionally(): void
+    {
+        $source = $this->getPageSource();
+        // The stopped check should NOT reference hasCheckedData — it must be
+        // a simple !isRunning guard.
+        $this->assertStringNotContainsString('!isRunning && !hasCheckedData', $source,
+            'Stopped stack early return must be unconditional (!isRunning only, not gated on hasCheckedData)');
+    }
+
 }
