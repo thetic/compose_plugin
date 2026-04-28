@@ -133,7 +133,7 @@ else
     if [[ ${#files[@]} -eq 0 ]]; then
       echo "No package found in archive"; exit 1
     fi
-    PACKAGE_PATH=$(printf '%s\n' "${files[@]}" | sort -r | head -n1)
+    PACKAGE_PATH=$(printf '%s\n' "${files[@]}" | sort -r | head -n1 || true)
     if [[ -z "$PACKAGE_PATH" ]]; then
       echo "No package found in archive"; exit 1
     fi
