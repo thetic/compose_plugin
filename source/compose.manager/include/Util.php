@@ -1575,12 +1575,11 @@ class StackInfo
             if ($key !== 'COMPOSE_FILE') {
                 continue;
             }
-            $value = Strings::stripQuotes(trim($value));
+            $value = trim($value);
             if ($value === '') {
                 continue;
             }
-            $separator = PATH_SEPARATOR;
-            foreach (explode($separator, $value) as $entry) {
+            foreach (self::splitComposeFileValue($value) as $entry) {
                 $entry = Strings::stripQuotes(trim($entry));
                 if ($entry === '') {
                     continue;
@@ -1611,6 +1610,46 @@ class StackInfo
             return $real;
         }
         return rtrim($path, '/\\');
+    }
+
+    /**
+     * Split a COMPOSE_FILE env value into individual file paths.
+     *
+     * This preserves quoted segments so values like
+     * `"compose.debug.yaml":compose.extra.yaml` are parsed correctly.
+     *
+     * @param string $value
+     * @return string[]
+     */
+    private static function splitComposeFileValue(string $value): array
+    {
+        $entries = [];
+        $current = '';
+        $quote = null;
+        $length = strlen($value);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $value[$i];
+            if ($quote === null && ($char === '"' || $char === "'")) {
+                $quote = $char;
+                $current .= $char;
+                continue;
+            }
+            if ($quote !== null && $char === $quote) {
+                $quote = null;
+                $current .= $char;
+                continue;
+            }
+            if ($quote === null && $char === PATH_SEPARATOR) {
+                $entries[] = $current;
+                $current = '';
+                continue;
+            }
+            $current .= $char;
+        }
+
+        $entries[] = $current;
+        return $entries;
     }
 
     private function getComposeFilePaths(): array

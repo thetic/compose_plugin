@@ -819,14 +819,16 @@ class StackInfoTest extends TestCase
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
         $args = $info->buildComposeArgs();
 
-        $this->assertSame(3, count($args['filePaths']));
+        $this->assertSame(4, count($args['filePaths']));
         $this->assertStringContainsString('compose.debug.yaml', $args['files']);
         $this->assertStringContainsString('compose.extra.yaml', $args['files']);
         $this->assertContains($stackDir . '/compose.debug.yaml', $args['filePaths']);
         $this->assertContains($stackDir . '/compose.extra.yaml', $args['filePaths']);
+        $this->assertContains($stackDir . '/compose.override.yaml', $args['filePaths']);
         $this->assertSame(
             implode(PATH_SEPARATOR, [
                 $stackDir . '/compose.yaml',
+                $stackDir . '/compose.override.yaml',
                 $stackDir . '/compose.debug.yaml',
                 $stackDir . '/compose.extra.yaml',
             ]),
