@@ -785,6 +785,55 @@ class StackInfoTest extends TestCase
         $this->assertStringContainsString('--env-file', $args['envFile']);
     }
 
+    public function testBuildComposeArgsWithComposeFileInEnv(): void
+    {
+        $stack = 'env-compose-file';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        file_put_contents("$stackDir/compose.debug.yaml", "services:\n  web:\n    image: nginx:alpine\n");
+        $envPath = $stackDir . '/.env';
+        file_put_contents($envPath, "COMPOSE_FILE=compose.debug.yaml");
+        file_put_contents("$stackDir/envpath", $envPath);
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+        $args = $info->buildComposeArgs();
+
+        $this->assertSame(3, count($args['filePaths']));
+        $this->assertStringContainsString('compose.debug.yaml', $args['files']);
+        $this->assertContains($stackDir . '/compose.debug.yaml', $args['filePaths']);
+    }
+
+    public function testBuildComposeArgsWithQuotedComposeFileInEnv(): void
+    {
+        $stack = 'env-compose-file-quoted';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        file_put_contents("$stackDir/compose.debug.yaml", "services:\n  web:\n    image: nginx:alpine\n");
+        file_put_contents("$stackDir/compose.extra.yaml", "services:\n  web:\n    image: nginx:alpine\n");
+        $envPath = $stackDir . '/.env';
+        file_put_contents($envPath, 'COMPOSE_FILE="compose.debug.yaml":compose.extra.yaml');
+        file_put_contents("$stackDir/envpath", $envPath);
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+        $args = $info->buildComposeArgs();
+
+        $this->assertSame(3, count($args['filePaths']));
+        $this->assertStringContainsString('compose.debug.yaml', $args['files']);
+        $this->assertStringContainsString('compose.extra.yaml', $args['files']);
+        $this->assertContains($stackDir . '/compose.debug.yaml', $args['filePaths']);
+        $this->assertContains($stackDir . '/compose.extra.yaml', $args['filePaths']);
+        $this->assertSame(
+            implode(PATH_SEPARATOR, [
+                $stackDir . '/compose.yaml',
+                $stackDir . '/compose.debug.yaml',
+                $stackDir . '/compose.extra.yaml',
+            ]),
+            $args['fileList']
+        );
+    }
+
     public function testBuildComposeArgsWithOverride(): void
     {
         $stack = 'override-args';
@@ -796,8 +845,8 @@ class StackInfoTest extends TestCase
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
         $args = $info->buildComposeArgs();
 
-        // Should have two -f flags
-        $this->assertSame(2, substr_count($args['files'], '-f'));
+        // Should use two compose files: main + override
+        $this->assertSame(2, count($args['filePaths']));
         $this->assertStringContainsString('compose.override.yaml', $args['files']);
     }
 

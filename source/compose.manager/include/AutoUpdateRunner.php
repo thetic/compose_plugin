@@ -113,9 +113,27 @@ foreach ($data as $path => $entry) {
         composeLogger("Scheduled auto-update triggered for: $projectName ($schedule)", null, 'daemon', 'info', 'autoupdate');
 
         $script = $plugin_root . "scripts/compose_autoupdate.sh";
+        if ($stackInfo !== null) {
+            $args = $stackInfo->buildComposeArgs();
+            $composeFileList = $stackInfo->buildComposeFileList();
+            $envFilePath = $args['envFilePath'] ?? null;
+        } else {
+            $composeFileList = findComposeFile($path);
+            $envFilePath = null;
+        }
+
         // Allow overriding the shell command via environment for tests; default to sh
         $shCmd = getenv('COMPOSE_MANAGER_SH') ? getenv('COMPOSE_MANAGER_SH') : 'sh';
-        $cmd = $shCmd . ' ' . escapeshellarg($script) . " " . escapeshellarg($composeFile) . " " . escapeshellarg($projectName) . " >/dev/null 2>&1 &";
+
+        $envPrefix = '';
+        if ($composeFileList !== '') {
+            $envPrefix .= 'COMPOSE_FILE_LIST=' . escapeshellarg($composeFileList) . ' ';
+        }
+        if ($envFilePath !== null && $envFilePath !== '') {
+            $envPrefix .= 'COMPOSE_ENV_FILE=' . escapeshellarg($envFilePath) . ' ';
+        }
+
+        $cmd = $envPrefix . $shCmd . ' ' . escapeshellarg($script) . " " . escapeshellarg($projectName) . " >/dev/null 2>&1 &";
         exec($cmd);
     }
 }

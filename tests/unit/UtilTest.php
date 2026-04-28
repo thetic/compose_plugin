@@ -90,6 +90,26 @@ class UtilTest extends TestCase
         $this->assertEquals('stack123_test', $result);
     }
 
+    public function testPathIsAbsolutePathUnix(): void
+    {
+        $this->assertTrue(\Path::isAbsolutePath('/usr/local/bin'));
+    }
+
+    public function testPathIsAbsolutePathWindowsDrive(): void
+    {
+        $this->assertTrue(\Path::isAbsolutePath('C:\\Program Files\\Docker')); 
+    }
+
+    public function testPathIsAbsolutePathWindowsUnc(): void
+    {
+        $this->assertTrue(\Path::isAbsolutePath('\\\\server\\share\\compose.yml'));
+    }
+
+    public function testPathIsAbsolutePathRelative(): void
+    {
+        $this->assertFalse(\Path::isAbsolutePath('compose.yml'));
+    }
+
     /**
      * Test sanitizeProjectString with multiple consecutive special chars (dashes preserved, underscores collapsed)
      */

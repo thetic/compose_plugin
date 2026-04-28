@@ -261,6 +261,27 @@ class Path
     {
         return strpos($path, '/..') !== false || strpos($path, '../') !== false;
     }
+
+    public static function isAbsolutePath(string $path): bool
+    {
+        return preg_match('#^([A-Za-z]:|/|\\\\)#', $path) === 1;
+    }
+}
+
+/**
+ * Generic shared string helper utilities.
+ */
+class Strings
+{
+    public static function stripQuotes(string $value): string
+    {
+        if ((str_starts_with($value, '"') && str_ends_with($value, '"')) ||
+            (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
+            return substr($value, 1, -1);
+        }
+
+        return $value;
+    }
 }
 
 /**
@@ -1520,6 +1541,137 @@ class StackInfo
     }
 
     /**
+     * Parse COMPOSE_FILE values from the configured env file.
+     *
+     * This is used to support projects that declare additional compose
+     * files via COMPOSE_FILE in the env file loaded with the stack.
+     *
+     * @return string[]
+     */
+    private function getAdditionalComposeFilesFromEnv(): array
+    {
+        $envFilePath = $this->getEnvFilePath();
+        if ($envFilePath === null || !is_file($envFilePath)) {
+            return [];
+        }
+
+        $content = @file_get_contents($envFilePath);
+        if ($content === false) {
+            return [];
+        }
+
+        $files = [];
+        $envDir = dirname($envFilePath);
+        foreach (preg_split('/\R/', $content) as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#') || str_starts_with($line, ';')) {
+                continue;
+            }
+            if (!str_contains($line, '=')) {
+                continue;
+            }
+            [$key, $value] = explode('=', $line, 2);
+            $key = trim($key);
+            if ($key !== 'COMPOSE_FILE') {
+                continue;
+            }
+            $value = Strings::stripQuotes(trim($value));
+            if ($value === '') {
+                continue;
+            }
+            $separator = PATH_SEPARATOR;
+            foreach (explode($separator, $value) as $entry) {
+                $entry = Strings::stripQuotes(trim($entry));
+                if ($entry === '') {
+                    continue;
+                }
+                if (Path::isAbsolutePath($entry)) {
+                    $files[] = $entry;
+                } else {
+                    $files[] = $envDir . '/' . $entry;
+                }
+            }
+            break;
+        }
+
+        return array_values(array_unique($files));
+    }
+
+    /**
+     * Normalize compose file paths for deduplication.
+     *
+     * @return string
+     */
+    private function normalizeComposeFilePath(string $path): string
+    {
+        // Normalize equivalent paths to avoid duplicate compose file entries
+        // when the same file is referenced via slightly different paths.
+        $real = realpath($path);
+        if ($real !== false) {
+            return $real;
+        }
+        return rtrim($path, '/\\');
+    }
+
+    private function getComposeFilePaths(): array
+    {
+        $paths = [];
+        $mainComposeFile = $this->composeFilePath ?? ($this->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
+        $paths[] = $mainComposeFile;
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null) {
+            $paths[] = $overridePath;
+        }
+
+        foreach ($this->getAdditionalComposeFilesFromEnv() as $extraFile) {
+            $paths[] = $extraFile;
+        }
+
+        $normalized = [];
+        $unique = [];
+        foreach ($paths as $path) {
+            $key = $this->normalizeComposeFilePath($path);
+            if ($key !== '' && !isset($unique[$key])) {
+                $unique[$key] = true;
+                $normalized[] = $path;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Build the `-f` flags for all compose file paths used by this stack.
+     *
+     * @return string
+     */
+    private function buildComposeFileFlags(): string
+    {
+        $flags = [];
+        foreach ($this->getComposeFilePaths() as $filePath) {
+            if (is_file($filePath)) {
+                $flags[] = '-f ' . escapeshellarg($filePath);
+            }
+        }
+        return implode(' ', $flags);
+    }
+
+    /**
+     * Get the env-file argument for the current stack, if configured.
+     *
+     * @return string
+     */
+    private function buildEnvFileFlag(): string
+    {
+        $envPath = $this->getEnvFilePath();
+        if ($envPath !== null && is_file($envPath)) {
+            return '--env-file ' . escapeshellarg($envPath);
+        }
+        return '';
+    }
+
+    /**
      * Get the icon URL (from `icon_url` file), validated.
      * @return string|null
      */
@@ -1691,16 +1843,10 @@ class StackInfo
             return [];
         }
 
-        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
-
-        $overridePath = $this->getOverridePath();
-        if ($overridePath !== null && is_file($overridePath)) {
-            $cmd .= " -f " . escapeshellarg($overridePath);
-        }
-
-        $envFilePath = $this->getEnvFilePath();
-        if ($envFilePath !== null && is_file($envFilePath)) {
-            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        $cmd = "docker compose " . $this->buildComposeFileFlags();
+        $envFlag = $this->buildEnvFileFlag();
+        if ($envFlag !== '') {
+            $cmd .= " " . $envFlag;
         }
         $cmd .= " config --profiles 2>/dev/null";
 
@@ -1825,16 +1971,10 @@ class StackInfo
             return [];
         }
 
-        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
-
-        $overridePath = $this->getOverridePath();
-        if ($overridePath !== null && is_file($overridePath)) {
-            $cmd .= " -f " . escapeshellarg($overridePath);
-        }
-
-        $envFilePath = $this->getEnvFilePath();
-        if ($envFilePath !== null && is_file($envFilePath)) {
-            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        $cmd = "docker compose " . $this->buildComposeFileFlags();
+        $envFlag = $this->buildEnvFileFlag();
+        if ($envFlag !== '') {
+            $cmd .= " " . $envFlag;
         }
         // Include all profile-scoped services so stack totals reflect the
         // full compose definition, not only default-profile services.
@@ -1893,11 +2033,10 @@ class StackInfo
             return [];
         }
 
-        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
-
-        $envFilePath = $this->getEnvFilePath();
-        if ($envFilePath !== null && is_file($envFilePath)) {
-            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        $cmd = "docker compose " . $this->buildComposeFileFlags();
+        $envFlag = $this->buildEnvFileFlag();
+        if ($envFlag !== '') {
+            $cmd .= " " . $envFlag;
         }
         $cmd .= " --profile '*' config --services 2>/dev/null";
 
@@ -1914,33 +2053,49 @@ class StackInfo
     /**
      * Build the common compose CLI arguments for this stack.
      *
-     * Returns the project name, file flags, and env-file flag suitable
-     * for passing to `docker compose`.
+     * Returns the project name, file flags, env-file flag, and additional
+     * metadata needed by callers.
      *
-     * @return array{projectName: string, files: string, envFile: string}
+     * @return array{
+     *   projectName: string,
+     *   files: string,
+     *   envFile: string,
+     *   envFilePath?: string,
+     *   filePaths: string[]
+     * }
      */
     public function buildComposeArgs(): array
     {
-        $composeFile = $this->composeFilePath ?? ($this->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
-
-        $files = "-f " . escapeshellarg($composeFile);
-
-        $overridePath = $this->getOverridePath();
-        if ($overridePath !== null) {
-            $files .= " -f " . escapeshellarg($overridePath);
-        }
-
-        $envFile = "";
+        $files = $this->buildComposeFileFlags();
+        $envFile = $this->buildEnvFileFlag();
         $envPath = $this->getEnvFilePath();
-        if ($envPath !== null && is_file($envPath)) {
-            $envFile = "--env-file " . escapeshellarg($envPath);
-        }
 
-        return [
+        $result = [
             'projectName' => $this->projectName,
             'files' => $files,
             'envFile' => $envFile,
         ];
+        if ($envPath !== null) {
+            $result['envFilePath'] = $envPath;
+        }
+        $result['filePaths'] = $this->getComposeFilePaths();
+        $result['fileList'] = $this->buildComposeFileList();
+
+        return $result;
+    }
+
+    /**
+     * Build a PATH_SEPARATOR-delimited list of compose file paths for shell environment use.
+     *
+     * @return string
+     */
+    public function buildComposeFileList(): string
+    {
+        $filePaths = $this->getComposeFilePaths();
+        $filePaths = array_filter($filePaths, static fn(string $value): bool => $value !== '');
+        $filePaths = array_map('trim', $filePaths);
+
+        return implode(PATH_SEPARATOR, $filePaths);
     }
 
     /**
@@ -2019,16 +2174,10 @@ class StackInfo
             return false;
         }
 
-        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
-
-        $overridePath = $this->getOverridePath();
-        if ($overridePath !== null && is_file($overridePath)) {
-            $cmd .= " -f " . escapeshellarg($overridePath);
-        }
-
-        $envFilePath = $this->getEnvFilePath();
-        if ($envFilePath !== null && is_file($envFilePath)) {
-            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        $cmd = "docker compose " . $this->buildComposeFileFlags();
+        $envFlag = $this->buildEnvFileFlag();
+        if ($envFlag !== '') {
+            $cmd .= " " . $envFlag;
         }
         $cmd .= " config 2>/dev/null";
 

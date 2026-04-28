@@ -120,21 +120,21 @@ function echoComposeCommand($action, $recreate = false, $background = false)
 
         // Resolve stack identity via StackInfo
         $stackInfo = StackInfo::fromProject($compose_root, basename($path));
+        $args = $stackInfo->buildComposeArgs();
 
         $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . $stackInfo->projectName;
+        $composeCommand[] = "-p" . $args['projectName'];
 
-        $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
-        $composeCommand[] = "-f" . $composeFile;
+        foreach ($args['filePaths'] as $filePath) {
+            $composeCommand[] = "-f" . $filePath;
+        }
 
         // Prune orphaned services from override before compose up
         if ($action === 'up') {
             $stackInfo->pruneOrphanOverrideServices();
         }
 
-        $composeCommand[] = "-f" . $stackInfo->getOverridePath();
-
-        $envFilePath = $stackInfo->getEnvFilePath();
+        $envFilePath = $args['envFilePath'] ?? null;
         if ($envFilePath !== null) {
             $composeCommand[] = "-e" . $envFilePath;
         }
@@ -245,22 +245,21 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         // Resolve stack identity via StackInfo
         $stackInfo = StackInfo::fromProject($compose_root, $project);
         $stackNames[] = $stackInfo->getName();
+        $args = $stackInfo->buildComposeArgs();
 
         $composeCommand[] = "-c" . $action;
-        $composeCommand[] = "-p" . $stackInfo->projectName;
+        $composeCommand[] = "-p" . $args['projectName'];
 
-        $composeFile = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
-        $composeCommand[] = "-f" . $composeFile;
+        foreach ($args['filePaths'] as $filePath) {
+            $composeCommand[] = "-f" . $filePath;
+        }
 
         // Prune orphaned services from override before compose up
         if ($action === 'up') {
             $stackInfo->pruneOrphanOverrideServices();
         }
 
-        $composeCommand[] = "-f" . $stackInfo->getOverridePath();
-
-        // Add env-file if available for this stack
-        $envFilePath = $stackInfo->getEnvFilePath();
+        $envFilePath = $args['envFilePath'] ?? null;
         if ($envFilePath !== null) {
             $composeCommand[] = "-e" . $envFilePath;
         }
