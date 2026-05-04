@@ -455,6 +455,51 @@ class StackInfoTest extends TestCase
         $this->assertNull($info->getEnvFilePath());
     }
 
+    public function testGetEffectiveEnvFilePathFallsBackWhenEnvpathEmpty(): void
+    {
+        $stack = 'empty-envpath-fallback';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/.env", "KEY=value\n");
+        file_put_contents("$stackDir/envpath", "   \n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame("$stackDir/.env", $info->getEffectiveEnvFilePath());
+    }
+
+    public function testGetEffectiveEnvFilePathFallsBackWhenEnvpathInvalid(): void
+    {
+        $stack = 'invalid-envpath-fallback';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/.env", "KEY=value\n");
+        file_put_contents("$stackDir/envpath", "/path/that/does/not/exist/.env\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame("$stackDir/.env", $info->getEffectiveEnvFilePath());
+    }
+
+    public function testBuildComposeArgsUsesLocalEnvWhenEnvpathInvalid(): void
+    {
+        $stack = 'invalid-envpath-build-args';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        file_put_contents("$stackDir/.env", "KEY=value\n");
+        file_put_contents("$stackDir/envpath", "/path/that/does/not/exist/.env\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+        $args = $info->buildComposeArgs();
+
+        $this->assertStringContainsString('--env-file', $args['envFile']);
+        $this->assertStringContainsString($stackDir . '/.env', $args['envFile']);
+        $this->assertSame($stackDir . '/.env', $args['envFilePath']);
+    }
+
     public function testGetIconUrlValid(): void
     {
         $stack = 'icon-stack';
@@ -794,7 +839,6 @@ class StackInfoTest extends TestCase
         file_put_contents("$stackDir/compose.debug.yaml", "services:\n  web:\n    image: nginx:alpine\n");
         $envPath = $stackDir . '/.env';
         file_put_contents($envPath, "COMPOSE_FILE=compose.debug.yaml");
-        file_put_contents("$stackDir/envpath", $envPath);
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
         $args = $info->buildComposeArgs();
@@ -814,7 +858,6 @@ class StackInfoTest extends TestCase
         file_put_contents("$stackDir/compose.extra.yaml", "services:\n  web:\n    image: nginx:alpine\n");
         $envPath = $stackDir . '/.env';
         file_put_contents($envPath, 'COMPOSE_FILE="compose.debug.yaml":compose.extra.yaml');
-        file_put_contents("$stackDir/envpath", $envPath);
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
         $args = $info->buildComposeArgs();

@@ -1541,6 +1541,37 @@ class StackInfo
     }
 
     /**
+     * Resolve the effective env file path for this stack.
+     *
+     * Resolution order:
+     * 1) `envpath` metadata (explicit stack setting) when it points to a
+     *    readable file
+     * 2) Local `.env` in compose source (direct or indirect)
+     *
+     * If `envpath` exists but is empty, it is treated as unset.
+     * If `envpath` exists but points to a missing file, it is treated as
+     * invalid and local `.env` is used as fallback when available.
+     *
+     * @return string|null
+     */
+    public function getEffectiveEnvFilePath(): ?string
+    {
+        $rawEnvPath = $this->readMetadata('envpath');
+        if ($rawEnvPath !== null) {
+            $rawEnvPath = trim($rawEnvPath);
+            if ($rawEnvPath !== '') {
+                if (is_file($rawEnvPath)) {
+                    return $rawEnvPath;
+                }
+                composeLogger("Ignoring invalid envpath for stack $this->projectFolder: file not found", ['envpath' => $rawEnvPath], 'user', 'warning', 'stack');
+            }
+        }
+
+        $defaultEnvPath = $this->composeSource . '/.env';
+        return is_file($defaultEnvPath) ? $defaultEnvPath : null;
+    }
+
+    /**
      * Parse COMPOSE_FILE values from the configured env file.
      *
      * This is used to support projects that declare additional compose
@@ -1550,8 +1581,11 @@ class StackInfo
      */
     private function getAdditionalComposeFilesFromEnv(): array
     {
-        $envFilePath = $this->getEnvFilePath();
-        if ($envFilePath === null || !is_file($envFilePath)) {
+        $envFilePath = $this->getEffectiveEnvFilePath();
+        if ($envFilePath === null) {
+            return [];
+        }
+        if (!is_file($envFilePath)) {
             return [];
         }
 
@@ -1703,7 +1737,7 @@ class StackInfo
      */
     private function buildEnvFileFlag(): string
     {
-        $envPath = $this->getEnvFilePath();
+        $envPath = $this->getEffectiveEnvFilePath();
         if ($envPath !== null && is_file($envPath)) {
             return '--env-file ' . escapeshellarg($envPath);
         }
@@ -1859,7 +1893,7 @@ class StackInfo
             return true;
         }
 
-        $envFilePath = $this->getEnvFilePath();
+        $envFilePath = $this->getEffectiveEnvFilePath();
         if ($envFilePath !== null && is_file($envFilePath) && filemtime($envFilePath) > $cacheMtime) {
             return true;
         }
@@ -2107,7 +2141,7 @@ class StackInfo
     {
         $files = $this->buildComposeFileFlags();
         $envFile = $this->buildEnvFileFlag();
-        $envPath = $this->getEnvFilePath();
+        $envPath = $this->getEffectiveEnvFilePath();
 
         $result = [
             'projectName' => $this->projectName,

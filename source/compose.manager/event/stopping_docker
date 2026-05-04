@@ -59,12 +59,9 @@ stop_stack() {
     override_args=(-f "$compose_override_file")
     
     local -a env_args=()
-    if [ -f "$dir/envpath" ]; then
-        local envpath
-        envpath=$(< "$dir/envpath")
-        if [ -f "$envpath" ]; then
-            env_args=("--env-file" "$envpath")
-        fi
+    local env_file
+    if env_file=$(resolve_stack_env_file "$dir"); then
+        env_args=("--env-file" "$env_file")
     fi
     
     # Try graceful stop first with timeout

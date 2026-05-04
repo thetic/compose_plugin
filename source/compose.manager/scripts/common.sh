@@ -91,3 +91,48 @@ find_compose_override_file() {
 has_compose_file() {
     find_compose_file "$1" > /dev/null 2>&1
 }
+
+# Resolve effective env file for a stack.
+# Order:
+#  1) <stack>/envpath when it points to a readable file
+#  2) <compose source>/.env (local fallback)
+#
+# Compose source is the indirect directory when <stack>/indirect exists,
+# otherwise the stack directory itself.
+# Empty envpath values are treated as unset.
+# Invalid envpath values are ignored and fallback is attempted.
+# Prints the resolved env file path when found and returns 0.
+# Returns 1 when no usable env file is available.
+resolve_stack_env_file() {
+    local stack_dir="$1"
+    local compose_source="$stack_dir"
+
+    if [ -f "$stack_dir/indirect" ]; then
+        local indirect
+        indirect=$(< "$stack_dir/indirect")
+        if [ -n "$indirect" ]; then
+            compose_source="$indirect"
+        fi
+    fi
+
+    if [ -f "$stack_dir/envpath" ]; then
+        local envpath
+        envpath=$(< "$stack_dir/envpath")
+        envpath="$(echo "$envpath" | xargs)"
+        if [ -n "$envpath" ] && [ -f "$envpath" ]; then
+            echo "$envpath"
+            return 0
+        fi
+        if [ -n "$envpath" ]; then
+            composeLogger "Ignoring invalid envpath for stack '$stack_dir': $envpath" warning stack
+        fi
+    fi
+
+    local local_env="$compose_source/.env"
+    if [ -f "$local_env" ]; then
+        echo "$local_env"
+        return 0
+    fi
+
+    return 1
+}

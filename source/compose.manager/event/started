@@ -98,9 +98,8 @@ start_stack() {
     fi
     cmd_args+=(-f "$compose_override_file")
 
-    if [ -f "$dir/envpath" ]; then
-        local env_file
-        env_file=$(< "$dir/envpath")
+    local env_file
+    if env_file=$(resolve_stack_env_file "$dir"); then
         cmd_args+=(-e "$env_file")
     fi
 

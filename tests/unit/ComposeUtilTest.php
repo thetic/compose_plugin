@@ -316,7 +316,9 @@ class ComposeUtilTest extends TestCase
         mkdir($stackDir, 0755, true);
         file_put_contents("$stackDir/" . COMPOSE_FILE_NAMES[0], "services:\n  web:\n    image: nginx\n");
         file_put_contents("$stackDir/name", $stackName);
-        file_put_contents("$stackDir/envpath", "/custom/path/.env");
+        $customEnvPath = "$tempDir/custom.env";
+        file_put_contents($customEnvPath, "TEST_VAR=1\n");
+        file_put_contents("$stackDir/envpath", $customEnvPath);
         
         // Ensure array is started
         $varIniDir = sys_get_temp_dir() . '/emhttp_test_' . uniqid();
@@ -334,7 +336,7 @@ class ComposeUtilTest extends TestCase
         $output = ob_get_clean();
         
         // Should include env path
-        $this->assertStringContainsString('-e/custom/path/.env', $output);
+        $this->assertStringContainsString('-e' . $customEnvPath, $output);
         
         // Cleanup
         unlink("$varIniDir/var.ini");
