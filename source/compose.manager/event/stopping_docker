@@ -31,42 +31,54 @@ stop_stack() {
     
     log "Stopping stack: $stack_name"
     
-    # Build command arguments
-    local -a file_args=()
-    if [ -f "$dir/indirect" ]; then
-        local indirect
-        indirect=$(< "$dir/indirect")
-        local compose_file
-        if ! compose_file=$(find_compose_file "$indirect"); then
-            compose_file="$indirect/compose.yaml"
-        fi
-        file_args=("-f" "$compose_file")
-    else
-        local compose_file
-        if ! compose_file=$(find_compose_file "$dir"); then
-            compose_file="$dir/compose.yaml"
-        fi
-        file_args=("-f" "$compose_file")
-    fi
-    
-    local -a override_args=()
+    local project
+    project=$(basename "$dir")
+    local project_name="$sanitized_name"
 
-    
-    local compose_override_file
-    if ! compose_override_file=$(find_compose_override_file "$dir"); then
-        compose_override_file="$dir/compose.override.yaml"
-    fi
-    override_args=(-f "$compose_override_file")
-    
+    # Build args from centralized provider.
+    local -a file_args=()
     local -a env_args=()
-    local env_file
-    if env_file=$(resolve_stack_env_file "$dir"); then
-        env_args=("--env-file" "$env_file")
+    if load_compose_action_spec "$COMPOSE_ROOT" "$project" down "$dir"; then
+        project_name="$COMPOSE_SPEC_PROJECT_NAME"
+        for compose_file in "${COMPOSE_SPEC_COMPOSE_FILES[@]}"; do
+            file_args+=("-f" "$compose_file")
+        done
+        if [ -n "$COMPOSE_SPEC_ENV_FILE_PATH" ]; then
+            env_args=("--env-file" "$COMPOSE_SPEC_ENV_FILE_PATH")
+        fi
+    else
+        # Fallback to legacy shell resolution.
+        if [ -f "$dir/indirect" ]; then
+            local indirect
+            indirect=$(< "$dir/indirect")
+            local compose_file
+            if ! compose_file=$(find_compose_file "$indirect"); then
+                compose_file="$indirect/compose.yaml"
+            fi
+            file_args=("-f" "$compose_file")
+        else
+            local compose_file
+            if ! compose_file=$(find_compose_file "$dir"); then
+                compose_file="$dir/compose.yaml"
+            fi
+            file_args=("-f" "$compose_file")
+        fi
+
+        local compose_override_file
+        if ! compose_override_file=$(find_compose_override_file "$dir"); then
+            compose_override_file="$dir/compose.override.yaml"
+        fi
+        file_args+=("-f" "$compose_override_file")
+
+        local env_file
+        if env_file=$(resolve_stack_env_file "$dir"); then
+            env_args=("--env-file" "$env_file")
+        fi
     fi
     
     # Try graceful stop first with timeout
     local exit_code
-    timeout $SHUTDOWN_TIMEOUT docker compose "${file_args[@]}" "${override_args[@]}" "${env_args[@]}" -p "$sanitized_name" stop 2>&1
+    timeout $SHUTDOWN_TIMEOUT docker compose "${file_args[@]}" "${env_args[@]}" -p "$project_name" stop 2>&1
     exit_code=$?
     
     local duration=$(($(date +%s) - start_time))
@@ -77,7 +89,7 @@ stop_stack() {
     elif [ $exit_code -eq 124 ]; then
         log "WARNING: Stack $stack_name stop timed out after ${SHUTDOWN_TIMEOUT}s, forcing..."
         # Force kill containers if graceful stop times out
-        docker compose "${file_args[@]}" "${override_args[@]}" "${env_args[@]}" -p "$sanitized_name" kill 2>&1
+        docker compose "${file_args[@]}" "${env_args[@]}" -p "$project_name" kill 2>&1
         log "Stack $stack_name force killed"
         return 124
     else
