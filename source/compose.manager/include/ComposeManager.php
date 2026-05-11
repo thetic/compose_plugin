@@ -6226,6 +6226,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             });
         }
 
+        context.destroy('#' + elementId);
         context.attach('#' + elementId, opts);
     }
 
