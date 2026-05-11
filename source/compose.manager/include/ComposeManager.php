@@ -236,6 +236,12 @@ if ($cpuCount <= 0) {
         z-index: 100 !important;
     }
 
+    /* Keep long context menus visible above fixed bottom UI bars */
+    .dropdown-context:not(.dropdown-context-sub) {
+        max-height: calc(100vh - 72px);
+        overflow-y: auto;
+    }
+
     /* CPU & Memory load display (matches Docker manager usage-disk style) */
     .compose-load-cell {
         white-space: nowrap;
@@ -5631,7 +5637,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var opts = [];
         context.settings({
             right: false,
-            above: false
+            above: 'auto'
         });
 
         // WebUI (if running)
@@ -5973,7 +5979,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var opts = [];
         context.settings({
             right: false,
-            above: false
+            above: 'auto'
         });
 
         // ===== STACK IS RUNNING =====
