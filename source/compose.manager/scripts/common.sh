@@ -140,7 +140,6 @@ resolve_stack_env_file() {
 # Load compose command args for a stack/action from the PHP builder.
 #
 # Populates global variables:
-#   COMPOSE_SPEC_ACTION
 #   COMPOSE_SPEC_PROJECT_NAME
 #   COMPOSE_SPEC_STACK_PATH
 #   COMPOSE_SPEC_ENV_FILE_PATH
@@ -175,9 +174,9 @@ load_compose_action_spec() {
         return 1
     fi
 
-    COMPOSE_SPEC_ACTION=""
     COMPOSE_SPEC_PROJECT_NAME=""
     COMPOSE_SPEC_STACK_PATH=""
+    # shellcheck disable=SC2034  # Populated here, consumed by scripts that source common.sh.
     COMPOSE_SPEC_ENV_FILE_PATH=""
     COMPOSE_SPEC_ERROR_MESSAGE=""
     COMPOSE_SPEC_COMPOSE_FILES=()
@@ -192,9 +191,6 @@ load_compose_action_spec() {
             message)
                 COMPOSE_SPEC_ERROR_MESSAGE="$value"
                 ;;
-            action)
-                COMPOSE_SPEC_ACTION="$value"
-                ;;
             projectName)
                 COMPOSE_SPEC_PROJECT_NAME="$value"
                 ;;
@@ -202,6 +198,7 @@ load_compose_action_spec() {
                 COMPOSE_SPEC_STACK_PATH="$value"
                 ;;
             envFilePath)
+                # shellcheck disable=SC2034  # Populated here, consumed by scripts that source common.sh.
                 COMPOSE_SPEC_ENV_FILE_PATH="$value"
                 ;;
             composeFile)
