@@ -453,27 +453,6 @@ var editorModal = {
     labelsViewMode: 'basic' // 'basic' (form UI) or 'advanced' (override editor)
 };
 
-function getSavedLabelsViewMode() {
-    return $.cookie('compose_editor_labelsview_mode') === 'advanced' ? 'advanced' : 'basic';
-}
-
-function applySavedLabelsViewMode() {
-    var isAdvanced = getSavedLabelsViewMode() === 'advanced';
-    editorModal.labelsViewMode = isAdvanced ? 'advanced' : 'basic';
-
-    var $toggle = $('#labels-view-toggle');
-    if ($toggle.length) {
-        if ($toggle.is(':checked') !== isAdvanced) {
-            // Drive through native change path so switch widget + panel stay in sync.
-            $toggle.prop('checked', isAdvanced).trigger('change');
-        } else {
-            toggleLabelsViewMode(isAdvanced, true);
-        }
-    } else {
-        toggleLabelsViewMode(isAdvanced, true);
-    }
-}
-
 // Debounce helper for validation
 function debounceValidation(type, content) {
     if (editorModal.validationTimeout) {
@@ -598,7 +577,7 @@ function initEditorModal() {
             labels_placement: 'left',
             on_label: 'Advanced View',
             off_label: 'Basic View',
-            checked: getSavedLabelsViewMode() === 'advanced'
+            checked: false
         });
     }
 
@@ -747,11 +726,12 @@ function switchTab(tabName) {
     }
 
     if (tabName === 'labels') {
-        // Apply persisted mode every time labels tab opens so toggle and view never drift.
-        applySavedLabelsViewMode();
+        // Apply stack-specific mode every time labels tab opens.
+        var labelsAdvanced = editorModal.labelsViewMode === 'advanced';
+        toggleLabelsViewMode(labelsAdvanced, true);
 
         // If in advanced mode, ensure override editor is populated + resized.
-        if (editorModal.labelsViewMode === 'advanced') {
+        if (labelsAdvanced) {
             if (!editorModal.labelsData) {
                 loadLabelsData(function() { _populateOverrideEditor(); });
             } else {
@@ -3883,7 +3863,7 @@ function openEditorModalByProject(project, projectName, initialTab) {
     editorModal.originalSettings = {};
     editorModal.originalLabels = {};
     editorModal.labelsData = null;
-    editorModal.labelsViewMode = getSavedLabelsViewMode();
+    editorModal.labelsViewMode = 'basic';
 
     // Reset all tabs to unmodified state
     $('.editor-tab').removeClass('modified active');
@@ -3891,8 +3871,8 @@ function openEditorModalByProject(project, projectName, initialTab) {
     $('.editor-container').removeClass('active');
     $('.editor-panel').removeClass('active');
 
-    // Reset labels tab based on persisted mode
-    applySavedLabelsViewMode();
+    // Reset labels tab to basic immediately; stack-specific mode arrives from getStackSettings.
+    toggleLabelsViewMode(false, true);
     if (editorModal.editors['override']) {
         editorModal.editors['override'].setValue('', -1);
     }
@@ -4085,6 +4065,15 @@ function loadSettingsData(project, projectName) {
                 $('#settings-use-default-compose-files').prop('checked', useDefaultComposeFiles);
                 editorModal.originalSettings['use-default-compose-files'] = useDefaultComposeFiles ? 'true' : 'false';
 
+                // Labels editor mode (per-stack)
+                var labelsViewMode = response.labelsViewMode === 'advanced' ? 'advanced' : 'basic';
+                editorModal.labelsViewMode = labelsViewMode;
+                editorModal.originalSettings['labels-view-mode'] = labelsViewMode;
+
+                if (editorModal.currentProject === project && editorModal.currentTab === 'labels') {
+                    toggleLabelsViewMode(labelsViewMode === 'advanced', true);
+                }
+
                 // Available profiles (from the profiles file)
                 var availableProfiles = response.availableProfiles || [];
                 if (availableProfiles.length > 0) {
@@ -4108,6 +4097,8 @@ function loadSettingsData(project, projectName) {
         editorModal.originalSettings['default-profile'] = '';
         editorModal.originalSettings['external-compose-path'] = '';
         editorModal.originalSettings['use-default-compose-files'] = 'false';
+        editorModal.originalSettings['labels-view-mode'] = 'basic';
+        editorModal.labelsViewMode = 'basic';
         $('#settings-icon-preview').hide();
         $('#settings-available-profiles').hide();
         $('#settings-external-compose-info').hide();
@@ -4119,9 +4110,14 @@ function loadSettingsData(project, projectName) {
 function toggleLabelsViewMode(isAdvanced, skipPersist) {
     editorModal.labelsViewMode = isAdvanced ? 'advanced' : 'basic';
 
-    if (!skipPersist) {
-        $.cookie('compose_editor_labelsview_mode', editorModal.labelsViewMode, {
-            expires: 3650
+    // Keep switch UI synced for programmatic mode application.
+    $('#labels-view-toggle').prop('checked', isAdvanced);
+
+    if (!skipPersist && editorModal.currentProject) {
+        $.post(caURL, {
+            action: 'setLabelsViewMode',
+            script: editorModal.currentProject,
+            labelsViewMode: editorModal.labelsViewMode
         });
     }
 
@@ -4879,7 +4875,7 @@ function doCloseEditorModal() {
     editorModal.originalSettings = {};
     editorModal.originalLabels = {};
     editorModal.labelsData = null;
-    editorModal.labelsViewMode = getSavedLabelsViewMode();
+    editorModal.labelsViewMode = 'basic';
 
     // Clear editor content to avoid showing stale content on next open
     ['compose', 'env', 'override'].forEach(function(type) {
@@ -4888,8 +4884,8 @@ function doCloseEditorModal() {
         }
     });
 
-    // Reset labels view based on persisted mode
-    applySavedLabelsViewMode();
+    // Reset labels view to basic; stack-specific mode reloads on next open.
+    toggleLabelsViewMode(false, true);
     $('#editor-validation-override').html('<i class="fa fa-check editor-validation-icon"></i> Ready').removeClass('valid error warning');
 
     // Reset settings fields

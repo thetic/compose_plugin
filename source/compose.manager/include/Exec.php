@@ -452,6 +452,13 @@ switch ($_POST['action']) {
         $defaultProfileFile = "$compose_root/$script/default_profile";
         $defaultProfile = is_file($defaultProfileFile) ? trim(file_get_contents($defaultProfileFile)) : "";
 
+        // Get labels tab view mode (per-stack)
+        $labelsViewModeFile = "$compose_root/$script/labels_view_mode";
+        $labelsViewMode = is_file($labelsViewModeFile) ? strtolower(trim(file_get_contents($labelsViewModeFile))) : 'basic';
+        if ($labelsViewMode !== 'advanced') {
+            $labelsViewMode = 'basic';
+        }
+
         // Use Docker Compose default file discovery (no explicit -f)
         $useDefaultComposeFilesFile = "$compose_root/$script/use_default_compose_files";
         $useDefaultComposeFiles = is_file($useDefaultComposeFilesFile)
@@ -491,11 +498,36 @@ switch ($_POST['action']) {
             'iconUrl' => $iconUrl,
             'webuiUrl' => $webuiUrl,
             'defaultProfile' => $defaultProfile,
+            'labelsViewMode' => $labelsViewMode,
             'useDefaultComposeFiles' => $useDefaultComposeFiles,
             'externalComposePath' => $externalComposePath,
             'invalidIndirectPath' => $invalidIndirectPath,
             'availableProfiles' => $availableProfiles
         ]);
+        break;
+    case 'setLabelsViewMode':
+        $script = getPostScript();
+        if (!$script) {
+            echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
+            break;
+        }
+
+        $labelsViewMode = isset($_POST['labelsViewMode']) ? strtolower(trim((string) $_POST['labelsViewMode'])) : 'basic';
+        if ($labelsViewMode !== 'advanced' && $labelsViewMode !== 'basic') {
+            echo json_encode(['result' => 'error', 'message' => 'Invalid labels view mode.']);
+            break;
+        }
+
+        $labelsViewModeFile = "$compose_root/$script/labels_view_mode";
+        if ($labelsViewMode === 'advanced') {
+            file_put_contents($labelsViewModeFile, 'advanced');
+        } else {
+            if (is_file($labelsViewModeFile)) {
+                @unlink($labelsViewModeFile);
+            }
+        }
+
+        echo json_encode(['result' => 'success', 'labelsViewMode' => $labelsViewMode]);
         break;
     case 'detectWebui':
         $script = getPostScript();
