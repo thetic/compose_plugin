@@ -16,6 +16,29 @@ STARTUP_TIMEOUT=${AUTOSTART_TIMEOUT:-300}
 WAIT_FOR_DOCKER=${AUTOSTART_WAIT_FOR_DOCKER:-false}
 DOCKER_WAIT_TIMEOUT=${AUTOSTART_DOCKER_WAIT_TIMEOUT:-120}
 
+# Ensure Docker daemon is reachable before running compose commands.
+wait_for_docker_daemon() {
+    local waited=0
+    local check_interval=3
+
+    while [ $waited -lt $DOCKER_WAIT_TIMEOUT ]; do
+        if docker info >/dev/null 2>&1; then
+            log "Docker daemon is ready after ${waited}s"
+            return 0
+        fi
+
+        if [ $waited -eq 0 ]; then
+            log "Waiting for Docker daemon to become ready..."
+        fi
+
+        sleep $check_interval
+        waited=$((waited + check_interval))
+    done
+
+    log "ERROR: Docker daemon was not ready after ${DOCKER_WAIT_TIMEOUT}s"
+    return 1
+}
+
 # Logging helper — writes to log file and delegates to shared composeLogger for syslog
 log() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
@@ -170,6 +193,17 @@ start_stack() {
 # Main execution
 log "=== Compose Manager Autostart Begin ==="
 
+if [ -z "$COMPOSE_ROOT" ] || [ ! -d "$COMPOSE_ROOT" ]; then
+    log "ERROR: Invalid compose root path: '$COMPOSE_ROOT'"
+    exit 1
+fi
+
+# Always wait for Docker daemon readiness to avoid early-boot startup races.
+if ! wait_for_docker_daemon; then
+    log "=== Compose Manager Autostart Aborted (docker unavailable) ==="
+    exit 1
+fi
+
 # Optionally wait for Docker autostart containers to complete
 if [ "$WAIT_FOR_DOCKER" = "true" ]; then
     wait_for_docker_autostart
@@ -193,7 +227,7 @@ for dir in "$COMPOSE_ROOT"/*; do
                 
                 # Get priority (default 50, lower = start earlier)
                 # This can be set via startup_priority file or UI ordering later
-                local priority=50
+                priority=50
                 if [ -f "$dir/startup_priority" ]; then
                     priority=$(< "$dir/startup_priority")
                     # Validate it's a number
