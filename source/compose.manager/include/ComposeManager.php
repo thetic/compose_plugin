@@ -764,8 +764,30 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // Labels state
         originalLabels: {},
         modifiedLabels: new Set(),
-        labelsData: null // Stores the parsed compose and override data
+        labelsData: null, // Stores the parsed compose and override data
+        labelsViewMode: 'basic' // 'basic' (form UI) or 'advanced' (override editor)
     };
+
+    function getSavedLabelsViewMode() {
+        return $.cookie('compose_editor_labelsview_mode') === 'advanced' ? 'advanced' : 'basic';
+    }
+
+    function applySavedLabelsViewMode() {
+        var isAdvanced = getSavedLabelsViewMode() === 'advanced';
+        editorModal.labelsViewMode = isAdvanced ? 'advanced' : 'basic';
+
+        var $toggle = $('#labels-view-toggle');
+        if ($toggle.length) {
+            if ($toggle.is(':checked') !== isAdvanced) {
+                // Drive through native change path so switch widget + panel stay in sync.
+                $toggle.prop('checked', isAdvanced).trigger('change');
+            } else {
+                toggleLabelsViewMode(isAdvanced, true);
+            }
+        } else {
+            toggleLabelsViewMode(isAdvanced, true);
+        }
+    }
 
     // Debounce helper for validation
     function debounceValidation(type, content) {
@@ -859,9 +881,44 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             editorModal.editors[type] = editor;
         });
 
+        // Initialize override editor (for labels tab advanced mode)
+        var overrideEditor = ace.edit('editor-override');
+        overrideEditor.setTheme(aceTheme);
+        overrideEditor.setShowPrintMargin(false);
+        overrideEditor.setOptions({
+            fontSize: '1.1rem',
+            tabSize: 2,
+            useSoftTabs: true,
+            wrap: true
+        });
+        overrideEditor.getSession().setUseWorker(false);
+        overrideEditor.getSession().setMode('ace/mode/yaml');
+        overrideEditor.on('change', function() {
+            var currentContent = overrideEditor.getValue();
+            var originalContent = editorModal.originalContent['override'] || '';
+            if (currentContent !== originalContent) {
+                editorModal.modifiedTabs.add('override');
+            } else {
+                editorModal.modifiedTabs.delete('override');
+            }
+            updateSaveButtonState();
+            updateTabModifiedState();
+            debounceValidation('override', currentContent);
+        });
+        editorModal.editors['override'] = overrideEditor;
+
+        // Initialize labels view-mode toggle using same style/pattern as compose tab
+        if ($.fn.switchButton) {
+            $('#labels-view-toggle').switchButton({
+                labels_placement: 'left',
+                on_label: 'Advanced View',
+                off_label: 'Basic View',
+                checked: getSavedLabelsViewMode() === 'advanced'
+            });
+        }
+
         // Initialize settings field change tracking
-        $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path, #settings-use-default-compose-files').on('input change', function() {
-            var fieldId = this.id.replace('settings-', '');
+        $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path, #settings-use-default-compose-files').on('input change', function() {            var fieldId = this.id.replace('settings-', '');
             var isCheckbox = this.type === 'checkbox';
             var currentValue = isCheckbox ? ($(this).is(':checked') ? 'true' : 'false') : $(this).val();
             var originalValue = editorModal.originalSettings[fieldId] || '';
@@ -1004,9 +1061,21 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             }
         }
 
-        // Load labels data if switching to labels tab for the first time
-        if (tabName === 'labels' && !editorModal.labelsData) {
-            loadLabelsData();
+        if (tabName === 'labels') {
+            // Apply persisted mode every time labels tab opens so toggle and view never drift.
+            applySavedLabelsViewMode();
+
+            // If in advanced mode, ensure override editor is populated + resized.
+            if (editorModal.labelsViewMode === 'advanced') {
+                if (!editorModal.labelsData) {
+                    loadLabelsData(function() { _populateOverrideEditor(); });
+                } else {
+                    _populateOverrideEditor();
+                }
+            } else if (!editorModal.labelsData) {
+                // Basic mode still needs labels service/form data.
+                loadLabelsData();
+            }
         }
     }
 
@@ -1038,8 +1107,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             $('#editor-tab-env').removeClass('modified');
         }
 
-        // Labels tab
-        if (editorModal.modifiedLabels.size > 0) {
+        // Labels tab — modified if labels form OR override editor has changes
+        if (editorModal.modifiedLabels.size > 0 || editorModal.modifiedTabs.has('override')) {
             $('#editor-tab-labels').addClass('modified');
         } else {
             $('#editor-tab-labels').removeClass('modified');
@@ -4129,12 +4198,20 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         editorModal.originalSettings = {};
         editorModal.originalLabels = {};
         editorModal.labelsData = null;
+        editorModal.labelsViewMode = getSavedLabelsViewMode();
 
         // Reset all tabs to unmodified state
         $('.editor-tab').removeClass('modified active');
         $('.editor-main-tab').removeClass('modified active');
         $('.editor-container').removeClass('active');
         $('.editor-panel').removeClass('active');
+
+        // Reset labels tab based on persisted mode
+        applySavedLabelsViewMode();
+        if (editorModal.editors['override']) {
+            editorModal.editors['override'].setValue('', -1);
+        }
+        $('#editor-validation-override').html('<i class="fa fa-check editor-validation-icon"></i> Ready').removeClass('valid error warning');
 
         // Set modal title
         $('#editor-modal-title').text('Editing: ' + projectName);
@@ -4353,8 +4430,60 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         });
     }
 
+    // Toggle labels tab between basic (form) and advanced (override editor) modes
+    function toggleLabelsViewMode(isAdvanced, skipPersist) {
+        editorModal.labelsViewMode = isAdvanced ? 'advanced' : 'basic';
+
+        if (!skipPersist) {
+            $.cookie('compose_editor_labelsview_mode', editorModal.labelsViewMode, {
+                expires: 3650
+            });
+        }
+
+        if (isAdvanced) {
+            $('#labels-basic-view').hide();
+            $('#labels-advanced-view').show();
+            $('#editor-tab-labels-text').text('Override');
+
+            // Pre-populate override editor if labelsData is available (loaded via loadLabelsData)
+            // If not yet loaded, load it now
+            if (!editorModal.labelsData) {
+                loadLabelsData(function() {
+                    _populateOverrideEditor();
+                });
+            } else {
+                _populateOverrideEditor();
+            }
+        } else {
+            $('#labels-advanced-view').hide();
+            $('#labels-basic-view').show();
+            $('#editor-tab-labels-text').text('Labels');
+
+            // If the override editor has unsaved changes, warn before switching back
+            // (already tracked in modifiedTabs so save button will prompt)
+        }
+    }
+
+    // Populate the override Ace editor with the current override file content
+    function _populateOverrideEditor() {
+        if (!editorModal.editors['override']) return;
+        var content = (editorModal.labelsData && editorModal.labelsData.overrideContent) || '';
+        // Hydrate editor from override file unless there are unsaved override edits.
+        if (!editorModal.modifiedTabs.has('override')) {
+            editorModal.originalContent['override'] = content;
+            editorModal.editors['override'].setValue(content, -1);
+        }
+        setTimeout(function() {
+            try {
+                editorModal.editors['override'].resize();
+                editorModal.editors['override'].renderer.updateFull();
+                editorModal.editors['override'].focus();
+            } catch(e) {}
+        }, 50);
+    }
+
     // Load labels data for the WebUI Labels panel
-    function loadLabelsData() {
+    function loadLabelsData(callback) {
         var project = editorModal.currentProject;
         if (!project) return;
 
@@ -4398,7 +4527,16 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     overrideHasCustomTags: composeYamlContainsCustomTags(overrideData.content || '')
                 };
 
+                // Pre-cache override content for the override editor (only if not yet set for this project)
+                if (editorModal.originalContent['override'] === undefined) {
+                    editorModal.originalContent['override'] = overrideData.content || '';
+                }
+
                 renderLabelsUI(mainDoc, overrideDoc);
+
+                if (typeof callback === 'function') {
+                    callback();
+                }
 
             } catch (e) {
                 composeLogger('Failed to parse compose files for labels', {
@@ -4633,6 +4771,24 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         var currentTab = editorModal.currentTab;
         if (!currentTab) return;
 
+        // Handle override editor save (labels tab in advanced mode)
+        if (currentTab === 'labels' && editorModal.labelsViewMode === 'advanced') {
+            if (!editorModal.modifiedTabs.has('override')) return;
+            saveTab('override').then(function(result) {
+                if (result === true) {
+                    $('#editor-validation-override').html('<i class="fa fa-check editor-validation-icon"></i> Saved!').removeClass('error warning').addClass('valid');
+                    setTimeout(function() {
+                        if (editorModal.editors['override']) validateYaml('override', editorModal.editors['override'].getValue());
+                    }, 1500);
+                } else {
+                    $('#editor-validation-override').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Save failed').removeClass('valid warning').addClass('error');
+                }
+            }).catch(function() {
+                $('#editor-validation-override').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Save failed').removeClass('valid warning').addClass('error');
+            });
+            return;
+        }
+
         // Only save editor tabs
         if (currentTab !== 'compose' && currentTab !== 'env') return;
         if (!editorModal.modifiedTabs.has(currentTab)) return;
@@ -4665,6 +4821,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             case 'env':
                 actionStr = 'saveEnv';
                 break;
+            case 'override':
+                actionStr = 'saveOverride';
+                break;
             default:
                 return Promise.reject('Unknown tab');
         }
@@ -4677,7 +4836,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             if (data) {
                 editorModal.originalContent[tabName] = content;
                 editorModal.modifiedTabs.delete(tabName);
-                $('#editor-tab-' + tabName).removeClass('modified');
+                // For override, clear 'modified' on the labels tab indicator
+                if (tabName === 'override') {
+                    updateTabModifiedState();
+                } else {
+                    $('#editor-tab-' + tabName).removeClass('modified');
+                }
                 updateSaveButtonState();
                 updateTabModifiedState();
 
@@ -4708,7 +4872,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         // Track if labels are being modified (need to offer recreate)
         var labelsWereModified = editorModal.modifiedLabels.size > 0;
 
-        // Save modified file tabs
+        // Save modified file tabs (compose, env, and override editor)
         editorModal.modifiedTabs.forEach(function(tabName) {
             savePromises.push(saveTab(tabName, saveErrors));
         });
@@ -5030,13 +5194,18 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         editorModal.originalSettings = {};
         editorModal.originalLabels = {};
         editorModal.labelsData = null;
+        editorModal.labelsViewMode = getSavedLabelsViewMode();
 
         // Clear editor content to avoid showing stale content on next open
-        ['compose', 'env'].forEach(function(type) {
+        ['compose', 'env', 'override'].forEach(function(type) {
             if (editorModal.editors[type]) {
                 editorModal.editors[type].setValue('', -1);
             }
         });
+
+        // Reset labels view based on persisted mode
+        applySavedLabelsViewMode();
+        $('#editor-validation-override').html('<i class="fa fa-check editor-validation-icon"></i> Ready').removeClass('valid error warning');
 
         // Reset settings fields
         $('#settings-name').val('');
@@ -6467,7 +6636,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 </button>
                 <button class="editor-tab" id="editor-tab-labels" onclick="switchTab('labels')" role="tab" aria-selected="false" aria-controls="editor-panel-labels">
                     <i class="fa fa-tags" aria-hidden="true"></i>
-                    WebUI Labels
+                    <span id="editor-tab-labels-text">Labels</span>
                     <span class="editor-tab-modified" aria-hidden="true"></span>
                 </button>
                 <button class="editor-tab" id="editor-tab-settings" onclick="switchTab('settings')" role="tab" aria-selected="false" aria-controls="editor-panel-settings">
@@ -6503,15 +6672,38 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
             <!-- ========== WEBUI LABELS PANEL ========== -->
             <div class="editor-panel" id="editor-panel-labels" role="tabpanel" aria-labelledby="editor-tab-labels">
-                <div class="labels-panel">
+                <div class="labels-view-toggle-row">
+                    <span class="status compose-view-toggle"><span><input type="checkbox" id="labels-view-toggle" class="labels-advancedview" onchange="toggleLabelsViewMode(this.checked)"></span></span>
+                </div>
+                <!-- Basic mode: form UI -->
+                <div class="labels-panel" id="labels-basic-view">
                     <div class="labels-panel-header">
-                        <p>Configure icons, WebUI links, and shell commands for each service. These labels integrate your containers with the unRAID Docker UI.</p>
+                        <div class="labels-panel-header-row">
+                            <p>Configure icons, WebUI links, and shell commands for each service. These labels integrate your containers with the unRAID Docker UI.</p>
+                        </div>
                     </div>
                     <div id="labels-services-container">
                         <div class="labels-empty-state">
                             <i class="fa fa-spinner fa-spin"></i>
                             Loading services...
                         </div>
+                    </div>
+                </div>
+                <!-- Advanced mode: raw override editor -->
+                <div class="labels-override-view" id="labels-advanced-view" style="display:none;">
+                    <div class="labels-override-header">
+                        <div class="labels-override-header-row">
+                            <div>
+                                <span class="labels-override-title"><i class="fa fa-file-code-o"></i> compose.override.yaml</span>
+                                <span class="labels-override-desc">Editing the raw override file. Changes here are saved directly without affecting the Labels form view.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="labels-override-editor-wrap">
+                        <div id="editor-override" style="width:100%;height:100%;"></div>
+                    </div>
+                    <div class="editor-validation" id="editor-validation-override">
+                        <i class="fa fa-check editor-validation-icon"></i> Ready
                     </div>
                 </div>
             </div>

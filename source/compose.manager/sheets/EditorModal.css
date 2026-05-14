@@ -485,6 +485,65 @@
   color: var(--brand-orange);
 }
 
+/* Labels panel header row (description + toggle side-by-side) */
+.labels-panel-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.labels-panel-header-row p {
+  margin: 0;
+  flex: 1;
+}
+
+/* Shared labels toggle row (uses existing compose switch styling) */
+.labels-view-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 20px 0 20px;
+}
+
+/* Override editor view (advanced mode) */
+.labels-override-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.labels-override-header {
+  padding: 12px 20px;
+  background-color: var(--dynamix-tablesorter-tbody-row-alt-bg-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.labels-override-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.labels-override-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--brand-orange);
+  margin-right: 12px;
+}
+
+.labels-override-desc {
+  font-size: 0.95rem;
+  color: var(--alt-text-color);
+}
+
+.labels-override-editor-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
 .editor-modal-footer {
   display: flex;
   justify-content: space-between;
