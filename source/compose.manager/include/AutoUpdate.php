@@ -2,6 +2,8 @@
 require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 
+$compose_root = $compose_root ?? locate_compose_root('compose.manager');
+
 $action = isset($_POST['action']) ? $_POST['action'] : '';
 $autofile = getAutoUpdateConfigFilePath();
 $legacyAutofile = rtrim($plugin_root ?? '', '/') . "/autoupdate.json";
@@ -128,9 +130,11 @@ switch ($action) {
             $args = $stackInfo->buildComposeArgs();
             $composeFileList = $stackInfo->buildComposeFileList();
             $envFilePath = $args['envFilePath'] ?? null;
+            $projectDirectory = $args['projectDirectory'];
         } else {
             $composeFileList = $composeFile;
             $envFilePath = null;
+            $projectDirectory = $path;
         }
 
         // Allow overriding the shell command via environment for tests; default to sh
@@ -142,6 +146,9 @@ switch ($action) {
         }
         if ($envFilePath !== null && $envFilePath !== '') {
             $envPrefix .= 'COMPOSE_ENV_FILE=' . escapeshellarg($envFilePath) . ' ';
+        }
+        if ($composeFileList === '' && $projectDirectory !== '') {
+            $envPrefix .= 'COMPOSE_PROJECT_DIR=' . escapeshellarg($projectDirectory) . ' ';
         }
 
         $cmd = $envPrefix . $shCmd . ' ' . escapeshellarg($script) . " " . escapeshellarg($projectName) . " 2>&1";

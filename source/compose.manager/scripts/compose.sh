@@ -11,8 +11,8 @@ export HOME=/root
 LOCK_TIMEOUT=${COMPOSE_LOCK_TIMEOUT:-30}
 LOCK_DIR="/var/run/compose.manager"
 
-SHORT=e:,c:,f:,p:,d:,o:,g:,s:
-LONG=env,command:,file:,project_name:,project_dir:,override:,profile:,debug,recreate,stack-path:
+SHORT=e:,c:,f:,p:,d:,o:,g:,s:,w:
+LONG=env,command:,file:,project_name:,project_dir:,override:,profile:,debug,recreate,stack-path:,workdir:
 OPTS=$(getopt -a -n compose --options $SHORT --longoptions $LONG -- "$@")
 
 eval set -- "$OPTS"
@@ -22,6 +22,7 @@ env_args=()
 file_args=()
 profile_names=()
 profile_args=()
+project_dir_args=()
 cmd_args=()
 stack_path=""
 debug=false
@@ -149,6 +150,15 @@ do
       profile_names+=("$2")
       shift 2
       ;;
+    -w | --workdir )
+      if [ -d "$2" ]; then
+        project_dir_args=("--project-directory" "$2")
+      else
+        log_msg "ERROR" "Project directory does not exist: $2"
+        exit 1
+      fi
+      shift 2
+      ;;
     --recreate )
       cmd_args+=("--force-recreate")
       shift;
@@ -178,7 +188,7 @@ for profile_name in "${profile_names[@]}"; do
 done
 
 # Build the compose base command as an array (no eval needed)
-compose_base=(docker compose "${env_args[@]}" "${file_args[@]}" "${profile_args[@]}")
+compose_base=(docker compose "${project_dir_args[@]}" "${env_args[@]}" "${file_args[@]}" "${profile_args[@]}")
 
 # Sanitize the project name for Docker Compose (must be lowercase alphanumeric, hyphens, underscores)
 name=$(echo "$name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/_/g; s/__*/_/g; s/^[_-]*//; s/[_-]*$//')

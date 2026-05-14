@@ -1715,12 +1715,35 @@ class StackInfo
     }
 
     /**
+     * Whether this stack should rely on Docker Compose default file discovery.
+     *
+     * When enabled, commands omit explicit `-f` flags and run with the stack
+     * compose source as project directory so Docker Compose can discover
+     * `compose.yaml`/`compose.override.yaml` and honor COMPOSE_FILE from `.env`.
+     *
+     * @return bool
+     */
+    public function useDefaultComposeFileDiscovery(): bool
+    {
+        $raw = $this->readMetadata('use_default_compose_files');
+        if ($raw === null) {
+            return false;
+        }
+
+        return strtolower(trim($raw)) === 'true';
+    }
+
+    /**
      * Build the `-f` flags for all compose file paths used by this stack.
      *
      * @return string
      */
     private function buildComposeFileFlags(): string
     {
+        if ($this->useDefaultComposeFileDiscovery()) {
+            return '--project-directory ' . escapeshellarg($this->composeSource);
+        }
+
         $flags = [];
         foreach ($this->getComposeFilePaths() as $filePath) {
             if (is_file($filePath)) {
@@ -2133,12 +2156,16 @@ class StackInfo
      *   projectName: string,
      *   files: string,
      *   envFile: string,
+        *   projectDirectory: string,
+        *   useDefaultFileDiscovery: bool,
      *   envFilePath?: string,
-     *   filePaths: string[]
+        *   filePaths: string[],
+        *   fileList: string
      * }
      */
     public function buildComposeArgs(): array
     {
+        $useDefaultDiscovery = $this->useDefaultComposeFileDiscovery();
         $files = $this->buildComposeFileFlags();
         $envFile = $this->buildEnvFileFlag();
         $envPath = $this->getEffectiveEnvFilePath();
@@ -2147,11 +2174,13 @@ class StackInfo
             'projectName' => $this->projectName,
             'files' => $files,
             'envFile' => $envFile,
+            'projectDirectory' => $this->composeSource,
+            'useDefaultFileDiscovery' => $useDefaultDiscovery,
         ];
         if ($envPath !== null) {
             $result['envFilePath'] = $envPath;
         }
-        $result['filePaths'] = $this->getComposeFilePaths();
+        $result['filePaths'] = $useDefaultDiscovery ? [] : $this->getComposeFilePaths();
         $result['fileList'] = $this->buildComposeFileList();
 
         return $result;
@@ -2164,6 +2193,10 @@ class StackInfo
      */
     public function buildComposeFileList(): string
     {
+        if ($this->useDefaultComposeFileDiscovery()) {
+            return '';
+        }
+
         $filePaths = $this->getComposeFilePaths();
         $filePaths = array_filter($filePaths, static fn(string $value): bool => $value !== '');
         $filePaths = array_map('trim', $filePaths);

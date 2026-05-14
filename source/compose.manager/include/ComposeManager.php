@@ -860,9 +860,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         });
 
         // Initialize settings field change tracking
-        $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path').on('input change', function() {
+        $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path, #settings-use-default-compose-files').on('input change', function() {
             var fieldId = this.id.replace('settings-', '');
-            var currentValue = $(this).val();
+            var isCheckbox = this.type === 'checkbox';
+            var currentValue = isCheckbox ? ($(this).is(':checked') ? 'true' : 'false') : $(this).val();
             var originalValue = editorModal.originalSettings[fieldId] || '';
 
             if (currentValue !== originalValue) {
@@ -4317,6 +4318,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     $('#settings-default-profile').val(defaultProfile);
                     editorModal.originalSettings['default-profile'] = defaultProfile;
 
+                    // Compose file discovery mode
+                    var useDefaultComposeFiles = response.useDefaultComposeFiles === true;
+                    $('#settings-use-default-compose-files').prop('checked', useDefaultComposeFiles);
+                    editorModal.originalSettings['use-default-compose-files'] = useDefaultComposeFiles ? 'true' : 'false';
+
                     // Available profiles (from the profiles file)
                     var availableProfiles = response.availableProfiles || [];
                     if (availableProfiles.length > 0) {
@@ -4333,11 +4339,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             $('#settings-env-path').val('');
             $('#settings-default-profile').val('');
             $('#settings-external-compose-path').val('');
+            $('#settings-use-default-compose-files').prop('checked', false);
             editorModal.originalSettings['icon-url'] = '';
             editorModal.originalSettings['webui-url'] = '';
             editorModal.originalSettings['env-path'] = '';
             editorModal.originalSettings['default-profile'] = '';
             editorModal.originalSettings['external-compose-path'] = '';
+            editorModal.originalSettings['use-default-compose-files'] = 'false';
             $('#settings-icon-preview').hide();
             $('#settings-available-profiles').hide();
             $('#settings-external-compose-info').hide();
@@ -4804,7 +4812,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         }
 
         // Save icon URL, webui URL, env path, default profile, and external compose path if any are modified
-        if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('webui-url') || editorModal.modifiedSettings.has('env-path') || editorModal.modifiedSettings.has('default-profile') || editorModal.modifiedSettings.has('external-compose-path')) {
+        if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('webui-url') || editorModal.modifiedSettings.has('env-path') || editorModal.modifiedSettings.has('default-profile') || editorModal.modifiedSettings.has('external-compose-path') || editorModal.modifiedSettings.has('use-default-compose-files')) {
             var iconUrl = $('#settings-icon-url').val();
             var webuiUrl = $('#settings-webui-url').val();
             if (webuiUrl && !isValidWebUIUrl(webuiUrl)) {
@@ -4826,6 +4834,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var envPath = $('#settings-env-path').val();
             var defaultProfile = $('#settings-default-profile').val();
             var externalComposePath = $('#settings-external-compose-path').val();
+            var useDefaultComposeFiles = $('#settings-use-default-compose-files').is(':checked') ? 'true' : 'false';
             savePromises.push(
                 $.post(caURL, {
                     action: 'setStackSettings',
@@ -4834,7 +4843,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     webuiUrl: webuiUrl,
                     envPath: envPath,
                     defaultProfile: defaultProfile,
-                    externalComposePath: externalComposePath
+                    externalComposePath: externalComposePath,
+                    useDefaultComposeFiles: useDefaultComposeFiles
                 }).then(function(data) {
                     if (data) {
                         try {
@@ -4849,11 +4859,13 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                             editorModal.originalSettings['env-path'] = envPath;
                             editorModal.originalSettings['default-profile'] = defaultProfile;
                             editorModal.originalSettings['external-compose-path'] = externalComposePath;
+                            editorModal.originalSettings['use-default-compose-files'] = useDefaultComposeFiles;
                             editorModal.modifiedSettings.delete('icon-url');
                             editorModal.modifiedSettings.delete('webui-url');
                             editorModal.modifiedSettings.delete('env-path');
                             editorModal.modifiedSettings.delete('default-profile');
                             editorModal.modifiedSettings.delete('external-compose-path');
+                            editorModal.modifiedSettings.delete('use-default-compose-files');
                             needsReload = true;
                             return true;
                         } else {
@@ -5034,6 +5046,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
         $('#settings-env-path').val('');
         $('#settings-default-profile').val('');
         $('#settings-external-compose-path').val('');
+        $('#settings-use-default-compose-files').prop('checked', false);
         $('#settings-icon-preview').hide();
         $('#settings-available-profiles').hide();
         $('#settings-external-compose-info').hide();
@@ -6587,6 +6600,15 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                                 <span class="compose-text-muted" style="font-size:0.9em;">Available profiles: </span>
                                 <span id="settings-profiles-list" style="font-family:var(--font-bitstream);"></span>
                             </div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="settings-use-default-compose-files">Compose File Selection</label>
+                            <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
+                                <input type="checkbox" id="settings-use-default-compose-files">
+                                Use Docker Compose default file discovery (no explicit <code>-f</code> flags)
+                            </label>
+                            <div class="settings-field-help">Enable this for projects that rely on auto-loaded <code>compose.override.*</code> and/or <code>COMPOSE_FILE</code> defined in <code>.env</code>. Leave disabled to keep explicit file selection behavior.</div>
                         </div>
                     </div>
                 </div>

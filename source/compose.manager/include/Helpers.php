@@ -125,8 +125,12 @@ function echoComposeCommand($action, $recreate = false, $background = false)
         $composeCommand[] = "-c" . $action;
         $composeCommand[] = "-p" . $args['projectName'];
 
-        foreach ($args['filePaths'] as $filePath) {
-            $composeCommand[] = "-f" . $filePath;
+        if (!empty($args['useDefaultFileDiscovery'])) {
+            $composeCommand[] = "-w" . $args['projectDirectory'];
+        } else {
+            foreach ($args['filePaths'] as $filePath) {
+                $composeCommand[] = "-f" . $filePath;
+            }
         }
 
         // Prune orphaned services from override before compose up
@@ -250,8 +254,12 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         $composeCommand[] = "-c" . $action;
         $composeCommand[] = "-p" . $args['projectName'];
 
-        foreach ($args['filePaths'] as $filePath) {
-            $composeCommand[] = "-f" . $filePath;
+        if (!empty($args['useDefaultFileDiscovery'])) {
+            $composeCommand[] = "-w" . $args['projectDirectory'];
+        } else {
+            foreach ($args['filePaths'] as $filePath) {
+                $composeCommand[] = "-f" . $filePath;
+            }
         }
 
         // Prune orphaned services from override before compose up

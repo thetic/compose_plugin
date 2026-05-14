@@ -452,6 +452,11 @@ switch ($_POST['action']) {
         $defaultProfileFile = "$compose_root/$script/default_profile";
         $defaultProfile = is_file($defaultProfileFile) ? trim(file_get_contents($defaultProfileFile)) : "";
 
+        // Use Docker Compose default file discovery (no explicit -f)
+        $useDefaultComposeFilesFile = "$compose_root/$script/use_default_compose_files";
+        $useDefaultComposeFiles = is_file($useDefaultComposeFilesFile)
+            && strtolower(trim(file_get_contents($useDefaultComposeFilesFile))) === 'true';
+
         // Get external compose path (indirect)
         $indirectFile = "$compose_root/$script/indirect";
         $invalidIndirectFile = "$compose_root/$script/indirect.invalid";
@@ -486,6 +491,7 @@ switch ($_POST['action']) {
             'iconUrl' => $iconUrl,
             'webuiUrl' => $webuiUrl,
             'defaultProfile' => $defaultProfile,
+            'useDefaultComposeFiles' => $useDefaultComposeFiles,
             'externalComposePath' => $externalComposePath,
             'invalidIndirectPath' => $invalidIndirectPath,
             'availableProfiles' => $availableProfiles
@@ -536,6 +542,8 @@ switch ($_POST['action']) {
 
         $envPath = isset($_POST['envPath']) ? trim($_POST['envPath']) : "";
         $defaultProfile = isset($_POST['defaultProfile']) ? trim($_POST['defaultProfile']) : "";
+        $useDefaultComposeFiles = isset($_POST['useDefaultComposeFiles'])
+            && strtolower(trim((string) $_POST['useDefaultComposeFiles'])) === 'true';
 
         $externalComposePath = isset($_POST['externalComposePath']) ? trim($_POST['externalComposePath']) : "";
         $externalComposePath = rtrim($externalComposePath, '/');
@@ -587,6 +595,16 @@ switch ($_POST['action']) {
                 @unlink($defaultProfileFile);
         } else {
             file_put_contents($defaultProfileFile, $defaultProfile);
+        }
+
+        // Set compose file discovery mode
+        $useDefaultComposeFilesFile = "$compose_root/$script/use_default_compose_files";
+        if ($useDefaultComposeFiles) {
+            file_put_contents($useDefaultComposeFilesFile, 'true');
+        } else {
+            if (is_file($useDefaultComposeFilesFile)) {
+                @unlink($useDefaultComposeFilesFile);
+            }
         }
 
         // Set external compose path (indirect)

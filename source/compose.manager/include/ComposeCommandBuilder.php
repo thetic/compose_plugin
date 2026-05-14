@@ -32,6 +32,8 @@ class ComposeCommandBuilder
             'projectName' => $args['projectName'],
             'composeFiles' => $args['filePaths'],
             'envFilePath' => $args['envFilePath'] ?? null,
+            'projectDirectory' => $args['projectDirectory'],
+            'useDefaultFileDiscovery' => $args['useDefaultFileDiscovery'],
             'profiles' => self::resolveProfilesForAction($stackInfo, $action),
             'stackPath' => $stackPath ?? $stackInfo->path,
         ];

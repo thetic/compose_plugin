@@ -40,9 +40,13 @@ stop_stack() {
     local -a env_args=()
     if load_compose_action_spec "$COMPOSE_ROOT" "$project" down "$dir"; then
         project_name="$COMPOSE_SPEC_PROJECT_NAME"
-        for compose_file in "${COMPOSE_SPEC_COMPOSE_FILES[@]}"; do
-            file_args+=("-f" "$compose_file")
-        done
+        if [ "$COMPOSE_SPEC_USE_DEFAULT_FILE_DISCOVERY" = "true" ] && [ -n "$COMPOSE_SPEC_PROJECT_DIR" ]; then
+            file_args=("--project-directory" "$COMPOSE_SPEC_PROJECT_DIR")
+        else
+            for compose_file in "${COMPOSE_SPEC_COMPOSE_FILES[@]}"; do
+                file_args+=("-f" "$compose_file")
+            done
+        fi
         if [ -n "$COMPOSE_SPEC_ENV_FILE_PATH" ]; then
             env_args=("--env-file" "$COMPOSE_SPEC_ENV_FILE_PATH")
         fi

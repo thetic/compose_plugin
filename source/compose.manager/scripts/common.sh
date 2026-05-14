@@ -142,6 +142,8 @@ resolve_stack_env_file() {
 # Populates global variables:
 #   COMPOSE_SPEC_PROJECT_NAME
 #   COMPOSE_SPEC_STACK_PATH
+#   COMPOSE_SPEC_PROJECT_DIR
+#   COMPOSE_SPEC_USE_DEFAULT_FILE_DISCOVERY
 #   COMPOSE_SPEC_ENV_FILE_PATH
 #   COMPOSE_SPEC_COMPOSE_FILES (array)
 #   COMPOSE_SPEC_PROFILES (array)
@@ -177,6 +179,10 @@ load_compose_action_spec() {
     COMPOSE_SPEC_PROJECT_NAME=""
     COMPOSE_SPEC_STACK_PATH=""
     # shellcheck disable=SC2034  # Populated here, consumed by scripts that source common.sh.
+    COMPOSE_SPEC_PROJECT_DIR=""
+    # shellcheck disable=SC2034  # Populated here, consumed by scripts that source common.sh.
+    COMPOSE_SPEC_USE_DEFAULT_FILE_DISCOVERY="false"
+    # shellcheck disable=SC2034  # Populated here, consumed by scripts that source common.sh.
     COMPOSE_SPEC_ENV_FILE_PATH=""
     COMPOSE_SPEC_ERROR_MESSAGE=""
     COMPOSE_SPEC_COMPOSE_FILES=()
@@ -196,6 +202,13 @@ load_compose_action_spec() {
                 ;;
             stackPath)
                 COMPOSE_SPEC_STACK_PATH="$value"
+                ;;
+            projectDirectory)
+                # shellcheck disable=SC2034  # Value consumed by scripts after load_compose_action_spec returns.
+                COMPOSE_SPEC_PROJECT_DIR="$value"
+                ;;
+            useDefaultFileDiscovery)
+                COMPOSE_SPEC_USE_DEFAULT_FILE_DISCOVERY="$value"
                 ;;
             envFilePath)
                 # shellcheck disable=SC2034  # Populated here, consumed by scripts that source common.sh.
@@ -218,8 +231,13 @@ load_compose_action_spec() {
         return 1
     fi
 
-    if [ -z "$COMPOSE_SPEC_PROJECT_NAME" ] || [ ${#COMPOSE_SPEC_COMPOSE_FILES[@]} -eq 0 ]; then
+    if [ -z "$COMPOSE_SPEC_PROJECT_NAME" ]; then
         composeLogger "Compose args resolution returned incomplete data for '$project'" warning compose-args
+        return 1
+    fi
+
+    if [ "${COMPOSE_SPEC_USE_DEFAULT_FILE_DISCOVERY}" != "true" ] && [ ${#COMPOSE_SPEC_COMPOSE_FILES[@]} -eq 0 ]; then
+        composeLogger "Compose args resolution returned no compose files for '$project'" warning compose-args
         return 1
     fi
 

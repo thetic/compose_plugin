@@ -117,9 +117,11 @@ foreach ($data as $path => $entry) {
             $args = $stackInfo->buildComposeArgs();
             $composeFileList = $stackInfo->buildComposeFileList();
             $envFilePath = $args['envFilePath'] ?? null;
+            $projectDirectory = $args['projectDirectory'];
         } else {
             $composeFileList = findComposeFile($path);
             $envFilePath = null;
+            $projectDirectory = $path;
         }
 
         // Allow overriding the shell command via environment for tests; default to sh
@@ -131,6 +133,9 @@ foreach ($data as $path => $entry) {
         }
         if ($envFilePath !== null && $envFilePath !== '') {
             $envPrefix .= 'COMPOSE_ENV_FILE=' . escapeshellarg($envFilePath) . ' ';
+        }
+        if ($composeFileList === '' && $projectDirectory !== '') {
+            $envPrefix .= 'COMPOSE_PROJECT_DIR=' . escapeshellarg($projectDirectory) . ' ';
         }
 
         $cmd = $envPrefix . $shCmd . ' ' . escapeshellarg($script) . " " . escapeshellarg($projectName) . " >/dev/null 2>&1 &";

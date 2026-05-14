@@ -10,6 +10,7 @@ COMPOSE_FILE_ARG="$1"
 PROJECT_NAME="$2"
 COMPOSE_FILE_LIST="${COMPOSE_FILE_LIST:-}"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-}"
+COMPOSE_PROJECT_DIR="${COMPOSE_PROJECT_DIR:-}"
 COMPOSE_FILE="${COMPOSE_FILE_ARG:-${COMPOSE_FILE:-}}"
 
 # If this script is invoked by the background runner, the first positional
@@ -42,6 +43,7 @@ trim() {
 
 compose_file_args=()
 env_file_args=()
+project_dir_args=()
 build_compose_file_args() {
   local file_spec
   file_spec="$(trim "$1")"
@@ -97,8 +99,12 @@ fi
 
 build_env_file_args "$COMPOSE_ENV_FILE"
 
-if [ ${#compose_file_args[@]} -eq 0 ]; then
-  echo "No compose file paths were provided" >&2
+if [ -n "$COMPOSE_PROJECT_DIR" ] && [ -d "$COMPOSE_PROJECT_DIR" ]; then
+  project_dir_args=("--project-directory" "$COMPOSE_PROJECT_DIR")
+fi
+
+if [ ${#compose_file_args[@]} -eq 0 ] && [ ${#project_dir_args[@]} -eq 0 ]; then
+  echo "No compose file paths or project directory were provided" >&2
   exit 2
 fi
 
@@ -137,7 +143,7 @@ summarize_output() {
 # Get current image digests before pull
 # Uses docker compose images to list service images, then inspects each for RepoDigests
 get_image_digests() {
-  docker compose "${compose_file_args[@]}" "${env_file_args[@]}" -p "$PROJECT_NAME" images -q 2>/dev/null | while read -r img_id; do
+  docker compose "${project_dir_args[@]}" "${compose_file_args[@]}" "${env_file_args[@]}" -p "$PROJECT_NAME" images -q 2>/dev/null | while read -r img_id; do
     if [ -n "$img_id" ]; then
       docker inspect --format='{{index .RepoDigests 0}}' "$img_id" 2>/dev/null || echo "$img_id"
     fi
@@ -148,7 +154,7 @@ OLD_DIGESTS=$(get_image_digests || true)
 
 # Run pull and capture output (timeout prevents indefinite hangs on unresponsive registries)
 # --ignore-buildable: skip services with build sections (they should be rebuilt, not pulled)
-timeout "$COMMAND_TIMEOUT" docker compose "${compose_file_args[@]}" "${env_file_args[@]}" -p "$PROJECT_NAME" pull --ignore-buildable > "$OUT" 2>&1 || RC=$?
+timeout "$COMMAND_TIMEOUT" docker compose "${project_dir_args[@]}" "${compose_file_args[@]}" "${env_file_args[@]}" -p "$PROJECT_NAME" pull --ignore-buildable > "$OUT" 2>&1 || RC=$?
 
 if [ "$RC" -ne 0 ]; then
   ERRMSG="Auto-update pull failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
@@ -167,7 +173,7 @@ NEW_DIGESTS=$(get_image_digests || true)
 # Compare digests to determine if any images were updated
 if [ "$OLD_DIGESTS" != "$NEW_DIGESTS" ]; then
   # Images changed - run recreate/up
-  timeout "$COMMAND_TIMEOUT" docker compose "${compose_file_args[@]}" "${env_file_args[@]}" -p "$PROJECT_NAME" up -d >> "$OUT" 2>&1 || RC=$?
+  timeout "$COMMAND_TIMEOUT" docker compose "${project_dir_args[@]}" "${compose_file_args[@]}" "${env_file_args[@]}" -p "$PROJECT_NAME" up -d >> "$OUT" 2>&1 || RC=$?
   
   if [ "$RC" -ne 0 ]; then
     ERRMSG="Auto-update up failed for '$PROJECT_NAME'. Recent output: $(summarize_output)"
