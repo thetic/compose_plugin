@@ -4355,7 +4355,7 @@ function renderLabelsUI(mainDoc, overrideDoc) {
             $input.data('iconDebounce', setTimeout(function() {
                 var iconUrl = $input.val().trim();
                 var $preview = $('#label-icon-preview-' + service);
-                if (iconUrl) {
+                if (iconUrl && isValidIconSrc(iconUrl)) {
                     $preview.attr('src', iconUrl);
                 } else {
                     $preview.attr('src', '/plugins/dynamix.docker.manager/images/question.png');
