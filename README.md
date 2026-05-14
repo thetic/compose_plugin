@@ -2,7 +2,7 @@
 
 ![GitHub Repo stars](https://img.shields.io/github/stars/mstrhakr/compose_plugin)
 ![GitHub branch check runs](https://img.shields.io/github/check-runs/mstrhakr/compose_plugin/main)
-![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads-pre/mstrhakr/compose_plugin/latest/total)
+![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/mstrhakr/compose_plugin/latest/total)
 ![GitHub Closed Issues](https://img.shields.io/github/issues-closed/mstrhakr/compose_plugin)
 ![GitHub Closed Pull Requests](https://img.shields.io/github/issues-pr-closed/mstrhakr/compose_plugin)
 
