@@ -557,6 +557,12 @@ switch ($_POST['action']) {
                 echo json_encode(['result' => 'error', 'message' => 'External compose path directory does not exist: ' . $externalComposePath]);
                 break;
             }
+
+            // Guardrail: treat self-referential external path as local mode.
+            $projectPath = realpath("$compose_root/$script") ?: rtrim("$compose_root/$script", '/');
+            if ($realPath === $projectPath) {
+                $externalComposePath = "";
+            }
         }
 
         // --- All validation passed, now write everything ---
@@ -634,7 +640,11 @@ switch ($_POST['action']) {
             // Remove local compose file if it exists since we're now using external
             $localCompose = findComposeFile("$compose_root/$script");
             if ($localCompose) {
-                @unlink($localCompose);
+                $projectPath = realpath("$compose_root/$script") ?: rtrim("$compose_root/$script", '/');
+                $resolvedExternalPath = realpath($externalComposePath) ?: rtrim($externalComposePath, '/');
+                if ($resolvedExternalPath !== $projectPath) {
+                    @unlink($localCompose);
+                }
             }
         }
 
