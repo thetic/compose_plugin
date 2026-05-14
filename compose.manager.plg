@@ -10,7 +10,7 @@
 <!ENTITY packageName "&name;-&packageVER;-noarch-&pkgBUILD;">
 <!ENTITY packagefile "&packageName;.txz">
 <!ENTITY github "mstrhakr/compose_plugin">
-<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
 <!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
 <!ENTITY pluginsPATH "/boot/config/plugins">
 <!ENTITY pluginLOC "&pluginsPATH;/&name;">
@@ -36,40 +36,10 @@
 >
 
 <CHANGES>
-###2026.05.14.1611
-- Features: enhance compose command handling with file discovery and error logging
-- Features: add advanced labels view mode with toggle and override editor support
-- Features: implement Docker Compose default file discovery option and enhance project directory handling
-- Features: enhance dropdown context menu visibility and adjust positioning settings
-- Features: centralize compose command argument resolution and enhance event handling
-- Features: implement effective env file resolution for stacks and enhance related scripts
-- Features: enhance stack info handling and auto-update script for improved compose file management
-- Bug Fixes: validate icon URL before updating label icon preview
-- Bug Fixes (editor): store labels tab basic/advanced view mode in stack settings
-- Bug Fixes: enhance external compose path handling to prevent self-referential paths fixes #107
-- Bug Fixes: enhance Docker daemon readiness check and improve error logging during autostart
-- Bug Fixes: update project name resolution to use sanitized projectName and enhance test payload structure
-- Bug Fixes: remove unused COMPOSE_SPEC_ACTION variable and add shellcheck comments for clarity
-- Bug Fixes: ensure proper destruction of context for element attachment
-- Bug Fixes: enhance COMPOSE_FILE handling and add support for quoted paths
-- Bug Fixes (deploy): prevent script failure when no package is found in archive
-- Bug Fixes (deploy): improve error handling for package path resolution and command checks
-- Bug Fixes (tests): update testEchoComposeCommandActions to use attribute-based data provider
-- Bug Fixes (tests): update subproject commit reference in framework
-- Bug Fixes (tests): update PHP version from 8.2 to 8.3 in workflow configuration
-- Bug Fixes (pkg_build): add shellcheck disables for wget commands to prevent warnings
-- Bug Fixes: formatting pass and fix missing closing brace
-- Bug Fixes (logging): replace console error/warn with composeLogger for improved logging consistency
-- Bug Fixes (cache): implement persistent container cache loading and retrieval for improved container metadata handling
-- Bug Fixes (caching): implement persistent container metadata caching in getStackContainers
-- Bug Fixes (actions): enhance logging for getStackContainers and (non)profile services retrieval
-- Bug Fixes (ui): improve modal responsiveness with flexible dimensions and scrolling
-- Bug Fixes (logging): enhance stack deletion logging and error handling in Exec.php
-- Bug Fixes (logging): remove extra debug log for referrer path check in settings
-- Refactoring: extract js from main php file for maintainability and to enable autov
-- Chores: formatting fixes
+###2026.05.14.1621
+- Fix badge link for GitHub downloads in README
 - [PR #108](https://github.com/mstrhakr/compose_plugin/pull/108)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.14.1611)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.14.1621)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
