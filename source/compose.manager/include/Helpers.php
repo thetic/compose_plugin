@@ -85,6 +85,48 @@ function getLastCmdLogFileForComposeAction($action, $path)
 }
 
 /**
+ * Append compose file discovery arguments to compose.sh command args.
+ *
+ * @param array<int, string> $composeCommand
+ * @param array<string, mixed> $args
+ */
+function appendComposeFileArgs(array &$composeCommand, array $args): void
+{
+    if (!empty($args['useDefaultFileDiscovery'])) {
+        $projectDirectory = $args['projectDirectory'] ?? '';
+        if (is_string($projectDirectory) && $projectDirectory !== '') {
+            $composeCommand[] = "-w" . $projectDirectory;
+        }
+        return;
+    }
+
+    $filePaths = $args['filePaths'] ?? [];
+    if (!is_array($filePaths)) {
+        return;
+    }
+
+    foreach ($filePaths as $filePath) {
+        if (is_string($filePath) && $filePath !== '' && is_file($filePath)) {
+            $composeCommand[] = "-f" . $filePath;
+        }
+    }
+}
+
+/**
+ * Append env-file argument to compose.sh command args when valid.
+ *
+ * @param array<int, string> $composeCommand
+ * @param array<string, mixed> $args
+ */
+function appendComposeEnvFileArg(array &$composeCommand, array $args): void
+{
+    $envFilePath = $args['envFilePath'] ?? null;
+    if (is_string($envFilePath) && $envFilePath !== '' && is_file($envFilePath)) {
+        $composeCommand[] = "-e" . $envFilePath;
+    }
+}
+
+/**
  * Build and echo a compose command for a single stack.
  *
  * @param string $action The compose action (up, down, update, pull, stop, logs)
@@ -119,29 +161,25 @@ function echoComposeCommand($action, $recreate = false, $background = false)
         $composeCommand = array($plugin_root . "scripts/compose.sh");
 
         // Resolve stack identity via StackInfo
-        $stackInfo = StackInfo::fromProject($compose_root, basename($path));
+        try {
+            $stackInfo = StackInfo::fromProject($compose_root, basename($path));
+        } catch (\Throwable $e) {
+            composeLogger("Cannot perform action: invalid stack", ['action' => $action, 'path' => $path, 'error' => $e->getMessage()], 'user', 'warning', 'compose');
+            echo '';
+            return;
+        }
         $args = $stackInfo->buildComposeArgs();
 
         $composeCommand[] = "-c" . $action;
         $composeCommand[] = "-p" . $args['projectName'];
-
-        if (!empty($args['useDefaultFileDiscovery'])) {
-            $composeCommand[] = "-w" . $args['projectDirectory'];
-        } else {
-            foreach ($args['filePaths'] as $filePath) {
-                $composeCommand[] = "-f" . $filePath;
-            }
-        }
+        appendComposeFileArgs($composeCommand, $args);
 
         // Prune orphaned services from override before compose up
         if ($action === 'up') {
             $stackInfo->pruneOrphanOverrideServices();
         }
 
-        $envFilePath = $args['envFilePath'] ?? null;
-        if ($envFilePath !== null) {
-            $composeCommand[] = "-e" . $envFilePath;
-        }
+        appendComposeEnvFileArg($composeCommand, $args);
 
         // Support multiple profiles (comma-separated)
         if ($profile) {
@@ -247,30 +285,25 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         $project = basename($path);
 
         // Resolve stack identity via StackInfo
-        $stackInfo = StackInfo::fromProject($compose_root, $project);
+        try {
+            $stackInfo = StackInfo::fromProject($compose_root, $project);
+        } catch (\Throwable $e) {
+            composeLogger("Skipping invalid stack during multi-compose action", ['action' => $action, 'path' => $path, 'error' => $e->getMessage()], 'user', 'warning', 'compose-multi');
+            continue;
+        }
         $stackNames[] = $stackInfo->getName();
         $args = $stackInfo->buildComposeArgs();
 
         $composeCommand[] = "-c" . $action;
         $composeCommand[] = "-p" . $args['projectName'];
-
-        if (!empty($args['useDefaultFileDiscovery'])) {
-            $composeCommand[] = "-w" . $args['projectDirectory'];
-        } else {
-            foreach ($args['filePaths'] as $filePath) {
-                $composeCommand[] = "-f" . $filePath;
-            }
-        }
+        appendComposeFileArgs($composeCommand, $args);
 
         // Prune orphaned services from override before compose up
         if ($action === 'up') {
             $stackInfo->pruneOrphanOverrideServices();
         }
 
-        $envFilePath = $args['envFilePath'] ?? null;
-        if ($envFilePath !== null) {
-            $composeCommand[] = "-e" . $envFilePath;
-        }
+        appendComposeEnvFileArg($composeCommand, $args);
 
         // Profile selection per action:
         //  - up:     use user-configured default profiles (running_profiles
@@ -304,6 +337,12 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         }
 
         $commands[] = $composeCommand;
+    }
+
+    if (empty($commands)) {
+        composeLogger("Multi Compose operation aborted: no valid stacks resolved", ['action' => $action], 'user', 'warning', 'compose-multi');
+        echo '';
+        return;
     }
 
     // Human-readable action label for terminal headings
