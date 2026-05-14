@@ -28,7 +28,11 @@ class AutoupdateTest extends TestCase
         $shim = <<<'PHP'
     <?php
     $marker = getenv('AUTOTEST_MARKER');
-    if ($marker) file_put_contents($marker, "OK\n");
+    if ($marker) {
+        file_put_contents($marker, json_encode([
+            'argv' => $argv,
+        ]));
+    }
     exit(0);
     PHP;
         file_put_contents($this->wrapperPath, $shim);
@@ -82,7 +86,7 @@ class AutoupdateTest extends TestCase
     {
         // Create a fake stack under compose_root so path validation passes
         global $plugin_root, $compose_root;
-        $tmp = $compose_root . '/autoupdate_test_' . getmypid();
+        $tmp = $compose_root . '/PrintMaster_' . getmypid();
         if (!is_dir($tmp)) mkdir($tmp, 0755, true);
         file_put_contents($tmp . '/docker-compose.yml', "services:\n  a:\n    image: busybox\n");
 
@@ -104,6 +108,13 @@ class AutoupdateTest extends TestCase
         // rc should be 0 for our stub
         $this->assertEquals(0, $r['rc']);
         $this->assertFileExists($marker);
+
+        $payload = json_decode((string) file_get_contents($marker), true);
+        $this->assertIsArray($payload);
+        $this->assertIsArray($payload['argv'] ?? null);
+        $this->assertGreaterThanOrEqual(3, count($payload['argv']));
+        $expectedProjectName = \StackInfo::sanitizeProjectString(basename($tmp));
+        $this->assertSame($expectedProjectName, $payload['argv'][2]);
 
         // cleanup
         unlink($marker);
