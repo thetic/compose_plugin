@@ -15,29 +15,37 @@ use PluginTests\TestCase;
 class ComposeManagerMainSourceTest extends TestCase
 {
     private string $mainPagePath;
+    private string $mainScriptPath;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->mainPagePath = __DIR__ . '/../../source/compose.manager/include/ComposeManager.php';
+        $this->mainScriptPath = __DIR__ . '/../../source/compose.manager/javascript/composeManagerMain.js';
         $this->assertFileExists($this->mainPagePath, 'ComposeManager.php must exist');
+        $this->assertFileExists($this->mainScriptPath, 'composeManagerMain.js must exist');
     }
 
-    private function getPageSource(): string
+    private function getPhpSource(): string
     {
         return file_get_contents($this->mainPagePath);
     }
 
+    private function getJsSource(): string
+    {
+        return file_get_contents($this->mainScriptPath);
+    }
+
     public function testCpuSpecCountHelperExists(): void
     {
-        $source = $this->getPageSource();
+        $source = $this->getPhpSource();
         $this->assertStringContainsString('function compose_manager_cpu_spec_count($cpuSpec)', $source);
         $this->assertStringContainsString('explode(\',\', trim((string)$cpuSpec))', $source);
     }
 
     public function testCpuCountSumsAllCpuSpecs(): void
     {
-        $source = $this->getPageSource();
+        $source = $this->getPhpSource();
         $this->assertStringContainsString('$cpuCount = 0;', $source);
         $this->assertStringContainsString('foreach ($cpus as $cpuSpec)', $source);
         $this->assertStringContainsString('$cpuCount += compose_manager_cpu_spec_count($cpuSpec);', $source);
@@ -45,7 +53,7 @@ class ComposeManagerMainSourceTest extends TestCase
 
     public function testCpuCountHasFallbackGuards(): void
     {
-        $source = $this->getPageSource();
+        $source = $this->getPhpSource();
         $this->assertStringContainsString("trim(shell_exec('nproc 2>/dev/null') ?: '1')", $source);
         $this->assertStringContainsString('if ($cpuCount <= 0) {', $source);
         $this->assertStringContainsString('$cpuCount = 1;', $source);
@@ -53,7 +61,7 @@ class ComposeManagerMainSourceTest extends TestCase
 
     public function testStackAggregationTracksMemoryLimits(): void
     {
-        $source = $this->getPageSource();
+        $source = $this->getJsSource();
         $this->assertStringContainsString('var totalMemLimitBytes = 0;', $source);
         $this->assertStringContainsString('totalMemLimitBytes += composeLoadById[ctId].memLimitBytes || 0;', $source);
         $this->assertStringContainsString('var stackMemTotalBytes = 0;', $source);
@@ -62,14 +70,14 @@ class ComposeManagerMainSourceTest extends TestCase
 
     public function testDockerLoadMapStoresParsedLimitBytes(): void
     {
-        $source = $this->getPageSource();
+        $source = $this->getJsSource();
         $this->assertStringContainsString('var memPair = parseMemUsagePair(parts[2]);', $source);
         $this->assertStringContainsString('memLimitBytes: memPair.limit,', $source);
     }
 
     public function testComposeCustomTagSchemaSupportIsDeclared(): void
     {
-        $source = $this->getPageSource();
+        $source = $this->getJsSource();
         $this->assertStringContainsString("var customTags = ['!override', '!reset', '!merge'];", $source);
         $this->assertStringContainsString('function buildComposeYamlSchema()', $source);
         $this->assertStringContainsString("if (typeof jsyaml !== 'undefined') {", $source);
@@ -78,7 +86,7 @@ class ComposeManagerMainSourceTest extends TestCase
 
     public function testLabelSaveBlocksTaggedOverrideRewrite(): void
     {
-        $source = $this->getPageSource();
+        $source = $this->getJsSource();
         $this->assertStringContainsString('overrideHasCustomTags: composeYamlContainsCustomTags(overrideData.content || \'\')', $source);
         $this->assertStringContainsString('WebUI labels cannot be saved because compose.override.yaml uses !override, !reset, or !merge tags.', $source);
     }
@@ -93,7 +101,7 @@ class ComposeManagerMainSourceTest extends TestCase
      */
     public function testUncheckedRunningStackShowsCheckForUpdates(): void
     {
-        $source = $this->getPageSource();
+        $source = $this->getJsSource();
         // The else branch for no containers must call checkStackUpdates
         $this->assertStringContainsString(
             "onclick=\"checkStackUpdates(\\'' + composeEscapeAttr(stackName) + '\\');\"",
@@ -110,7 +118,7 @@ class ComposeManagerMainSourceTest extends TestCase
      */
     public function testStoppedStacksReturnEarlyUnconditionally(): void
     {
-        $source = $this->getPageSource();
+        $source = $this->getJsSource();
         // The stopped check should NOT reference hasCheckedData — it must be
         // a simple !isRunning guard.
         $this->assertStringNotContainsString('!isRunning && !hasCheckedData', $source,
