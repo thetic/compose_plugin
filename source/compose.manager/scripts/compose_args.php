@@ -6,7 +6,7 @@ require_once '/usr/local/emhttp/plugins/compose.manager/include/Defines.php';
 require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 require_once '/usr/local/emhttp/plugins/compose.manager/include/ComposeCommandBuilder.php';
 
-$options = getopt('', ['compose-root:', 'project:', 'action:', 'stack-path::', 'format::']);
+$options = getopt('', ['compose-root:', 'project:', 'action:', 'stack-path::', 'format:']);
 
 $composeRoot = isset($options['compose-root']) ? trim((string) $options['compose-root']) : '';
 $project = isset($options['project']) ? trim((string) $options['project']) : '';
