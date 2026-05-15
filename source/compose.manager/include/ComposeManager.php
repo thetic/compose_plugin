@@ -643,8 +643,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     </span>
                 </div>
                 <div class="editor-footer-right">
-                    <button class="editor-btn editor-btn-cancel" onclick="closeEditorModal()">Cancel</button>
-                    <button class="editor-btn editor-btn-save-all" id="editor-btn-save-all" onclick="saveAllChanges()" disabled>Save All</button>
+                    <span class="editor-change-count" id="editor-change-count">0 changes</span>
+                    <button class="editor-btn editor-btn-save-all" id="editor-btn-okay" onclick="handleOkayAction()">Okay</button>
+                    <button class="editor-btn editor-btn-save-all" id="editor-btn-apply" onclick="saveAllChanges(false)" disabled>Apply</button>
+                    <button class="editor-btn editor-btn-cancel" id="editor-btn-close" onclick="closeEditorModal()">Close</button>
                 </div>
             </div>
         </div>

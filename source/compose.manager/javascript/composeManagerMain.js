@@ -2694,7 +2694,11 @@ function ForceUpdateStack(path, profile = "") {
 }
 
 // Prompt user to recreate containers after label changes
-function promptRecreateContainers() {
+function promptRecreateContainers(closeAfterSave) {
+    if (typeof closeAfterSave === 'undefined') {
+        closeAfterSave = true;
+    }
+
     var project = editorModal.currentProject;
     if (!project) {
         swal({
@@ -2712,12 +2716,27 @@ function promptRecreateContainers() {
     var isUp = $stackRow.length > 0 && $stackRow.data('isup') == "1";
 
     if (!isUp) {
-        // Stack is not running, close editor and show saved message
-        doCloseEditorModal();
+        // Stack is not running; optionally close editor and show saved message
+        if (closeAfterSave) {
+            doCloseEditorModal();
+        }
         swal({
             title: "Saved!",
             text: "All changes have been saved. Container labels will take effect when you start the stack.",
             type: "success"
+        }, function() {
+            refreshStackByProject(project);
+        });
+        return;
+    }
+
+    if (!closeAfterSave) {
+        swal({
+            title: "Saved!",
+            text: "Container labels were saved. Recreate or restart containers to apply the changes.",
+            type: "info",
+            timer: 2000,
+            showConfirmButton: false
         }, function() {
             refreshStackByProject(project);
         });
@@ -4451,12 +4470,16 @@ function updateValidation(type, content, isValid, errorMsg) {
 function updateSaveButtonState() {
     var totalChanges = editorModal.modifiedTabs.size + editorModal.modifiedSettings.size + editorModal.modifiedLabels.size;
     var hasChanges = totalChanges > 0;
-    $('#editor-btn-save-all').prop('disabled', !hasChanges);
+    $('#editor-btn-apply').prop('disabled', !hasChanges);
+    $('#editor-change-count').text(totalChanges + (totalChanges === 1 ? ' change' : ' changes'));
+}
 
-    if (hasChanges) {
-        $('#editor-btn-save-all').text('Save All (' + totalChanges + ')');
+function handleOkayAction() {
+    var totalChanges = editorModal.modifiedTabs.size + editorModal.modifiedSettings.size + editorModal.modifiedLabels.size;
+    if (totalChanges > 0) {
+        saveAllChanges(true);
     } else {
-        $('#editor-btn-save-all').text('Save All');
+        doCloseEditorModal();
     }
 }
 
@@ -4592,7 +4615,11 @@ function saveTab(tabName, saveErrors) {
 }
 
 // Save all modified changes (files, settings, and labels)
-function saveAllChanges() {
+function saveAllChanges(closeAfterSave) {
+    if (typeof closeAfterSave === 'undefined') {
+        closeAfterSave = false;
+    }
+
     var savePromises = [];
     var saveErrors = [];
     var skippedManualLabels = false;
@@ -4644,10 +4671,12 @@ function saveAllChanges() {
 
             // Check if we should offer to recreate containers
             if (labelsWereModified) {
-                promptRecreateContainers();
+                promptRecreateContainers(closeAfterSave);
             } else {
-                // Close editor and refresh stack locally
-                doCloseEditorModal();
+                var project = editorModal.currentProject;
+                if (closeAfterSave) {
+                    doCloseEditorModal();
+                }
                 swal({
                     title: "Saved!",
                     text: "All changes have been saved.",
@@ -4656,7 +4685,9 @@ function saveAllChanges() {
                     showConfirmButton: false
                 });
                 setTimeout(function() {
-                    refreshStackByProject(editorModal.currentProject);
+                    if (project) {
+                        refreshStackByProject(project);
+                    }
                 }, 1600);
             }
         } else {
@@ -4945,7 +4976,7 @@ function saveLabels(saveErrors) {
 
 // Keep saveAllTabs for backwards compatibility
 function saveAllTabs() {
-    saveAllChanges();
+    saveAllChanges(true);
 }
 
 function closeEditorModal() {

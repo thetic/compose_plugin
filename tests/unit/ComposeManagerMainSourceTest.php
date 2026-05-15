@@ -122,6 +122,67 @@ class ComposeManagerMainSourceTest extends TestCase
         $this->assertStringContainsString("$('#editor-tab-labels-text').text(labelsViewMode === 'advanced' ? 'Override' : 'Labels');", $jsSource);
     }
 
+    public function testEditorHasOkayApplyCloseButtonsAndChangeCounter(): void
+    {
+        $phpSource = $this->getPhpSource();
+        $jsSource = $this->getJsSource();
+
+        $this->assertStringContainsString('id="editor-change-count"', $phpSource);
+        $this->assertStringContainsString('id="editor-btn-okay"', $phpSource);
+        $this->assertStringContainsString('onclick="handleOkayAction()"', $phpSource);
+        $this->assertStringContainsString('id="editor-btn-apply"', $phpSource);
+        $this->assertStringContainsString('onclick="saveAllChanges(false)"', $phpSource);
+        $this->assertStringContainsString('id="editor-btn-close"', $phpSource);
+        $this->assertStringContainsString("function handleOkayAction()", $jsSource);
+        $this->assertStringContainsString("saveAllChanges(true);", $jsSource);
+        $this->assertStringContainsString("doCloseEditorModal();", $jsSource);
+        $this->assertStringContainsString("function saveAllChanges(closeAfterSave)", $jsSource);
+        $this->assertStringContainsString("$('#editor-btn-apply').prop('disabled', !hasChanges);", $jsSource);
+        $this->assertStringContainsString("$('#editor-change-count').text(totalChanges + (totalChanges === 1 ? ' change' : ' changes'));", $jsSource);
+        $this->assertStringContainsString("promptRecreateContainers(closeAfterSave);", $jsSource);
+    }
+
+    public function testSaveAllChangesDefaultsToApplyMode(): void
+    {
+        $source = $this->getJsSource();
+        $this->assertStringContainsString('function saveAllChanges(closeAfterSave) {', $source);
+        $this->assertStringContainsString("if (typeof closeAfterSave === 'undefined') {", $source);
+        $this->assertStringContainsString('closeAfterSave = false;', $source);
+    }
+
+    public function testHandleOkayActionSavesAndClosesWhenModified(): void
+    {
+        $source = $this->getJsSource();
+
+        $this->assertMatchesRegularExpression(
+            '/function\\s+handleOkayAction\\s*\\(\\)\\s*\\{[\\s\\S]*?if\\s*\\(totalChanges\\s*>\\s*0\\)\\s*\\{[\\s\\S]*?saveAllChanges\\(true\\);[\\s\\S]*?\\}\\s*else\\s*\\{[\\s\\S]*?doCloseEditorModal\\(\\);/m',
+            $source,
+            'Okay must save with closeAfterSave=true and close immediately when no changes.'
+        );
+    }
+
+    public function testNonLabelSaveOnlyClosesWhenRequested(): void
+    {
+        $source = $this->getJsSource();
+
+        $this->assertMatchesRegularExpression(
+            '/if\\s*\\(closeAfterSave\\)\\s*\\{\\s*doCloseEditorModal\\(\\);\\s*\\}[\\s\\S]*?refreshStackByProject\\(project\\);/m',
+            $source,
+            'Non-label success path should only close modal when closeAfterSave=true.'
+        );
+    }
+
+    public function testApplyLabelSaveSkipsRecreatePromptAndKeepsModalOpen(): void
+    {
+        $source = $this->getJsSource();
+
+        $this->assertMatchesRegularExpression(
+            '/function\\s+promptRecreateContainers\\s*\\(closeAfterSave\\)\\s*\\{[\\s\\S]*?if\\s*\\(!closeAfterSave\\)\\s*\\{[\\s\\S]*?title:\\s*\"Saved!\"[\\s\\S]*?recreate or restart containers to apply the changes\\.[\\s\\S]*?refreshStackByProject\\(project\\);[\\s\\S]*?return;[\\s\\S]*?\\}/mi',
+            $source,
+            'Apply flow after label save should show informational message and avoid recreate-confirm dialog.'
+        );
+    }
+
     // ===========================================
     // Regression Tests
     // ===========================================

@@ -555,7 +555,15 @@
 
 .editor-footer-right {
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.editor-change-count {
+  color: var(--alt-text-color);
+  font-size: 0.9rem;
+  min-width: 80px;
+  text-align: right;
 }
 
 .editor-file-info {
