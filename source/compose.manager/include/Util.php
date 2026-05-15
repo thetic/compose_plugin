@@ -729,6 +729,16 @@ class OverrideInfo
     }
 
     /**
+     * Get the project-only override path (for writing only, never indirect)
+     * Always returns the project directory override, never the indirect path.
+     * @return string|null
+     */
+    public function getProjectOverridePath(): ?string
+    {
+        return $this->projectOverride;
+    }
+
+    /**
      * Prune orphaned services from the override file.
      *
      * Removes any services in the override that are not present in the
@@ -740,7 +750,8 @@ class OverrideInfo
      */
     public function pruneOrphanServices(array $validServices): array
     {
-        $overridePath = $this->getOverridePath();
+        // Background auto-process: only ever modify app-managed project override, never external/indirect files
+        $overridePath = $this->getProjectOverridePath();
         if ($overridePath === null || $overridePath === '' || !is_file($overridePath)) {
             return ['changed' => false, 'removed' => []];
         }
@@ -789,7 +800,8 @@ class OverrideInfo
     {
         $result = ['migrated' => false, 'migrations' => []];
 
-        $overridePath = $this->getOverridePath();
+        // Background auto-process: only ever modify app-managed project override, never external/indirect files
+        $overridePath = $this->getProjectOverridePath();
         if ($overridePath === null || !is_file($overridePath)) {
             return $result;
         }

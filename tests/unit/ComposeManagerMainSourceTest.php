@@ -91,6 +91,37 @@ class ComposeManagerMainSourceTest extends TestCase
         $this->assertStringContainsString('WebUI labels cannot be saved because compose.override.yaml uses !override, !reset, or !merge tags.', $source);
     }
 
+    public function testInvalidJsonSaveResponseIsTreatedAsFailure(): void
+    {
+        $source = $this->getJsSource();
+        $this->assertStringContainsString('Failed to save ' . "' + saveTarget + '" . '. Invalid server response.', $source);
+        $this->assertStringContainsString('return false;', $source);
+    }
+
+    public function testManualModeSaveAllUsesPartialSaveWarning(): void
+    {
+        $source = $this->getJsSource();
+        $this->assertStringContainsString('var skippedManualLabels = false;', $source);
+        $this->assertStringContainsString('skippedManualLabels = true;', $source);
+        $this->assertStringContainsString('title: "Partially Saved"', $source);
+        $this->assertStringContainsString('Non-label changes were saved.', $source);
+    }
+
+    public function testOverrideManagementModePersistsOnSaveSettings(): void
+    {
+        $phpSource = $this->getPhpSource();
+        $jsSource = $this->getJsSource();
+
+        $this->assertStringContainsString('id="settings-override-management"', $phpSource);
+        $this->assertStringNotContainsString('id="settings-override-management" onchange=', $phpSource);
+        $this->assertStringContainsString("editorModal.modifiedSettings.has('labels-view-mode')", $jsSource);
+        $this->assertStringContainsString("editorModal.pendingLabelsViewMode = mode;", $jsSource);
+        $this->assertStringContainsString("action: 'setLabelsViewMode'", $jsSource);
+        $this->assertStringContainsString("editorModal.originalSettings['labels-view-mode'] = labelsViewMode;", $jsSource);
+        $this->assertStringContainsString("toggleLabelsViewMode(labelsViewMode === 'advanced', true);", $jsSource);
+        $this->assertStringContainsString("$('#editor-tab-labels-text').text(labelsViewMode === 'advanced' ? 'Override' : 'Labels');", $jsSource);
+    }
+
     // ===========================================
     // Regression Tests
     // ===========================================

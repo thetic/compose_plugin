@@ -450,7 +450,8 @@ var editorModal = {
     originalLabels: {},
     modifiedLabels: new Set(),
     labelsData: null, // Stores the parsed compose and override data
-    labelsViewMode: 'basic' // 'basic' (form UI) or 'advanced' (override editor)
+    labelsViewMode: 'basic', // Applied mode: 'basic' (form UI) or 'advanced' (override editor)
+    pendingLabelsViewMode: 'basic' // Pending settings value; applied only after save
 };
 
 // Debounce helper for validation
@@ -571,16 +572,6 @@ function initEditorModal() {
     });
     editorModal.editors['override'] = overrideEditor;
 
-    // Initialize labels view-mode toggle using same style/pattern as compose tab
-    if ($.fn.switchButton) {
-        $('#labels-view-toggle').switchButton({
-            labels_placement: 'left',
-            on_label: 'Advanced View',
-            off_label: 'Basic View',
-            checked: false
-        });
-    }
-
     // Initialize settings field change tracking
     $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path, #settings-use-default-compose-files').on('input change', function() {            var fieldId = this.id.replace('settings-', '');
         var isCheckbox = this.type === 'checkbox';
@@ -591,6 +582,25 @@ function initEditorModal() {
             editorModal.modifiedSettings.add(fieldId);
         } else {
             editorModal.modifiedSettings.delete(fieldId);
+        }
+
+        updateSaveButtonState();
+        updateTabModifiedState();
+    });
+
+    // Override management mode is a saveable setting (deferred persist).
+    $('#settings-override-management').on('change', function() {
+        var mode = $(this).is(':checked') ? 'basic' : 'advanced';
+        var originalMode = editorModal.originalSettings['labels-view-mode'] || 'basic';
+
+        // Defer labels tab mode switch until save; only stage pending setting locally.
+        editorModal.pendingLabelsViewMode = mode;
+        $('#settings-override-management-label').text(mode === 'advanced' ? 'Manual' : 'Automatic');
+
+        if (mode !== originalMode) {
+            editorModal.modifiedSettings.add('labels-view-mode');
+        } else {
+            editorModal.modifiedSettings.delete('labels-view-mode');
         }
 
         updateSaveButtonState();
@@ -3864,6 +3874,9 @@ function openEditorModalByProject(project, projectName, initialTab) {
     editorModal.originalLabels = {};
     editorModal.labelsData = null;
     editorModal.labelsViewMode = 'basic';
+    editorModal.pendingLabelsViewMode = 'basic';
+    $('#settings-override-management').prop('checked', true);
+    $('#settings-override-management-label').text('Automatic');
 
     // Reset all tabs to unmodified state
     $('.editor-tab').removeClass('modified active');
@@ -4068,7 +4081,13 @@ function loadSettingsData(project, projectName) {
                 // Labels editor mode (per-stack)
                 var labelsViewMode = response.labelsViewMode === 'advanced' ? 'advanced' : 'basic';
                 editorModal.labelsViewMode = labelsViewMode;
+                editorModal.pendingLabelsViewMode = labelsViewMode;
                 editorModal.originalSettings['labels-view-mode'] = labelsViewMode;
+                $('#editor-tab-labels-text').text(labelsViewMode === 'advanced' ? 'Override' : 'Labels');
+
+                // Always sync settings control state, even when Labels tab is not active.
+                $('#settings-override-management').prop('checked', labelsViewMode !== 'advanced');
+                $('#settings-override-management-label').text(labelsViewMode === 'advanced' ? 'Manual' : 'Automatic');
 
                 if (editorModal.currentProject === project && editorModal.currentTab === 'labels') {
                     toggleLabelsViewMode(labelsViewMode === 'advanced', true);
@@ -4099,6 +4118,10 @@ function loadSettingsData(project, projectName) {
         editorModal.originalSettings['use-default-compose-files'] = 'false';
         editorModal.originalSettings['labels-view-mode'] = 'basic';
         editorModal.labelsViewMode = 'basic';
+        editorModal.pendingLabelsViewMode = 'basic';
+        $('#editor-tab-labels-text').text('Labels');
+        $('#settings-override-management').prop('checked', true);
+        $('#settings-override-management-label').text('Automatic');
         $('#settings-icon-preview').hide();
         $('#settings-available-profiles').hide();
         $('#settings-external-compose-info').hide();
@@ -4109,17 +4132,6 @@ function loadSettingsData(project, projectName) {
 // Toggle labels tab between basic (form) and advanced (override editor) modes
 function toggleLabelsViewMode(isAdvanced, skipPersist) {
     editorModal.labelsViewMode = isAdvanced ? 'advanced' : 'basic';
-
-    // Keep switch UI synced for programmatic mode application.
-    $('#labels-view-toggle').prop('checked', isAdvanced);
-
-    if (!skipPersist && editorModal.currentProject) {
-        $.post(caURL, {
-            action: 'setLabelsViewMode',
-            script: editorModal.currentProject,
-            labelsViewMode: editorModal.labelsViewMode
-        });
-    }
 
     if (isAdvanced) {
         $('#labels-basic-view').hide();
@@ -4489,6 +4501,38 @@ function saveCurrentTab() {
     });
 }
 
+function parseSaveResponse(data, saveErrors, saveTarget) {
+    if (!data) {
+        if (saveErrors) saveErrors.push('Failed to save ' + saveTarget + '. Empty server response.');
+        return false;
+    }
+
+    var response = data;
+    if (typeof response === 'string') {
+        var trimmed = response.trim();
+        if (trimmed.charAt(0) === '{') {
+            try {
+                response = JSON.parse(trimmed);
+            } catch (e) {
+                if (saveErrors) saveErrors.push('Failed to save ' + saveTarget + '. Invalid server response.');
+                return false;
+            }
+        } else {
+            return true;
+        }
+    }
+
+    if (typeof response === 'object' && response !== null && response.result) {
+        if (response.result === 'success') {
+            return true;
+        }
+        if (saveErrors) saveErrors.push(response.message || ('Failed to save ' + saveTarget + '.'));
+        return false;
+    }
+
+    return true;
+}
+
 function saveTab(tabName, saveErrors) {
     if (!editorModal.editors[tabName]) return Promise.reject('Editor not available');
     var content = editorModal.editors[tabName].getValue();
@@ -4509,31 +4553,38 @@ function saveTab(tabName, saveErrors) {
             return Promise.reject('Unknown tab');
     }
 
-    return $.post(caURL, {
+    var savePayload = {
         action: actionStr,
         script: project,
         scriptContents: content
-    }).then(function(data) {
-        if (data) {
-            editorModal.originalContent[tabName] = content;
-            editorModal.modifiedTabs.delete(tabName);
-            // For override, clear 'modified' on the labels tab indicator
-            if (tabName === 'override') {
-                updateTabModifiedState();
-            } else {
-                $('#editor-tab-' + tabName).removeClass('modified');
-            }
-            updateSaveButtonState();
-            updateTabModifiedState();
+    };
+    if (tabName === 'override') {
+        savePayload.managed = editorModal.labelsViewMode === 'basic' ? 1 : 0;
+    }
 
-            // Regenerate profiles if compose file was saved
-            if (tabName === 'compose') {
-                generateProfiles(null, project);
-            }
-
-            return true;
+    return $.post(caURL, savePayload).then(function(data) {
+        var saveTarget = tabName === 'override' ? 'override file' : (tabName + ' file');
+        if (!parseSaveResponse(data, saveErrors, saveTarget)) {
+            return false;
         }
-        return false;
+
+        editorModal.originalContent[tabName] = content;
+        editorModal.modifiedTabs.delete(tabName);
+        // For override, clear 'modified' on the labels tab indicator
+        if (tabName === 'override') {
+            updateTabModifiedState();
+        } else {
+            $('#editor-tab-' + tabName).removeClass('modified');
+        }
+        updateSaveButtonState();
+        updateTabModifiedState();
+
+        // Regenerate profiles if compose file was saved
+        if (tabName === 'compose') {
+            generateProfiles(null, project);
+        }
+
+        return true;
     }).fail(function() {
         if (saveErrors) saveErrors.push('Failed to save ' + tabName + ' file.');
         return false;
@@ -4544,14 +4595,15 @@ function saveTab(tabName, saveErrors) {
 function saveAllChanges() {
     var savePromises = [];
     var saveErrors = [];
+    var skippedManualLabels = false;
     var totalChanges = editorModal.modifiedTabs.size + editorModal.modifiedSettings.size + editorModal.modifiedLabels.size;
 
     if (totalChanges === 0) {
         return;
     }
 
-    // Track if labels are being modified (need to offer recreate)
-    var labelsWereModified = editorModal.modifiedLabels.size > 0;
+    // Track if labels are being modified in Automatic mode (need to offer recreate)
+    var labelsWereModified = editorModal.labelsViewMode === 'basic' && editorModal.modifiedLabels.size > 0;
 
     // Save modified file tabs (compose, env, and override editor)
     editorModal.modifiedTabs.forEach(function(tabName) {
@@ -4563,9 +4615,13 @@ function saveAllChanges() {
         savePromises.push(saveSettings(saveErrors));
     }
 
-    // Save labels if modified
+    // Save labels only in Automatic mode.
     if (editorModal.modifiedLabels.size > 0) {
-        savePromises.push(saveLabels(saveErrors));
+        if (editorModal.labelsViewMode === 'basic') {
+            savePromises.push(saveLabels(saveErrors));
+        } else {
+            skippedManualLabels = true;
+        }
     }
 
     $.when.apply($, savePromises).then(function() {
@@ -4575,6 +4631,17 @@ function saveAllChanges() {
         });
 
         if (allSucceeded) {
+            if (skippedManualLabels) {
+                swal({
+                    title: "Partially Saved",
+                    text: "Non-label changes were saved. WebUI label form edits were not saved because Override File Management is set to Manual. Switch to Automatic to save Labels form changes.",
+                    type: "warning"
+                });
+                updateTabModifiedState();
+                updateSaveButtonState();
+                return;
+            }
+
             // Check if we should offer to recreate containers
             if (labelsWereModified) {
                 promptRecreateContainers();
@@ -4726,6 +4793,41 @@ function saveSettings(saveErrors) {
         );
     }
 
+    // Save labels view mode if modified
+    if (editorModal.modifiedSettings.has('labels-view-mode')) {
+        var labelsViewMode = editorModal.pendingLabelsViewMode === 'advanced' ? 'advanced' : 'basic';
+        savePromises.push(
+            $.post(caURL, {
+                action: 'setLabelsViewMode',
+                script: project,
+                labelsViewMode: labelsViewMode
+            }).then(function(data) {
+                if (data) {
+                    try {
+                        var response = JSON.parse(data);
+                    } catch (e) {
+                        if (saveErrors) saveErrors.push('Invalid server response when saving override management mode.');
+                        return false;
+                    }
+                    if (response.result === 'success') {
+                        editorModal.originalSettings['labels-view-mode'] = labelsViewMode;
+                        editorModal.pendingLabelsViewMode = labelsViewMode;
+                        editorModal.modifiedSettings.delete('labels-view-mode');
+                        toggleLabelsViewMode(labelsViewMode === 'advanced', true);
+                        return true;
+                    }
+                    if (saveErrors) saveErrors.push(response.message || 'Failed to save override management mode.');
+                    return false;
+                }
+                if (saveErrors) saveErrors.push('Failed to save override management mode. Empty server response.');
+                return false;
+            }).fail(function() {
+                if (saveErrors) saveErrors.push('Failed to save override management mode (network error).');
+                return false;
+            })
+        );
+    }
+
     return $.when.apply($, savePromises).then(function() {
         var results = Array.prototype.slice.call(arguments);
         var allSucceeded = savePromises.length === 0 || results.every(function(result) {
@@ -4795,40 +4897,42 @@ function saveLabels(saveErrors) {
     return $.post(caURL, {
         action: 'saveOverride',
         script: project,
-        scriptContents: rawOverride
+        scriptContents: rawOverride,
+        managed: editorModal.labelsViewMode === 'basic' ? 1 : 0
     }).then(function(data) {
-        if (data) {
-            // Collect services whose icon changed, then clear webgui icon cache
-            var changedIconServices = [];
-            for (var serviceKey in mainDoc.services) {
-                var oldIcon = editorModal.originalLabels[serviceKey + '_icon'] || '';
-                var newIcon = $('#label-' + serviceKey + '-icon').val() || '';
-                if (oldIcon !== newIcon) {
-                    changedIconServices.push(serviceKey);
-                }
-            }
-            if (changedIconServices.length > 0) {
-                $.post(caURL, {
-                    action: 'clearIconCache',
-                    script: project,
-                    services: JSON.stringify(changedIconServices)
-                });
-            }
-
-            // Update original labels to match current values
-            for (var serviceKey in mainDoc.services) {
-                editorModal.originalLabels[serviceKey + '_icon'] = $('#label-' + serviceKey + '-icon').val() || '';
-                editorModal.originalLabels[serviceKey + '_webui'] = $('#label-' + serviceKey + '-webui').val() || '';
-                editorModal.originalLabels[serviceKey + '_shell'] = $('#label-' + serviceKey + '-shell').val() || '';
-            }
-            editorModal.labelsData.overrideContent = rawOverride;
-            editorModal.labelsData.overrideHasCustomTags = false;
-            editorModal.modifiedLabels.clear();
-            updateTabModifiedState();
-            updateSaveButtonState();
-            return true;
+        if (!parseSaveResponse(data, saveErrors, 'WebUI labels')) {
+            return false;
         }
-        return false;
+
+        // Collect services whose icon changed, then clear webgui icon cache
+        var changedIconServices = [];
+        for (var serviceKey in mainDoc.services) {
+            var oldIcon = editorModal.originalLabels[serviceKey + '_icon'] || '';
+            var newIcon = $('#label-' + serviceKey + '-icon').val() || '';
+            if (oldIcon !== newIcon) {
+                changedIconServices.push(serviceKey);
+            }
+        }
+        if (changedIconServices.length > 0) {
+            $.post(caURL, {
+                action: 'clearIconCache',
+                script: project,
+                services: JSON.stringify(changedIconServices)
+            });
+        }
+
+        // Update original labels to match current values
+        for (var serviceKey in mainDoc.services) {
+            editorModal.originalLabels[serviceKey + '_icon'] = $('#label-' + serviceKey + '-icon').val() || '';
+            editorModal.originalLabels[serviceKey + '_webui'] = $('#label-' + serviceKey + '-webui').val() || '';
+            editorModal.originalLabels[serviceKey + '_shell'] = $('#label-' + serviceKey + '-shell').val() || '';
+        }
+        editorModal.labelsData.overrideContent = rawOverride;
+        editorModal.labelsData.overrideHasCustomTags = false;
+        editorModal.modifiedLabels.clear();
+        updateTabModifiedState();
+        updateSaveButtonState();
+        return true;
     }).fail(function() {
         swal({
             title: "Save Failed",
@@ -4876,6 +4980,7 @@ function doCloseEditorModal() {
     editorModal.originalLabels = {};
     editorModal.labelsData = null;
     editorModal.labelsViewMode = 'basic';
+    editorModal.pendingLabelsViewMode = 'basic';
 
     // Clear editor content to avoid showing stale content on next open
     ['compose', 'env', 'override'].forEach(function(type) {
@@ -4897,6 +5002,8 @@ function doCloseEditorModal() {
     $('#settings-default-profile').val('');
     $('#settings-external-compose-path').val('');
     $('#settings-use-default-compose-files').prop('checked', false);
+    $('#settings-override-management').prop('checked', true);
+    $('#settings-override-management-label').text('Automatic');
     $('#settings-icon-preview').hide();
     $('#settings-available-profiles').hide();
     $('#settings-external-compose-info').hide();

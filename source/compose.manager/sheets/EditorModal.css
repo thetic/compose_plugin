@@ -498,13 +498,6 @@
   flex: 1;
 }
 
-/* Shared labels toggle row (uses existing compose switch styling) */
-.labels-view-toggle-row {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 20px 0 20px;
-}
-
 /* Override editor view (advanced mode) */
 .labels-override-view {
   display: flex;

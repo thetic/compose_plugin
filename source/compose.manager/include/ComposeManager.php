@@ -494,9 +494,6 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
             <!-- ========== WEBUI LABELS PANEL ========== -->
             <div class="editor-panel" id="editor-panel-labels" role="tabpanel" aria-labelledby="editor-tab-labels">
-                <div class="labels-view-toggle-row">
-                    <span class="status compose-view-toggle"><span><input type="checkbox" id="labels-view-toggle" class="labels-advancedview" onchange="toggleLabelsViewMode(this.checked)"></span></span>
-                </div>
                 <!-- Basic mode: form UI -->
                 <div class="labels-panel" id="labels-basic-view">
                     <div class="labels-panel-header">
@@ -623,6 +620,15 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                                 Use Docker Compose default file discovery (no explicit <code>-f</code> flags)
                             </label>
                             <div class="settings-field-help">Enable this for projects that rely on auto-loaded <code>compose.override.*</code> and/or <code>COMPOSE_FILE</code> defined in <code>.env</code>. Leave disabled to keep explicit file selection behavior.</div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="settings-override-management">Override File Management</label>
+                            <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
+                                <input type="checkbox" id="settings-override-management">
+                                <span id="settings-override-management-label">Automatic</span>
+                            </label>
+                            <div class="settings-field-help">When <strong>Automatic</strong>, the plugin manages the override file in the project directory — label edits and background maintenance are applied automatically. When <strong>Manual</strong>, you control the override file directly; all automated edits are blocked and the Labels tab opens the raw override editor instead of the form view.</div>
                         </div>
                     </div>
                 </div>

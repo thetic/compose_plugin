@@ -191,17 +191,21 @@ switch ($_POST['action']) {
         break;
     case 'getOverride':
         $script = getPostScript();
-        $projectPath = "$compose_root/$script";
 
-        // Get Override file path and ensure project override exists (create blank if not)
-        $overridePath = StackInfo::fromProject($compose_root, $script)->getOverridePath();
+        // Get Override file path - can read from indirect if present, else project
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $overridePath = $stackInfo->overrideInfo->getOverridePath();
 
         $scriptContents = is_file($overridePath) ? file_get_contents($overridePath) : "";
         $scriptContents = str_replace("\r", "", $scriptContents);
         if (!$scriptContents) {
             $scriptContents = "";
         }
-        echo json_encode(['result' => 'success', 'fileName' => $overridePath, 'content' => $scriptContents]);
+        echo json_encode([
+            'result' => 'success',
+            'fileName' => $overridePath,
+            'content' => $scriptContents
+        ]);
         break;
     case 'saveYml':
         $script = getPostScript();
@@ -210,7 +214,7 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $composeFilePath = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
 
-        // Before saving, detect service renames and migrate override entries
+        // Before saving, detect service renames and migrate override entries in the project override only
         if (is_file($composeFilePath)) {
             $oldContent = file_get_contents($composeFilePath);
             $stackInfo->overrideInfo->migrateOnRename($oldContent, $scriptContents);
@@ -232,10 +236,19 @@ switch ($_POST['action']) {
     case 'saveOverride':
         $script = getPostScript();
         $scriptContents = isset($_POST['scriptContents']) ? $_POST['scriptContents'] : "";
-        $projectPath = "$compose_root/$script";
+        $isManaged = isset($_POST['managed']) && $_POST['managed'] === '1';
 
-        // Get Override file path and ensure project override exists (create blank if not)
-        $overridePath = StackInfo::fromProject($compose_root, $script)->getOverridePath();
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        // managed=1 (Automatic): plugin controls override, write to project dir only
+        // managed=0 (Manual): user controls override, write to wherever override resolves (incl. indirect)
+        $overridePath = $isManaged
+            ? $stackInfo->overrideInfo->getProjectOverridePath()
+            : $stackInfo->overrideInfo->getOverridePath();
+
+        if ($overridePath === null) {
+            echo json_encode(['result' => 'error', 'message' => 'Unable to resolve override path']);
+            break;
+        }
 
         file_put_contents($overridePath, $scriptContents);
         echo "$overridePath saved";

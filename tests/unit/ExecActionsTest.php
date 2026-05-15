@@ -390,6 +390,9 @@ class ExecActionsTest extends TestCase
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals($overrideContent, $result['content']);
+        $this->assertEquals($stackPath . '/compose.override.yaml', $result['fileName']);
+        $this->assertArrayNotHasKey('readingFromIndirect', $result);
+        $this->assertArrayNotHasKey('projectOverridePath', $result);
     }
 
     /**
@@ -408,6 +411,8 @@ class ExecActionsTest extends TestCase
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals($overrideContent, $result['content']);
+        $this->assertArrayNotHasKey('readingFromIndirect', $result);
+        $this->assertArrayNotHasKey('projectOverridePath', $result);
     }
 
     // ===========================================
