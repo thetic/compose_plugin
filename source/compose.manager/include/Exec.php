@@ -75,8 +75,46 @@ switch ($_POST['action']) {
             break;
         }
 
+        // Apply creation-time options, falling back to global defaults.
+        $cfg = @parse_plugin_cfg($sName);
+
+        $useDefaultComposeFilesRaw = isset($_POST['useDefaultComposeFiles'])
+            ? strtolower(trim((string) $_POST['useDefaultComposeFiles']))
+            : strtolower(trim((string) ($cfg['NEW_STACK_USE_DEFAULT_COMPOSE_FILES'] ?? 'false')));
+        $useDefaultComposeFiles = $useDefaultComposeFilesRaw === 'true';
+
+        $overrideManagementAutomaticRaw = isset($_POST['overrideManagementAutomatic'])
+            ? strtolower(trim((string) $_POST['overrideManagementAutomatic']))
+            : strtolower(trim((string) ($cfg['NEW_STACK_OVERRIDE_MANAGEMENT_AUTOMATIC'] ?? 'true')));
+        $overrideManagementAutomatic = $overrideManagementAutomaticRaw !== 'false';
+
+        $stackPath = $compose_root . '/' . $stack->projectFolder;
+
+        $useDefaultComposeFilesFile = "$stackPath/use_default_compose_files";
+        if ($useDefaultComposeFiles) {
+            file_put_contents($useDefaultComposeFilesFile, 'true');
+        } elseif (is_file($useDefaultComposeFilesFile)) {
+            @unlink($useDefaultComposeFilesFile);
+        }
+
+        $labelsViewModeFile = "$stackPath/labels_view_mode";
+        if ($overrideManagementAutomatic) {
+            if (is_file($labelsViewModeFile)) {
+                @unlink($labelsViewModeFile);
+            }
+        } else {
+            file_put_contents($labelsViewModeFile, 'advanced');
+        }
+
         composeLogger("Created stack: $stackName", null, 'user', 'info', 'stack');
-        echo json_encode(['result' => 'success', 'message' => '', 'project' => $stack->projectFolder, 'projectName' => $stack->getName()]);
+        echo json_encode([
+            'result' => 'success',
+            'message' => '',
+            'project' => $stack->projectFolder,
+            'projectName' => $stack->getName(),
+            'useDefaultComposeFiles' => $useDefaultComposeFiles,
+            'overrideManagementAutomatic' => $overrideManagementAutomatic,
+        ]);
         break;
     case 'deleteStack':
         $stackName = isset($_POST['stackName']) ? basename(trim($_POST['stackName'])) : "";
@@ -449,6 +487,13 @@ switch ($_POST['action']) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
         }
+
+        try {
+            $stackInfo = StackInfo::fromProject($compose_root, $script);
+        } catch (\Throwable $e) {
+            echo json_encode(['result' => 'error', 'message' => 'Unable to load stack settings.']);
+            break;
+        }
         // Get env path
         $envPathFile = "$compose_root/$script/envpath";
         $envPath = is_file($envPathFile) ? trim(file_get_contents($envPathFile)) : "";
@@ -515,7 +560,10 @@ switch ($_POST['action']) {
             'useDefaultComposeFiles' => $useDefaultComposeFiles,
             'externalComposePath' => $externalComposePath,
             'invalidIndirectPath' => $invalidIndirectPath,
-            'availableProfiles' => $availableProfiles
+            'availableProfiles' => $availableProfiles,
+            'projectPath' => "$compose_root/$script",
+            'projectOverridePath' => $stackInfo->overrideInfo->getProjectOverridePath(),
+            'effectiveOverridePath' => $stackInfo->overrideInfo->getOverridePath(),
         ]);
         break;
     case 'setLabelsViewMode':

@@ -451,7 +451,14 @@ var editorModal = {
     modifiedLabels: new Set(),
     labelsData: null, // Stores the parsed compose and override data
     labelsViewMode: 'basic', // Applied mode: 'basic' (form UI) or 'advanced' (override editor)
-    pendingLabelsViewMode: 'basic' // Pending settings value; applied only after save
+    pendingLabelsViewMode: 'basic', // Pending settings value; applied only after save
+    filePaths: {
+        stackMeta: '',
+        compose: '',
+        env: '',
+        projectOverride: '',
+        effectiveOverride: ''
+    }
 };
 
 // Debounce helper for validation
@@ -720,6 +727,7 @@ function switchTab(tabName) {
     });
 
     editorModal.currentTab = tabName;
+    updateEditorFileInfo();
 
     // Resize and focus editor if switching to compose or env tab
     if ((tabName === 'compose' || tabName === 'env') && editorModal.editors[tabName]) {
@@ -764,6 +772,40 @@ function refreshEditorContents(type) {
             error: e && e.toString()
         }, 'user', 'warn', 'refreshEditorContents');
     }
+}
+
+function getEditorSaveTargetPath() {
+    switch (editorModal.currentTab) {
+        case 'compose':
+            return editorModal.filePaths.compose || editorModal.filePaths.stackMeta;
+        case 'env':
+            return editorModal.filePaths.env || editorModal.filePaths.stackMeta;
+        case 'labels':
+            if (editorModal.labelsViewMode === 'advanced') {
+                return editorModal.filePaths.effectiveOverride || editorModal.filePaths.projectOverride || editorModal.filePaths.stackMeta;
+            }
+            return editorModal.filePaths.projectOverride || editorModal.filePaths.stackMeta;
+        case 'settings':
+        default:
+            return editorModal.filePaths.stackMeta;
+    }
+}
+
+function updateEditorFileInfo() {
+    var stackPath = editorModal.filePaths.stackMeta || '';
+    var savePath = getEditorSaveTargetPath();
+
+    if (stackPath && savePath && stackPath !== savePath) {
+        $('#editor-file-info').text('Stack config: ' + stackPath + ' | Save target: ' + savePath);
+        return;
+    }
+
+    if (savePath) {
+        $('#editor-file-info').text('Save target: ' + savePath);
+        return;
+    }
+
+    $('#editor-file-info').text(stackPath);
 }
 
 // Update the modified indicator on tabs
@@ -1988,6 +2030,18 @@ function addStack() {
                         <summary>Advanced Options</summary></br>
                         <div style="font-weight:bold;margin-bottom:8px;">Indirect Path</div>
                         <input type="text" id="compose-stack-indirect" placeholder="/mnt/user/compose/stackFolder" data-pickroot="/" data-picktop="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
+
+                        <div style="margin-top:14px;font-weight:bold;margin-bottom:8px;">Compose File Selection</div>
+                        <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
+                            <input type="checkbox" id="compose-stack-use-default-compose-files">
+                            Use Docker Compose default file discovery (no explicit -f flags)
+                        </label>
+
+                        <div style="margin-top:14px;font-weight:bold;margin-bottom:8px;">Override File Management</div>
+                        <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
+                            <input type="checkbox" id="compose-stack-override-management-automatic" checked>
+                            Automatic (disable for Manual/raw override mode)
+                        </label>
                     </details>
                 
                 </div>
@@ -2007,6 +2061,13 @@ function addStack() {
     var tempDiv = document.createElement('div');
     tempDiv.innerHTML = modalHtml;
     document.body.appendChild(tempDiv.firstElementChild);
+
+    getConfig().then(function(pluginCfg) {
+        var defaultUseDefaultComposeFiles = pluginCfg && pluginCfg.NEW_STACK_USE_DEFAULT_COMPOSE_FILES === 'true';
+        var defaultOverrideAutomatic = !(pluginCfg && pluginCfg.NEW_STACK_OVERRIDE_MANAGEMENT_AUTOMATIC === 'false');
+        $('#compose-stack-use-default-compose-files').prop('checked', defaultUseDefaultComposeFiles);
+        $('#compose-stack-override-management-automatic').prop('checked', defaultOverrideAutomatic);
+    });
 
     // The add-stack modal is created dynamically, so attach the picker after insertion.
     if ($.fn.fileTreeAttach) {
@@ -2029,6 +2090,8 @@ function addStack() {
         var name = document.getElementById('compose-stack-name').value.trim();
         var desc = document.getElementById('compose-stack-desc').value.trim();
         var indirect = document.getElementById('compose-stack-indirect').value.trim();
+        var useDefaultComposeFiles = document.getElementById('compose-stack-use-default-compose-files').checked ? 'true' : 'false';
+        var overrideManagementAutomatic = document.getElementById('compose-stack-override-management-automatic').checked ? 'true' : 'false';
         var errorDiv = document.getElementById('compose-stack-modal-error');
         if (!name) {
             errorDiv.textContent = "Please enter a stack name.";
@@ -2049,7 +2112,9 @@ function addStack() {
                 action: 'addStack',
                 stackName: name,
                 stackDesc: desc,
-                stackPath: indirect
+                stackPath: indirect,
+                useDefaultComposeFiles: useDefaultComposeFiles,
+                overrideManagementAutomatic: overrideManagementAutomatic
             },
             function(data) {
                 window.closeComposeStackModal();
@@ -3894,6 +3959,13 @@ function openEditorModalByProject(project, projectName, initialTab) {
     editorModal.labelsData = null;
     editorModal.labelsViewMode = 'basic';
     editorModal.pendingLabelsViewMode = 'basic';
+    editorModal.filePaths = {
+        stackMeta: compose_root + '/' + project,
+        compose: '',
+        env: '',
+        projectOverride: compose_root + '/' + project + '/compose.override.yaml',
+        effectiveOverride: ''
+    };
     $('#settings-override-management').prop('checked', true);
     $('#settings-override-management-label').text('Automatic');
 
@@ -3912,7 +3984,7 @@ function openEditorModalByProject(project, projectName, initialTab) {
 
     // Set modal title
     $('#editor-modal-title').text('Editing: ' + projectName);
-    $('#editor-file-info').text(compose_root + '/' + project);
+    updateEditorFileInfo();
 
     // Ensure overlay is in top-level document layer for tabbed mode
     // Appending to body makes the modal full-screen and avoids nested overflow limitations.
@@ -3944,8 +4016,10 @@ function loadEditorFiles(project) {
         }).then(function(data) {
             if (data) {
                 var response = jQuery.parseJSON(data);
+                editorModal.filePaths.compose = response.fileName || '';
                 editorModal.originalContent['compose'] = response.content || '';
                 if (editorModal.editors['compose']) editorModal.editors['compose'].setValue(response.content || '', -1);
+                updateEditorFileInfo();
             }
         }).fail(function() {
             var errorContent = '# Error loading file';
@@ -3962,8 +4036,10 @@ function loadEditorFiles(project) {
         }).then(function(data) {
             if (data) {
                 var response = jQuery.parseJSON(data);
+                editorModal.filePaths.env = response.fileName || '';
                 editorModal.originalContent['env'] = response.content || '';
                 if (editorModal.editors['env']) editorModal.editors['env'].setValue(response.content || '', -1);
+                updateEditorFileInfo();
             }
         }).fail(function() {
             var errorContent = '# Error loading file';
@@ -4097,6 +4173,11 @@ function loadSettingsData(project, projectName) {
                 $('#settings-use-default-compose-files').prop('checked', useDefaultComposeFiles);
                 editorModal.originalSettings['use-default-compose-files'] = useDefaultComposeFiles ? 'true' : 'false';
 
+                editorModal.filePaths.stackMeta = response.projectPath || (compose_root + '/' + project);
+                editorModal.filePaths.projectOverride = response.projectOverridePath || (compose_root + '/' + project + '/compose.override.yaml');
+                editorModal.filePaths.effectiveOverride = response.effectiveOverridePath || editorModal.filePaths.projectOverride;
+                updateEditorFileInfo();
+
                 // Labels editor mode (per-stack)
                 var labelsViewMode = response.labelsViewMode === 'advanced' ? 'advanced' : 'basic';
                 editorModal.labelsViewMode = labelsViewMode;
@@ -4138,11 +4219,15 @@ function loadSettingsData(project, projectName) {
         editorModal.originalSettings['labels-view-mode'] = 'basic';
         editorModal.labelsViewMode = 'basic';
         editorModal.pendingLabelsViewMode = 'basic';
+        editorModal.filePaths.stackMeta = compose_root + '/' + project;
+        editorModal.filePaths.projectOverride = compose_root + '/' + project + '/compose.override.yaml';
+        editorModal.filePaths.effectiveOverride = editorModal.filePaths.projectOverride;
         $('#editor-tab-labels-text').text('Labels');
         $('#settings-override-management').prop('checked', true);
         $('#settings-override-management-label').text('Automatic');
         $('#settings-icon-preview').hide();
         $('#settings-available-profiles').hide();
+        updateEditorFileInfo();
         $('#settings-external-compose-info').hide();
         $('#settings-invalid-indirect-warning').hide();
     });
@@ -4151,6 +4236,7 @@ function loadSettingsData(project, projectName) {
 // Toggle labels tab between basic (form) and advanced (override editor) modes
 function toggleLabelsViewMode(isAdvanced, skipPersist) {
     editorModal.labelsViewMode = isAdvanced ? 'advanced' : 'basic';
+    updateEditorFileInfo();
 
     if (isAdvanced) {
         $('#labels-basic-view').hide();
@@ -4238,6 +4324,9 @@ function loadLabelsData(callback) {
                 overrideContent: overrideData.content || '',
                 overrideHasCustomTags: composeYamlContainsCustomTags(overrideData.content || '')
             };
+            editorModal.filePaths.compose = composeData.fileName || editorModal.filePaths.compose;
+            editorModal.filePaths.effectiveOverride = overrideData.fileName || editorModal.filePaths.effectiveOverride;
+            updateEditorFileInfo();
 
             // Pre-cache override content for the override editor (only if not yet set for this project)
             if (editorModal.originalContent['override'] === undefined) {
