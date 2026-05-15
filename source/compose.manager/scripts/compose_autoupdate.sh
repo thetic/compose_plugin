@@ -86,13 +86,7 @@ if [ -z "$PROJECT_NAME" ]; then
 fi
 
 if [ -n "$COMPOSE_FILE_LIST" ]; then
-  IFS=':' read -r -a file_parts <<< "$COMPOSE_FILE_LIST"
-  for file in "${file_parts[@]}"; do
-    file="$(trim "$file")"
-    if [ -n "$file" ]; then
-      compose_file_args+=("-f" "$file")
-    fi
-  done
+  build_compose_file_args "$COMPOSE_FILE_LIST"
 elif [ -n "$COMPOSE_FILE_ARG" ]; then
   build_compose_file_args "$COMPOSE_FILE_ARG"
 fi
