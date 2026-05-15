@@ -700,12 +700,12 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => "$fileName saved"]);
         break;
     case 'getStackContainers':
+        $script = getPostScript();
         composeLogger('getStackContainers start', [
             'script' => $script,
             'post' => $_POST,
             'caller' => $_SERVER['REMOTE_ADDR'] ?? 'cli',
         ], 'user', 'debug', 'getStackContainers');
-        $script = getPostScript();
         if (!$script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
