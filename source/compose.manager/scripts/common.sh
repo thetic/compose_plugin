@@ -170,9 +170,36 @@ load_compose_action_spec() {
         cmd+=(--stack-path "$stack_path")
     fi
 
-    local output
-    if ! output="$("${cmd[@]}" 2>/dev/null)"; then
-        composeLogger "Failed to resolve compose args for '$project' action '$action'" warning compose-args
+    COMPOSE_SPEC_ERROR_MESSAGE=""
+
+    local output=""
+    local stderr_file=""
+    local stderr_output=""
+    local command_status=0
+
+    stderr_file=$(mktemp /tmp/compose_args_stderr.XXXXXX 2>/dev/null || true)
+    if [ -n "$stderr_file" ]; then
+        output="$("${cmd[@]}" 2>"$stderr_file")"
+        command_status=$?
+        if [ -s "$stderr_file" ]; then
+            stderr_output=$(tr '\n' ' ' < "$stderr_file" | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')
+        fi
+        rm -f "$stderr_file"
+    else
+        output="$("${cmd[@]}" 2>&1)"
+        command_status=$?
+    fi
+
+    if [ $command_status -ne 0 ]; then
+        if [ -n "$stderr_output" ]; then
+            COMPOSE_SPEC_ERROR_MESSAGE="$stderr_output"
+        elif [ -n "$output" ]; then
+            COMPOSE_SPEC_ERROR_MESSAGE=$(echo "$output" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')
+        else
+            COMPOSE_SPEC_ERROR_MESSAGE="compose args provider command failed"
+        fi
+
+        composeLogger "Failed to resolve compose args for '$project' action '$action': $COMPOSE_SPEC_ERROR_MESSAGE" warning compose-args
         return 1
     fi
 
