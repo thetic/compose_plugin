@@ -11,12 +11,26 @@ require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 class StackInfoTest extends TestCase
 {
     private string $tempRoot;
+    private string $stackOrderFile;
 
     protected function setUp(): void
     {
         parent::setUp();
         \StackInfo::clearCache();
         $this->tempRoot = $this->createTempDir();
+        $this->stackOrderFile = COMPOSE_STACK_ORDER_FILE;
+        if (is_file($this->stackOrderFile)) {
+            @unlink($this->stackOrderFile);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_file($this->stackOrderFile)) {
+            @unlink($this->stackOrderFile);
+        }
+
+        parent::tearDown();
     }
 
     // ===========================================
@@ -263,6 +277,19 @@ class StackInfoTest extends TestCase
     {
         $folders = \StackInfo::listProjectFolders('/nonexistent/path/that/does/not/exist');
         $this->assertSame([], $folders);
+    }
+
+    public function testListProjectFoldersHonorsSavedStackOrder(): void
+    {
+        mkdir($this->tempRoot . '/stack-a');
+        mkdir($this->tempRoot . '/stack-b');
+        mkdir($this->tempRoot . '/stack-c');
+
+        $this->assertTrue(saveComposeStackOrder($this->tempRoot, ['stack-c', 'stack-a', 'stack-b']));
+
+        $folders = \StackInfo::listProjectFolders($this->tempRoot);
+
+        $this->assertSame(['stack-c', 'stack-a', 'stack-b'], $folders);
     }
 
     // =========================================== 

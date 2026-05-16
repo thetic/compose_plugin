@@ -46,6 +46,47 @@ log() {
     composeLogger "$1" info autostart
 }
 
+# Load the saved UI stack order for the current compose root.
+# Prints "project<TAB>position" lines when a saved order exists.
+load_saved_stack_order() {
+    local compose_root="$1"
+    local php_cmd="${COMPOSE_MANAGER_PHP:-php}"
+
+    "$php_cmd" -r '
+$composeRoot = $argv[1] ?? "";
+$orderFile = "/boot/config/plugins/compose.manager/stack-order.json";
+if ($composeRoot === "" || !is_file($orderFile)) {
+    exit(0);
+}
+
+$normalized = realpath($composeRoot);
+if ($normalized === false || $normalized === null) {
+    $normalized = rtrim($composeRoot, "/");
+}
+
+$json = @file_get_contents($orderFile);
+if ($json === false || $json === "") {
+    exit(0);
+}
+
+$map = json_decode($json, true);
+if (!is_array($map)) {
+    exit(0);
+}
+
+$order = $map[$normalized] ?? [];
+if (!is_array($order)) {
+    exit(0);
+}
+
+foreach (array_values($order) as $index => $project) {
+    if (is_string($project) && $project !== "") {
+        echo $project, "\t", $index, "\n";
+    }
+}
+' "$compose_root"
+}
+
 
 # Wait for Docker autostart containers to finish starting
 wait_for_docker_autostart() {
@@ -176,9 +217,15 @@ if [ "$WAIT_FOR_DOCKER" = "true" ]; then
     wait_for_docker_autostart
 fi
 
-# Collect stacks with autostart enabled, sorted by priority
+# Collect stacks with autostart enabled, sorted by saved UI order.
 declare -a stacks_to_start
-declare -A stack_priorities
+declare -A stack_order_positions
+
+while IFS=$'\t' read -r project_name position; do
+    if [ -n "$project_name" ] && [ -n "$position" ]; then
+        stack_order_positions["$project_name"]=$position
+    fi
+done < <(load_saved_stack_order "$COMPOSE_ROOT")
 
 for dir in "$COMPOSE_ROOT"/*; do
     if [ -d "$dir" ]; then
@@ -192,29 +239,20 @@ for dir in "$COMPOSE_ROOT"/*; do
                     local_name=$(basename "$dir")
                 fi
                 
-                # Get priority (default 50, lower = start earlier)
-                # This can be set via startup_priority file or UI ordering later
-                priority=50
-                if [ -f "$dir/startup_priority" ]; then
-                    priority=$(< "$dir/startup_priority")
-                    # Validate it's a number
-                    if ! [[ "$priority" =~ ^[0-9]+$ ]]; then
-                        priority=50
-                    fi
-                fi
-                
                 stacks_to_start+=("$dir|$local_name")
-                stack_priorities["$dir"]=$priority
+                stack_priorities["$dir"]=0
             fi
         fi
     fi
 done
 
-# Sort stacks by priority (lower number = start first)
+# Sort stacks by saved UI order.
 IFS=$'\n' sorted_stacks=($(for stack in "${stacks_to_start[@]}"; do
     dir="${stack%%|*}"
-    echo "${stack_priorities[$dir]}|$stack"
-done | sort -t'|' -k1 -n | cut -d'|' -f2-))
+    project="$(basename "$dir")"
+    order_position="${stack_order_positions[$project]:-999999}"
+    printf '%s\t%s\n' "$order_position" "$stack"
+done | sort -t$'\t' -k1,1n -k2,2f | cut -f2-))
 unset IFS
 
 total_stacks=${#sorted_stacks[@]}

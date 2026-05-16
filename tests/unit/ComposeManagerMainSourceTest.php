@@ -16,14 +16,17 @@ class ComposeManagerMainSourceTest extends TestCase
 {
     private string $mainPagePath;
     private string $mainScriptPath;
+    private string $startedEventPath;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->mainPagePath = __DIR__ . '/../../source/compose.manager/include/ComposeManager.php';
         $this->mainScriptPath = __DIR__ . '/../../source/compose.manager/javascript/composeManagerMain.js';
+        $this->startedEventPath = __DIR__ . '/../../source/compose.manager/event/started';
         $this->assertFileExists($this->mainPagePath, 'ComposeManager.php must exist');
         $this->assertFileExists($this->mainScriptPath, 'composeManagerMain.js must exist');
+        $this->assertFileExists($this->startedEventPath, 'event/started must exist');
     }
 
     private function getPhpSource(): string
@@ -215,6 +218,16 @@ class ComposeManagerMainSourceTest extends TestCase
         // a simple !isRunning guard.
         $this->assertStringNotContainsString('!isRunning && !hasCheckedData', $source,
             'Stopped stack early return must be unconditional (!isRunning only, not gated on hasCheckedData)');
+    }
+
+    public function testAutostartHookUsesSavedStackOrderOnly(): void
+    {
+        $source = file_get_contents($this->startedEventPath);
+
+        $this->assertStringContainsString('load_saved_stack_order()', $source);
+        $this->assertStringContainsString('stack-order.json', $source);
+        $this->assertStringNotContainsString('startup_priority', $source);
+        $this->assertStringNotContainsString('priority=50', $source);
     }
 
 }
