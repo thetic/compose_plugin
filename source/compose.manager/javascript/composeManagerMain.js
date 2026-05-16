@@ -791,21 +791,42 @@ function getEditorSaveTargetPath() {
     }
 }
 
+function getEditorActiveFilePath() {
+    switch (editorModal.currentTab) {
+        case 'compose':
+            return editorModal.filePaths.compose || '';
+        case 'env':
+            return editorModal.filePaths.env || '';
+        case 'labels':
+            if (editorModal.labelsViewMode === 'advanced') {
+                return editorModal.filePaths.effectiveOverride || editorModal.filePaths.projectOverride || '';
+            }
+            return '';
+        case 'settings':
+        default:
+            return '';
+    }
+}
+
+function setEditorPathText(selector, value, emptyText) {
+    var text = value || emptyText;
+    var isEmpty = !value;
+    $(selector)
+        .text(text)
+        .attr('title', text)
+        .attr('data-empty', isEmpty ? 'true' : 'false');
+}
+
 function updateEditorFileInfo() {
     var stackPath = editorModal.filePaths.stackMeta || '';
+    var activeFilePath = getEditorActiveFilePath();
     var savePath = getEditorSaveTargetPath();
+    var fallbackText = savePath && savePath !== stackPath
+        ? 'No raw file in current tab; changes save via ' + savePath
+        : 'No raw file in current tab';
 
-    if (stackPath && savePath && stackPath !== savePath) {
-        $('#editor-file-info').text('Stack config: ' + stackPath + ' | Save target: ' + savePath);
-        return;
-    }
-
-    if (savePath) {
-        $('#editor-file-info').text('Save target: ' + savePath);
-        return;
-    }
-
-    $('#editor-file-info').text(stackPath);
+    setEditorPathText('#editor-project-dir', stackPath, 'Project directory unavailable');
+    setEditorPathText('#editor-edit-file', activeFilePath, fallbackText);
 }
 
 // Update the modified indicator on tabs

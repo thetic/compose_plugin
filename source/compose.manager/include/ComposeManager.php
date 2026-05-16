@@ -637,7 +637,16 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             <!-- Modal Footer -->
             <div class="editor-modal-footer">
                 <div class="editor-footer-left">
-                    <span class="editor-file-info" id="editor-file-info"></span>
+                    <div class="editor-paths" id="editor-file-info">
+                        <div class="editor-path-row">
+                            <span class="editor-path-label">Project Dir</span>
+                            <span class="editor-path-value" id="editor-project-dir"></span>
+                        </div>
+                        <div class="editor-path-row">
+                            <span class="editor-path-label">Editing File</span>
+                            <span class="editor-path-value" id="editor-edit-file"></span>
+                        </div>
+                    </div>
                     <span class="editor-shortcuts">
                         <kbd>Ctrl+S</kbd> Save &nbsp; <kbd>Esc</kbd> Close
                     </span>
