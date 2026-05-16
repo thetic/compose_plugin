@@ -16,17 +16,17 @@ class ComposeManagerMainSourceTest extends TestCase
 {
     private string $mainPagePath;
     private string $mainScriptPath;
-    private string $startedEventPath;
+    private string $dockerStartedEventPath;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->mainPagePath = __DIR__ . '/../../source/compose.manager/include/ComposeManager.php';
         $this->mainScriptPath = __DIR__ . '/../../source/compose.manager/javascript/composeManagerMain.js';
-        $this->startedEventPath = __DIR__ . '/../../source/compose.manager/event/started';
+        $this->dockerStartedEventPath = __DIR__ . '/../../source/compose.manager/event/docker_started';
         $this->assertFileExists($this->mainPagePath, 'ComposeManager.php must exist');
         $this->assertFileExists($this->mainScriptPath, 'composeManagerMain.js must exist');
-        $this->assertFileExists($this->startedEventPath, 'event/started must exist');
+        $this->assertFileExists($this->dockerStartedEventPath, 'event/docker_started must exist');
     }
 
     private function getPhpSource(): string
@@ -222,7 +222,7 @@ class ComposeManagerMainSourceTest extends TestCase
 
     public function testAutostartHookUsesSavedStackOrderOnly(): void
     {
-        $source = file_get_contents($this->startedEventPath);
+        $source = file_get_contents($this->dockerStartedEventPath);
 
         $this->assertStringContainsString('load_saved_stack_order()', $source);
         $this->assertStringContainsString('stack-order.json', $source);
