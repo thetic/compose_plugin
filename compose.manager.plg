@@ -36,12 +36,12 @@
 >
 
 <CHANGES>
-###2026.05.15.1350
-- Features (editor): replace save button with Okay and Apply buttons that follow the standard convention (okay = save and close, apply = save only)
-- Features: implement override file management settings and enhance labels view mode handling
-- Bug Fixes: improve error handling for compose args resolution in event handlers
+###2026.05.16.1708
+- Features (editor): enhance file info display with project directory and editing file paths
+- Features: add new stack defaults and override file management options in settings
+- Bug Fixes: correct getopt format option to ensure proper argument parsing
 - [PR #108](https://github.com/mstrhakr/compose_plugin/pull/108)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.15.1350)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.16.1708)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
