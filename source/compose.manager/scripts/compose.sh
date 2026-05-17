@@ -397,9 +397,9 @@ case $command in
 
   logs)
     if [ "$debug" = true ]; then
-      log_msg "DEBUG" "${compose_base[*]} logs -f"
+      log_msg "DEBUG" "${compose_base[*]} -p $name logs -f"
     fi
-    "${compose_base[@]}" logs -f 2>&1
+    "${compose_base[@]}" -p "$name" logs -f 2>&1
     exit_code=$?
     if [ $exit_code -ne 0 ]; then
       log_msg "ERROR" "Failed to stream logs (exit code: $exit_code)"

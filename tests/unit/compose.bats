@@ -98,6 +98,12 @@ test_setup() {
     assert_success
 }
 
+@test "compose.sh logs action uses explicit project name" {
+    # Stack logs must use the sanitized project name the plugin started the stack with.
+    run grep -E '^\s*"\$\{compose_base\[@\]\}" -p "\$name" logs -f 2>&1' "$COMPOSE_SCRIPT"
+    assert_success
+}
+
 @test "compose.sh update action pull step uses --ignore-buildable" {
     # The update action pulls before 'up -d --build'; buildable services are handled by --build
     run grep -E 'pull --ignore-buildable' "$COMPOSE_SCRIPT"
