@@ -36,11 +36,10 @@
 >
 
 <CHANGES>
-###2026.05.16.1954
-- Bug Fixes: replace started with docker_started so compose attempt autostart at docker start instead of array start
-- Bug Fixes: implement loading and honoring saved stack order for startup autostart
+###2026.05.17.0021
+- Bug Fixes: ensure logs command uses real project name
 - [PR #108](https://github.com/mstrhakr/compose_plugin/pull/108)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.16.1954)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.17.0021)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
