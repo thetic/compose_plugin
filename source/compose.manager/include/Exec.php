@@ -268,7 +268,7 @@ switch ($_POST['action']) {
 
         // Get Override file path - can read from indirect if present, else project
         $stackInfo = StackInfo::fromProject($compose_root, $script);
-        $overridePath = $stackInfo->overrideInfo->getOverridePath();
+        $overridePath = $stackInfo->getPreferredOverridePath();
 
         $scriptContents = is_file($overridePath) ? file_get_contents($overridePath) : "";
         $scriptContents = str_replace("\r", "", $scriptContents);
@@ -278,7 +278,39 @@ switch ($_POST['action']) {
         echo json_encode([
             'result' => 'success',
             'fileName' => $overridePath,
-            'content' => $scriptContents
+            'content' => $scriptContents,
+            'exists' => is_file($overridePath)
+        ]);
+        break;
+    case 'createOverrideTemplate':
+        $script = getPostScript();
+
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $overridePath = $stackInfo->getPreferredOverridePath();
+
+        if ($overridePath === null) {
+            echo json_encode(['result' => 'error', 'message' => 'Unable to resolve override path']);
+            break;
+        }
+
+        $overrideDir = dirname($overridePath);
+        if (!is_dir($overrideDir)) {
+            echo json_encode(['result' => 'error', 'message' => 'Override target directory does not exist.']);
+            break;
+        }
+
+        if (!is_file($overridePath)) {
+            file_put_contents($overridePath, OverrideInfo::buildTemplateContent());
+        }
+
+        $content = is_file($overridePath) ? file_get_contents($overridePath) : '';
+        $content = str_replace("\r", "", (string) $content);
+
+        echo json_encode([
+            'result' => 'success',
+            'fileName' => $overridePath,
+            'content' => $content,
+            'exists' => true
         ]);
         break;
     case 'saveYml':
@@ -314,10 +346,10 @@ switch ($_POST['action']) {
 
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         // managed=1 (Automatic): plugin controls override, write to project dir only
-        // managed=0 (Manual): user controls override, write to wherever override resolves (incl. indirect)
+        // managed=0 (Manual): user controls override, write to the preferred override target
         $overridePath = $isManaged
             ? $stackInfo->overrideInfo->getProjectOverridePath()
-            : $stackInfo->overrideInfo->getOverridePath();
+            : $stackInfo->getPreferredOverridePath();
 
         if ($overridePath === null) {
             echo json_encode(['result' => 'error', 'message' => 'Unable to resolve override path']);
@@ -617,7 +649,7 @@ switch ($_POST['action']) {
             'availableProfiles' => $availableProfiles,
             'projectPath' => "$compose_root/$script",
             'projectOverridePath' => $stackInfo->overrideInfo->getProjectOverridePath(),
-            'effectiveOverridePath' => $stackInfo->overrideInfo->getOverridePath(),
+            'effectiveOverridePath' => $stackInfo->getPreferredOverridePath(),
         ]);
         break;
     case 'setLabelsViewMode':

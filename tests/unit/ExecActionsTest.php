@@ -398,21 +398,47 @@ class ExecActionsTest extends TestCase
     /**
      * Test getOverride returns empty when no file
      */
-    public function testGetOverrideCreatesWhenNoFile(): void
+    public function testGetOverrideReturnsBlankWhenNoFile(): void
     {
-        $this->createTestStack('test-stack');
-        
+        $stackPath = $this->createTestStack('test-stack');
+
         $output = $this->executeAction('getOverride', [
             'script' => 'test-stack',
         ]);
-        $overrideContent = "# Override file for UI labels (icon, webui, shell)\n";
-        $overrideContent .= "# This file is managed by Compose Manager\n";
-        $overrideContent .= "services: {}\n";
+
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
-        $this->assertEquals($overrideContent, $result['content']);
+        $this->assertSame('', $result['content']);
+        $this->assertSame($stackPath . '/compose.override.yaml', $result['fileName']);
+        $this->assertFalse($result['exists']);
+        $this->assertFileDoesNotExist($stackPath . '/compose.override.yaml');
         $this->assertArrayNotHasKey('readingFromIndirect', $result);
         $this->assertArrayNotHasKey('projectOverridePath', $result);
+    }
+
+    // ===========================================
+    // createOverrideTemplate Action Tests
+    // ===========================================
+
+    /**
+     * Test createOverrideTemplate writes the default template
+     */
+    public function testCreateOverrideTemplateWritesTemplate(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+
+        $output = $this->executeAction('createOverrideTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertSame($stackPath . '/compose.override.yaml', $result['fileName']);
+        $this->assertTrue($result['exists']);
+        $this->assertStringContainsString('Manual example:', $result['content']);
+        $this->assertStringContainsString('net.unraid.docker.webui', $result['content']);
+        $this->assertFileExists($stackPath . '/compose.override.yaml');
+        $this->assertStringContainsString('services: {}', file_get_contents($stackPath . '/compose.override.yaml'));
     }
 
     // ===========================================

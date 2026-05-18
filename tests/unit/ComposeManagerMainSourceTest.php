@@ -215,6 +215,23 @@ class ComposeManagerMainSourceTest extends TestCase
         $this->assertStringContainsString('externalComposeFilePath: externalComposeFilePath,', $source);
     }
 
+    public function testOverrideEditorShowsBlankStateAndCreateButton(): void
+    {
+        $source = $this->getPhpSource();
+
+        $this->assertStringContainsString('id="labels-override-empty-state"', $source);
+        $this->assertStringContainsString('Create Override Template', $source);
+    }
+
+    public function testCreateOverrideTemplateActionIsWiredInJs(): void
+    {
+        $source = $this->getJsSource();
+
+        $this->assertStringContainsString("action: 'createOverrideTemplate'", $source);
+        $this->assertStringContainsString('function createOverrideTemplate()', $source);
+        $this->assertStringContainsString('overrideExists = true', $source);
+    }
+
     public function testInvalidIndirectRepairRoutesFileModeToExternalComposeFileField(): void
     {
         $source = $this->getJsSource();

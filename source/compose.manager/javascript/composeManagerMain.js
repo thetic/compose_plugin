@@ -4117,6 +4117,8 @@ function openEditorModalByProject(project, projectName, initialTab) {
     if (editorModal.editors['override']) {
         editorModal.editors['override'].setValue('', -1);
     }
+    $('#labels-override-empty-state').hide();
+    $('#labels-override-editor-wrap').show();
     $('#editor-validation-override').html('<i class="fa fa-check editor-validation-icon"></i> Ready').removeClass('valid error warning');
 
     // Set modal title
@@ -4420,7 +4422,22 @@ function toggleLabelsViewMode(isAdvanced, skipPersist) {
 // Populate the override Ace editor with the current override file content
 function _populateOverrideEditor() {
     if (!editorModal.editors['override']) return;
+    var hasOverride = !!(editorModal.labelsData && editorModal.labelsData.overrideExists);
     var content = (editorModal.labelsData && editorModal.labelsData.overrideContent) || '';
+
+    if (!hasOverride) {
+        $('#labels-override-empty-state').css('display', 'flex');
+        $('#labels-override-editor-wrap').hide();
+        if (!editorModal.modifiedTabs.has('override')) {
+            editorModal.originalContent['override'] = '';
+            editorModal.editors['override'].setValue('', -1);
+        }
+        return;
+    }
+
+    $('#labels-override-empty-state').hide();
+    $('#labels-override-editor-wrap').show();
+
     // Hydrate editor from override file unless there are unsaved override edits.
     if (!editorModal.modifiedTabs.has('override')) {
         editorModal.originalContent['override'] = content;
@@ -4477,7 +4494,8 @@ function loadLabelsData(callback) {
                 mainDoc: mainDoc,
                 overrideDoc: overrideDoc,
                 overrideContent: overrideData.content || '',
-                overrideHasCustomTags: composeYamlContainsCustomTags(overrideData.content || '')
+                overrideHasCustomTags: composeYamlContainsCustomTags(overrideData.content || ''),
+                overrideExists: overrideData.exists === true
             };
             editorModal.filePaths.compose = composeData.fileName || editorModal.filePaths.compose;
             editorModal.filePaths.effectiveOverride = overrideData.fileName || editorModal.filePaths.effectiveOverride;
@@ -4502,6 +4520,60 @@ function loadLabelsData(callback) {
         }
     }).fail(function() {
         $('#labels-services-container').html('<div class="labels-empty-state"><i class="fa fa-exclamation-triangle"></i> Failed to load compose files</div>');
+    });
+}
+
+function createOverrideTemplate() {
+    var project = editorModal.currentProject;
+    if (!project) return;
+
+    $('#labels-override-empty-state button').prop('disabled', true);
+
+    $.post(caURL, {
+        action: 'createOverrideTemplate',
+        script: project
+    }).done(function(data) {
+        try {
+            if (!data) {
+                throw new Error('Empty server response');
+            }
+
+            var response = JSON.parse(data);
+            if (response.result !== 'success') {
+                throw new Error(response.message || 'Failed to create override template.');
+            }
+
+            editorModal.labelsData = editorModal.labelsData || {};
+            editorModal.labelsData.overrideExists = true;
+            editorModal.labelsData.overrideContent = response.content || '';
+            editorModal.filePaths.effectiveOverride = response.fileName || editorModal.filePaths.effectiveOverride;
+            editorModal.originalContent['override'] = response.content || '';
+            editorModal.modifiedTabs.delete('override');
+
+            if (editorModal.editors['override']) {
+                editorModal.editors['override'].setValue(response.content || '', -1);
+            }
+
+            _populateOverrideEditor();
+            updateEditorFileInfo();
+            validateYaml('override', response.content || '');
+            updateTabModifiedState();
+            updateSaveButtonState();
+        } catch (error) {
+            swal({
+                title: 'Create Failed',
+                text: error && error.message ? error.message : 'Failed to create override template.',
+                type: 'error'
+            });
+        }
+    }).fail(function() {
+        swal({
+            title: 'Create Failed',
+            text: 'Failed to create override template.',
+            type: 'error'
+        });
+    }).always(function() {
+        $('#labels-override-empty-state button').prop('disabled', false);
     });
 }
 

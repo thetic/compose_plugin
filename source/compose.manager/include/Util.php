@@ -673,6 +673,44 @@ class OverrideInfo
     }
 
     /**
+     * Build the override filename that corresponds to a compose file path.
+     *
+     * @param string $composePath Compose file path or name
+     * @return string
+     */
+    public static function buildComputedNameForPath(string $composePath): string
+    {
+        $baseName = basename($composePath);
+        $computedName = preg_replace('/(\.[^.]+)$/', '.override$1', $baseName);
+
+        if (!is_string($computedName) || $computedName === '') {
+            return $baseName . '.override';
+        }
+
+        return $computedName;
+    }
+
+    /**
+     * Default template content for newly created override files.
+     *
+     * @return string
+     */
+    public static function buildTemplateContent(): string
+    {
+        return "# Override file for UI labels (icon, webui, shell)\n"
+            . "# This file is managed by Compose Manager\n"
+            . "#\n"
+            . "# Manual example:\n"
+            . "# services:\n"
+            . "#   my-service:\n"
+            . "#     labels:\n"
+            . "#       net.unraid.docker.icon: https://icon-url\n"
+            . "#       net.unraid.docker.webui: https://service-url\n"
+            . "#       net.unraid.docker.shell: /bin/bash\n"
+            . "services: {}\n";
+    }
+
+    /**
      * Core override resolution logic shared by both factories.
      *
      * Computes the override filename from the compose file, resolves project
@@ -689,8 +727,8 @@ class OverrideInfo
         $info = new self();
         $info->composeFilePath = $composeFilePath;
 
-        $composeBaseName = $composeFilePath !== null ? basename($composeFilePath) : COMPOSE_FILE_NAMES[0];
-        $info->computedName = preg_replace('/(\.[^.]+)$/', '.override$1', $composeBaseName);
+        $composeBaseName = $composeFilePath !== null ? $composeFilePath : COMPOSE_FILE_NAMES[0];
+        $info->computedName = self::buildComputedNameForPath($composeBaseName);
 
         $computedProjectOverride = $projectPath . '/' . $info->computedName;
         $computedIndirectOverride = $indirectPath !== null ? ($indirectPath . '/' . $info->computedName) : null;
@@ -716,14 +754,6 @@ class OverrideInfo
 
         $info->useIndirect = ($info->indirectOverride && is_file($info->indirectOverride));
         $info->mismatchIndirectLegacy = false;
-
-        if (!is_file($info->projectOverride) && !$info->useIndirect) {
-            $overrideContent = "# Override file for UI labels (icon, webui, shell)\n";
-            $overrideContent .= "# This file is managed by Compose Manager\n";
-            $overrideContent .= "services: {}\n";
-            file_put_contents($info->projectOverride, $overrideContent);
-            composeLogger("Created missing project override template at $info->projectOverride", null, 'user', 'info', 'override');
-        }
 
         return $info;
     }
@@ -2118,6 +2148,29 @@ class StackInfo
     public function getOverridePath(): ?string
     {
         return $this->overrideInfo->getOverridePath();
+    }
+
+    /**
+     * Get the path where a new override template should be created.
+     *
+     * Uses the indirect target when the stack is indirect, otherwise the
+     * project override path.
+     *
+     * @return string|null
+     */
+    public function getPreferredOverridePath(): ?string
+    {
+        if (!$this->isIndirect || $this->indirectPath === null || $this->indirectPath === '') {
+            return $this->overrideInfo->getProjectOverridePath();
+        }
+
+        if ($this->indirectMode === 'file') {
+            $targetDir = dirname($this->indirectPath);
+            $targetName = OverrideInfo::buildComputedNameForPath($this->indirectPath);
+            return rtrim($targetDir, '/') . '/' . $targetName;
+        }
+
+        return rtrim($this->indirectPath, '/') . '/' . $this->overrideInfo->computedName;
     }
 
     /**

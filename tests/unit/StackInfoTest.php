@@ -430,6 +430,36 @@ class StackInfoTest extends TestCase
         $this->assertSame("$stackDir/compose.override.yaml", $info->getOverridePath());
     }
 
+    public function testPreferredOverridePathUsesIndirectFolder(): void
+    {
+        $stack = 'preferred-folder';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        $indirectDir = $this->tempRoot . '/indirect-folder-target';
+        mkdir($stackDir);
+        mkdir($indirectDir);
+        file_put_contents($stackDir . '/indirect', $indirectDir);
+        file_put_contents($indirectDir . '/compose.yaml', "services:\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame($indirectDir . '/compose.override.yaml', $info->getPreferredOverridePath());
+    }
+
+    public function testPreferredOverridePathUsesIndirectFile(): void
+    {
+        $stack = 'preferred-file';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        $indirectFile = $this->tempRoot . '/indirect-file-target/custom.compose.yaml';
+        mkdir($stackDir);
+        mkdir(dirname($indirectFile), 0755, true);
+        file_put_contents($stackDir . '/indirect', $indirectFile);
+        file_put_contents($indirectFile, "services:\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame(dirname($indirectFile) . '/custom.compose.override.yaml', $info->getPreferredOverridePath());
+    }
+
     // ===========================================
     // Lazy Metadata Getter Tests
     // ===========================================
@@ -1091,10 +1121,10 @@ class StackInfoTest extends TestCase
         $stack = \StackInfo::createNew($this->tempRoot, 'Override Init');
 
         $this->assertInstanceOf(\OverrideInfo::class, $stack->overrideInfo);
-        // Override file should be created for non-indirect stacks
+        // Override file should not be created until explicitly requested
         $overridePath = $stack->getOverridePath();
         $this->assertNotNull($overridePath);
-        $this->assertFileExists($overridePath);
+        $this->assertFileDoesNotExist($overridePath);
     }
 
     public function testCreateNewIsCached(): void
