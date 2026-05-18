@@ -8,6 +8,9 @@ parameters:
   excludePaths:
     - */vendor/*
   ignoreErrors:
+    # Unraid template-injected globals not traceable in dev
+    - message: "#Undefined variable \\$compose_root#"
+    - message: "#Undefined variable \\$theme#"
     # Platform-specific paths (Unraid emhttp)
     - messages:
         - "#/usr/local/emhttp/plugins/.*.php#"
