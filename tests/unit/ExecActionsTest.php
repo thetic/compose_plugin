@@ -582,6 +582,66 @@ class ExecActionsTest extends TestCase
         $this->assertEquals('production', $result['defaultProfile']);
     }
 
+    public function testGetStackSettingsReturnsExternalComposeFileForFileMode(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $externalDir = $this->testComposeRoot . '/external';
+        $externalFile = $externalDir . '/custom.compose.yaml';
+        mkdir($externalDir, 0755, true);
+        file_put_contents($externalFile, "services:\n  app:\n    image: redis\n");
+        file_put_contents($stackPath . '/indirect', $externalFile);
+        file_put_contents($stackPath . '/indirect_mode', 'file');
+
+        $output = $this->executeAction('getStackSettings', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertSame('file', $result['indirectMode']);
+        $this->assertSame($externalFile, $result['externalComposeFilePath']);
+        $this->assertSame('', $result['externalComposePath']);
+    }
+
+    public function testGetStackSettingsPreservesBrokenIndirectFileModePath(): void
+    {
+        $stackPath = $this->createTestStack('test-stack', [COMPOSE_FILE_NAMES[0] => null]);
+        $missingFile = $this->testComposeRoot . '/external/missing.compose.yaml';
+        file_put_contents($stackPath . '/indirect', $missingFile);
+        file_put_contents($stackPath . '/indirect_mode', 'file');
+        @unlink($stackPath . '/' . COMPOSE_FILE_NAMES[0]);
+
+        $output = $this->executeAction('getStackSettings', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertSame('file', $result['indirectMode']);
+        $this->assertSame($missingFile, $result['invalidIndirectPath']);
+        $this->assertSame('', $result['externalComposeFilePath']);
+    }
+
+    public function testGetStackSettingsReturnsEffectiveDefaultDiscoveryFalseForFileMode(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $externalDir = $this->testComposeRoot . '/external-discovery';
+        $externalFile = $externalDir . '/compose.yaml';
+        mkdir($externalDir, 0755, true);
+        file_put_contents($externalFile, "services:\n  app:\n    image: redis\n");
+        file_put_contents($stackPath . '/indirect', $externalFile);
+        file_put_contents($stackPath . '/indirect_mode', 'file');
+        file_put_contents($stackPath . '/use_default_compose_files', 'true');
+
+        $output = $this->executeAction('getStackSettings', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertFalse($result['useDefaultComposeFiles']);
+    }
+
     /**
      * Test getStackSettings error when stack not specified
      */
@@ -614,6 +674,34 @@ class ExecActionsTest extends TestCase
         
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
+    }
+
+    public function testSetStackSettingsRejectsBothExternalComposePathAndFile(): void
+    {
+        $this->createTestStack('test-stack');
+
+        $output = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'externalComposePath' => '/mnt/user/appdata/example',
+            'externalComposeFilePath' => '/mnt/user/appdata/example/compose.yaml',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('Set either External Compose Path or External Compose File', $result['message']);
+    }
+
+    public function testAddStackRejectsBothIndirectPathAndFile(): void
+    {
+        $output = $this->executeAction('addStack', [
+            'stackName' => 'My Stack',
+            'stackPath' => '/mnt/user/appdata/example',
+            'stackFilePath' => '/mnt/user/appdata/example/compose.yaml',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('Set either Indirect Path or Indirect Compose File', $result['message']);
     }
 
     /**

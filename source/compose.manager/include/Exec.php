@@ -34,25 +34,50 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'config' => $cfg]);
         break;
     case 'addStack':
-        // Validate indirect path (HTTP-boundary security check)
-        $indirect = isset($_POST['stackPath']) ? trim($_POST['stackPath']) : '';
-        if ($indirect !== '') {
-            $realIndirect = realpath(dirname($indirect));
+        // Validate optional indirect inputs (folder or specific compose file)
+        $indirectDir = isset($_POST['stackPath']) ? trim($_POST['stackPath']) : '';
+        $indirectFile = isset($_POST['stackFilePath']) ? trim($_POST['stackFilePath']) : '';
+        if ($indirectDir !== '' && $indirectFile !== '') {
+            echo json_encode(['result' => 'error', 'message' => 'Set either Indirect Path or Indirect Compose File, not both.']);
+            break;
+        }
+
+        $indirect = '';
+        if ($indirectDir !== '') {
+            $realIndirect = realpath($indirectDir);
             if ($realIndirect === false) {
-                composeLogger("Failed to create stack: Could not resolve indirect path: $indirect", null, 'user', 'error', 'stack');
+                composeLogger("Failed to create stack: Could not resolve indirect path: $indirectDir", null, 'user', 'error', 'stack');
                 echo json_encode(['result' => 'error', 'message' => 'Stack path is invalid or does not exist.']);
                 break;
             }
-            if (strpos($realIndirect, '/mnt/') !== 0 && strpos($realIndirect, '/boot/config/') !== 0) {
-                composeLogger("Failed to create stack: Invalid indirect path: $indirect", null, 'user', 'error', 'stack');
+            if (!Path::isAllowedPath($realIndirect, ['/mnt', '/boot/config'])) {
+                composeLogger("Failed to create stack: Invalid indirect path: $indirectDir", null, 'user', 'error', 'stack');
                 echo json_encode(['result' => 'error', 'message' => 'Stack path must be under /mnt/ or /boot/config/.']);
                 break;
             }
-            if (!is_dir($indirect)) {
-                composeLogger("Failed to create stack: Indirect stack path does not exist: $indirect", null, 'user', 'error', 'stack');
+            if (!is_dir($realIndirect)) {
+                composeLogger("Failed to create stack: Indirect stack path does not exist: $indirectDir", null, 'user', 'error', 'stack');
                 echo json_encode(['result' => 'error', 'message' => 'Indirect stack path does not exist.']);
                 break;
             }
+            $indirect = rtrim($realIndirect, '/');
+        } elseif ($indirectFile !== '') {
+            $realFile = realpath($indirectFile);
+            if ($realFile === false || !is_file($realFile)) {
+                composeLogger("Failed to create stack: Indirect compose file does not exist: $indirectFile", null, 'user', 'error', 'stack');
+                echo json_encode(['result' => 'error', 'message' => 'Indirect compose file does not exist.']);
+                break;
+            }
+            if (!Path::isAllowedPath($realFile, ['/mnt', '/boot/config'])) {
+                composeLogger("Failed to create stack: Invalid indirect compose file path: $indirectFile", null, 'user', 'error', 'stack');
+                echo json_encode(['result' => 'error', 'message' => 'Indirect compose file must be under /mnt/ or /boot/config/.']);
+                break;
+            }
+            if (preg_match('/\.ya?ml$/i', basename($realFile)) !== 1) {
+                echo json_encode(['result' => 'error', 'message' => 'Indirect compose file must be a .yml or .yaml file.']);
+                break;
+            }
+            $indirect = $realFile;
         }
 
         $stackName = isset($_POST['stackName']) ? trim($_POST['stackName']) : '';
@@ -82,6 +107,9 @@ switch ($_POST['action']) {
             ? strtolower(trim((string) $_POST['useDefaultComposeFiles']))
             : strtolower(trim((string) ($cfg['NEW_STACK_USE_DEFAULT_COMPOSE_FILES'] ?? 'false')));
         $useDefaultComposeFiles = $useDefaultComposeFilesRaw === 'true';
+        if ($indirectFile !== '') {
+            $useDefaultComposeFiles = false;
+        }
 
         $overrideManagementAutomaticRaw = isset($_POST['overrideManagementAutomatic'])
             ? strtolower(trim((string) $_POST['overrideManagementAutomatic']))
@@ -518,22 +546,38 @@ switch ($_POST['action']) {
         }
 
         // Use Docker Compose default file discovery (no explicit -f)
-        $useDefaultComposeFilesFile = "$compose_root/$script/use_default_compose_files";
-        $useDefaultComposeFiles = is_file($useDefaultComposeFilesFile)
-            && strtolower(trim(file_get_contents($useDefaultComposeFilesFile))) === 'true';
+        // Use the StackInfo method so the effective value (gated by manual overrides) is returned.
+        $useDefaultComposeFiles = $stackInfo->useDefaultComposeFileDiscovery();
 
         // Get external compose path (indirect)
         $indirectFile = "$compose_root/$script/indirect";
         $invalidIndirectFile = "$compose_root/$script/indirect.invalid";
         $externalComposePath = "";
+        $externalComposeFilePath = "";
         $invalidIndirectPath = "";
         if (is_file($indirectFile)) {
             $raw = trim(file_get_contents($indirectFile));
-            if ($raw !== '' && is_dir($raw)) {
-                $externalComposePath = $raw;
-            } else {
-                // Path is invalid or directory unavailable — non-destructive handling
-                $invalidIndirectPath = $raw;
+            if ($raw !== '') {
+                if ($stackInfo->indirectMode === 'file') {
+                    if (is_file($raw)) {
+                        $externalComposeFilePath = $raw;
+                    } else {
+                        $invalidIndirectPath = $raw;
+                    }
+                } elseif ($stackInfo->indirectMode === 'folder') {
+                    if (is_dir($raw)) {
+                        $externalComposePath = $raw;
+                    } else {
+                        $invalidIndirectPath = $raw;
+                    }
+                } elseif (is_dir($raw)) {
+                    $externalComposePath = $raw;
+                } elseif (is_file($raw)) {
+                    $externalComposeFilePath = $raw;
+                } else {
+                    // Path is invalid or unavailable — non-destructive handling
+                    $invalidIndirectPath = $raw;
+                }
             }
         } elseif (is_file($invalidIndirectFile)) {
             // Legacy fallback: older versions renamed indirect → indirect.invalid
@@ -558,7 +602,9 @@ switch ($_POST['action']) {
             'defaultProfile' => $defaultProfile,
             'labelsViewMode' => $labelsViewMode,
             'useDefaultComposeFiles' => $useDefaultComposeFiles,
+            'indirectMode' => $stackInfo->indirectMode,
             'externalComposePath' => $externalComposePath,
+            'externalComposeFilePath' => $externalComposeFilePath,
             'invalidIndirectPath' => $invalidIndirectPath,
             'availableProfiles' => $availableProfiles,
             'projectPath' => "$compose_root/$script",
@@ -640,9 +686,16 @@ switch ($_POST['action']) {
 
         $externalComposePath = isset($_POST['externalComposePath']) ? trim($_POST['externalComposePath']) : "";
         $externalComposePath = rtrim($externalComposePath, '/');
+        $externalComposeFilePath = isset($_POST['externalComposeFilePath']) ? trim($_POST['externalComposeFilePath']) : "";
+
+        if (!empty($externalComposePath) && !empty($externalComposeFilePath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Set either External Compose Path or External Compose File, not both.']);
+            break;
+        }
+
         if (!empty($externalComposePath)) {
             $realPath = realpath($externalComposePath) ?: $externalComposePath;
-            if (strpos($realPath, '/mnt/') !== 0 && strpos($realPath, '/boot/config/') !== 0) {
+            if (!Path::isAllowedPath($realPath, ['/mnt', '/boot/config'])) {
                 echo json_encode(['result' => 'error', 'message' => 'External compose path must be under /mnt/ or /boot/config/.']);
                 break;
             }
@@ -651,11 +704,34 @@ switch ($_POST['action']) {
                 break;
             }
 
-            // Guardrail: treat self-referential external path as local mode.
             $projectPath = realpath("$compose_root/$script") ?: rtrim("$compose_root/$script", '/');
-            if ($realPath === $projectPath) {
-                $externalComposePath = "";
+            if (Path::refersToSamePath($realPath, $projectPath)) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose path cannot be the stack project folder. Use a path under /mnt/ or /boot/config/ that is external to this stack.']);
+                break;
             }
+        }
+
+        if (!empty($externalComposeFilePath)) {
+            $realFile = realpath($externalComposeFilePath);
+            if ($realFile === false || !is_file($realFile)) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose file does not exist: ' . $externalComposeFilePath]);
+                break;
+            }
+            if (!Path::isAllowedPath($realFile, ['/mnt', '/boot/config'])) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose file must be under /mnt/ or /boot/config/.']);
+                break;
+            }
+            if (preg_match('/\.ya?ml$/i', basename($realFile)) !== 1) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose file must be a .yml or .yaml file.']);
+                break;
+            }
+
+            $projectPath = realpath("$compose_root/$script") ?: rtrim("$compose_root/$script", '/');
+            if (Path::refersToSamePath(dirname($realFile), $projectPath)) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose file cannot be inside the stack project folder. Use a path under /mnt/ or /boot/config/ that is external to this stack.']);
+                break;
+            }
+            $externalComposeFilePath = $realFile;
         }
 
         // --- All validation passed, now write everything ---
@@ -709,23 +785,40 @@ switch ($_POST['action']) {
         // Set external compose path (indirect)
         $indirectFile = "$compose_root/$script/indirect";
         $invalidIndirectFile = "$compose_root/$script/indirect.invalid";
-        if (empty($externalComposePath)) {
+        $indirectModeFile = "$compose_root/$script/indirect_mode";
+        $indirectTarget = '';
+        if (!empty($externalComposeFilePath)) {
+            $indirectTarget = $externalComposeFilePath;
+        } elseif (!empty($externalComposePath)) {
+            $indirectTarget = $externalComposePath;
+        }
+
+        if ($indirectTarget === '') {
             // Removing indirect: move compose file back to project folder if it only exists externally
             if (is_file($indirectFile)) {
                 $oldIndirectPath = trim(file_get_contents($indirectFile));
                 $localCompose = findComposeFile("$compose_root/$script");
-                $externalCompose = findComposeFile($oldIndirectPath);
+                $externalCompose = false;
+                if (is_dir($oldIndirectPath)) {
+                    $externalCompose = findComposeFile($oldIndirectPath);
+                } elseif (is_file($oldIndirectPath)) {
+                    $externalCompose = $oldIndirectPath;
+                }
                 if (!$localCompose && $externalCompose) {
                     copy($externalCompose, "$compose_root/$script/" . basename($externalCompose));
                 }
                 @unlink($indirectFile);
+            }
+            if (is_file($indirectModeFile)) {
+                @unlink($indirectModeFile);
             }
             // Also clean up any invalid indirect file when clearing the path
             if (is_file($invalidIndirectFile)) {
                 @unlink($invalidIndirectFile);
             }
         } else {
-            file_put_contents($indirectFile, $externalComposePath);
+            file_put_contents($indirectFile, $indirectTarget);
+            file_put_contents($indirectModeFile, is_file($indirectTarget) ? 'file' : 'folder');
             // Clean up the invalid file now that we have a corrected path
             if (is_file($invalidIndirectFile)) {
                 @unlink($invalidIndirectFile);
@@ -734,7 +827,9 @@ switch ($_POST['action']) {
             $localCompose = findComposeFile("$compose_root/$script");
             if ($localCompose) {
                 $projectPath = realpath("$compose_root/$script") ?: rtrim("$compose_root/$script", '/');
-                $resolvedExternalPath = realpath($externalComposePath) ?: rtrim($externalComposePath, '/');
+                $resolvedExternalPath = is_dir($indirectTarget)
+                    ? (realpath($indirectTarget) ?: rtrim($indirectTarget, '/'))
+                    : dirname($indirectTarget);
                 if ($resolvedExternalPath !== $projectPath) {
                     @unlink($localCompose);
                 }

@@ -219,22 +219,7 @@ function isAllowedAutoUpdatePath($path): bool
         return false;
     }
 
-    $realComposeRoot = realpath($compose_root);
-    if ($realComposeRoot !== false) {
-        $realComposeRoot = rtrim($realComposeRoot, DIRECTORY_SEPARATOR);
-        if ($realPath === $realComposeRoot || strpos($realPath, $realComposeRoot . DIRECTORY_SEPARATOR) === 0) {
-            return true;
-        }
-    }
-
-    if ($realPath === '/mnt' || strpos($realPath, '/mnt/') === 0) {
-        return true;
-    }
-    if ($realPath === '/boot/config' || strpos($realPath, '/boot/config/') === 0) {
-        return true;
-    }
-
-    return false;
+    return Path::isAllowedPath($realPath, [$compose_root, '/mnt', '/boot/config']);
 }
 
 /**
@@ -242,6 +227,58 @@ function isAllowedAutoUpdatePath($path): bool
  */
 class Path
 {
+    private static function normalizePath(string $path): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+
+        $realPath = realpath($path);
+        if ($realPath !== false) {
+            $path = $realPath;
+        }
+
+        if ($path !== DIRECTORY_SEPARATOR) {
+            $path = rtrim($path, '/\\');
+        }
+
+        return $path === '' ? DIRECTORY_SEPARATOR : $path;
+    }
+
+    public static function refersToSamePath(string $left, string $right): bool
+    {
+        $normalizedLeft = self::normalizePath($left);
+        $normalizedRight = self::normalizePath($right);
+
+        return $normalizedLeft !== '' && $normalizedLeft === $normalizedRight;
+    }
+
+    public static function isAllowedPath(string $path, array $allowedRoots): bool
+    {
+        $normalizedPath = self::normalizePath($path);
+        if ($normalizedPath === '') {
+            return false;
+        }
+
+        foreach ($allowedRoots as $allowedRoot) {
+            if (!is_string($allowedRoot)) {
+                continue;
+            }
+
+            $normalizedRoot = self::normalizePath($allowedRoot);
+            if ($normalizedRoot === '') {
+                continue;
+            }
+
+            if ($normalizedPath === $normalizedRoot || str_starts_with($normalizedPath, $normalizedRoot . DIRECTORY_SEPARATOR)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static function hasNewline(string $path): bool
     {
         return strpos($path, "\n") !== false;
@@ -585,7 +622,6 @@ function pruneOverrideContentServices(string $overrideContent, array $validServi
  * @property bool $mismatchIndirectLegacy Whether there is a legacy-named indirect override that doesn't match the computed name
  * @property string|null $composeFilePath The resolved path to the main compose file for the stack
  * @method static OverrideInfo fromStackInfo(StackInfo $stackInfo) Create an OverrideInfo from a StackInfo instance (preferred)
- * @method static OverrideInfo fromStack(string $composeRoot, string $stack) Create an OverrideInfo by resolving paths from scratch (deprecated)
  * @method string|null getOverridePath() Get the path to the override file that should be used (indirect if present, else project)
  * @method array{changed: bool, removed: string[]} pruneOrphanServices(array $validServices) Prune orphaned services from the override file based on a list of valid service names
  * @method array{migrated: bool, migrations: array<array{oldName: string, newName: string}>} migrateRenamedServices(string $oldComposeContent, string $newComposeContent) Migrate override entries when services are renamed by comparing old and new compose content
@@ -634,33 +670,6 @@ class OverrideInfo
     {
         $indirectPath = $stackInfo->isIndirect ? $stackInfo->composeSource : null;
         return self::resolveOverride($stackInfo->path, $indirectPath, $stackInfo->composeFilePath);
-    }
-
-    /**
-     * Create an OverrideInfo by resolving paths from scratch.
-     *
-     * @deprecated Use StackInfo::fromProject() which provides OverrideInfo automatically
-     *             via fromStackInfo(), avoiding duplicate filesystem resolution.
-     *
-     * @param string $composeRoot
-     * @param string $stack
-     * @return OverrideInfo
-     */
-    public static function fromStack(string $composeRoot, string $stack): self
-    {
-        $projectPath = rtrim($composeRoot, '/') . '/' . $stack;
-        $indirectPath = is_file("$projectPath/indirect")
-            ? trim(file_get_contents("$projectPath/indirect"))
-            : null;
-        if ($indirectPath === '') {
-            $indirectPath = null;
-        }
-
-        $composeSource = $indirectPath ?? $projectPath;
-        $foundCompose = findComposeFile($composeSource);
-        $composeFilePath = $foundCompose !== false ? $foundCompose : null;
-
-        return self::resolveOverride($projectPath, $indirectPath, $composeFilePath);
     }
 
     /**
@@ -1243,6 +1252,7 @@ class ContainerInfo
  * @property string $displayName Display name (from ./name)
  * @property string $path Full path to the stack directory ($composeRoot/$project)
  * @property string|null $indirectPath Indirect path or null if not indirect
+ * @property string|null $indirectMode Indirect mode ('folder' or 'file')
  * @property string $composeSource Resolved compose source directory, direct or indirect
  * @property string|null $composeFilePath Full path to the main compose file, direct or indirect
  * @property bool $isIndirect Whether this stack uses an indirect compose path
@@ -1280,6 +1290,8 @@ class StackInfo
     public bool $isIndirect;
     /** @var string|null Path from a renamed indirect.invalid file, if present (needs user fix) */
     public ?string $invalidIndirectPath;
+    /** @var string|null Indirect mode ('folder' or 'file') */
+    public ?string $indirectMode;
     /** @var OverrideInfo Resolved override info (eager) */
     public OverrideInfo $overrideInfo;
 
@@ -1337,15 +1349,30 @@ class StackInfo
         // Resolve indirect path and compose source (indirect if present, else direct)
         $this->isIndirect = $this->isIndirect();
         $this->indirectPath = $this->readMetadata('indirect');
+        $this->indirectMode = $this->resolveIndirectMode();
         $this->invalidIndirectPath = $this->readInvalidIndirect();
-        if ($this->invalidIndirectPath === null && !$this->isIndirect && $this->indirectPath !== null && $this->indirectPath !== '') {
-            // Invalid indirect path still present in ./indirect (non-destructive handling).
+        if ($this->isIndirect && $this->indirectPath !== null && $this->indirectPath !== '') {
+            if ($this->indirectMode === 'file') {
+                $this->composeSource = dirname($this->indirectPath);
+                $this->composeFilePath = is_file($this->indirectPath) ? $this->indirectPath : null;
+            } elseif (is_file($this->indirectPath)) {
+                $this->composeFilePath = $this->indirectPath;
+                $this->composeSource = dirname($this->indirectPath);
+            } else {
+                $this->composeSource = $this->indirectPath;
+                $this->composeFilePath = self::getComposeFilePath($this->composeSource);
+            }
+        } else {
+            $this->composeSource = $this->path;
+            $this->composeFilePath = self::getComposeFilePath($this->composeSource);
+        }
+
+        if ($this->invalidIndirectPath === null && $this->indirectPath !== null && $this->indirectPath !== '' && $this->composeFilePath === null && $this->isIndirect) {
+            // Preserve the broken indirect target for repair flows.
             $this->invalidIndirectPath = $this->indirectPath;
         }
-        $this->composeSource = $this->isIndirect ? $this->indirectPath : $this->path;
 
         // Resolve compose file
-        $this->composeFilePath = self::getComposeFilePath($this->composeSource);
         if ($this->composeFilePath === null) {
             if ($this->invalidIndirectPath !== null) {
                 // Stack has a broken indirect reference — allow degraded construction
@@ -1406,6 +1433,10 @@ class StackInfo
      */
     private static function getComposeFilePath($path): string|null
     {
+        if (is_string($path) && is_file($path)) {
+            return preg_match('/\.ya?ml$/i', basename($path)) === 1 ? $path : null;
+        }
+
         $composeFilePath = null;
         foreach (COMPOSE_FILE_NAMES as $name) {
             if (is_file("$path/$name")) {
@@ -1438,12 +1469,6 @@ class StackInfo
                 composeLogger("Ignoring structurally invalid indirect path at $this->path/indirect: " . sanitizeLogText($indirectPath), null, 'user', 'warning', 'stack');
                 return false;
             }
-            if (!is_dir($indirectPath)) {
-                // Directory doesn't exist — may be a temporarily unmounted share (NFS, etc.).
-                // Ignore it and keep stack local without mutating files.
-                composeLogger("Ignoring unavailable indirect path (may be temporarily unavailable): " . sanitizeLogText($indirectPath), null, 'user', 'warning', 'stack');
-                return false;
-            }
             return true;
         }
         return false;
@@ -1466,6 +1491,52 @@ class StackInfo
             return $content !== false ? trim($content) : null;
         }
         return null;
+    }
+
+    /**
+     * Resolve the indirect mode for this stack.
+     *
+     * @return string|null
+     */
+    private function resolveIndirectMode(): ?string
+    {
+        $rawMode = $this->readMetadata('indirect_mode');
+        if ($rawMode !== null) {
+            $rawMode = strtolower(trim($rawMode));
+            if ($rawMode === 'file' || $rawMode === 'folder') {
+                return $rawMode;
+            }
+        }
+
+        $indirectRaw = $this->readMetadata('indirect');
+        if ($indirectRaw === null) {
+            return null;
+        }
+
+        $indirectRaw = trim($indirectRaw);
+        if ($indirectRaw === '') {
+            return null;
+        }
+
+        return self::inferIndirectMode($indirectRaw);
+    }
+
+    /**
+     * Infer indirect mode from the stored path value.
+     *
+     * @return string
+     */
+    private static function inferIndirectMode(string $indirectRaw): string
+    {
+        if (is_file($indirectRaw)) {
+            return 'file';
+        }
+
+        if (preg_match('/\.ya?ml$/i', basename($indirectRaw)) === 1) {
+            return 'file';
+        }
+
+        return 'folder';
     }
 
     /**
@@ -1568,19 +1639,38 @@ class StackInfo
      */
     public function getEffectiveEnvFilePath(): ?string
     {
-        $rawEnvPath = $this->readMetadata('envpath');
-        if ($rawEnvPath !== null) {
-            $rawEnvPath = trim($rawEnvPath);
-            if ($rawEnvPath !== '') {
-                if (is_file($rawEnvPath)) {
-                    return $rawEnvPath;
-                }
-                composeLogger("Ignoring invalid envpath for stack $this->projectFolder: file not found", ['envpath' => $rawEnvPath], 'user', 'warning', 'stack');
-            }
+        $explicitEnvPath = $this->getExplicitEnvFilePath();
+        if ($explicitEnvPath !== null) {
+            return $explicitEnvPath;
         }
 
         $defaultEnvPath = $this->composeSource . '/.env';
         return is_file($defaultEnvPath) ? $defaultEnvPath : null;
+    }
+
+    /**
+     * Resolve a valid explicit envpath configured in stack metadata.
+     *
+     * @return string|null
+     */
+    private function getExplicitEnvFilePath(): ?string
+    {
+        $rawEnvPath = $this->readMetadata('envpath');
+        if ($rawEnvPath === null) {
+            return null;
+        }
+
+        $rawEnvPath = trim($rawEnvPath);
+        if ($rawEnvPath === '') {
+            return null;
+        }
+
+        if (is_file($rawEnvPath)) {
+            return realpath($rawEnvPath) ?: $rawEnvPath;
+        }
+
+        composeLogger("Ignoring invalid envpath for stack $this->projectFolder: file not found", ['envpath' => $rawEnvPath], 'user', 'warning', 'stack');
+        return null;
     }
 
     /**
@@ -1742,7 +1832,30 @@ class StackInfo
             return false;
         }
 
-        return strtolower(trim($raw)) === 'true';
+        if (strtolower(trim($raw)) !== 'true') {
+            return false;
+        }
+
+        // Default discovery is disabled only when explicit env or indirect-file mode is set.
+        return !$this->hasManualComposePathOverrides();
+    }
+
+    /**
+     * Determine whether this stack has manual settings that require explicit mode.
+     *
+    * Explicit env-path and indirect-file selections are treated as explicit-mode
+    * signals, so default file discovery is bypassed.
+     *
+     * @return bool
+     */
+    private function hasManualComposePathOverrides(): bool
+    {
+        $configuredEnvPath = $this->readMetadata('envpath');
+        if ($configuredEnvPath !== null && trim($configuredEnvPath) !== '') {
+            return true;
+        }
+
+        return $this->indirectMode === 'file';
     }
 
     /**
@@ -1772,6 +1885,17 @@ class StackInfo
      */
     private function buildEnvFileFlag(): string
     {
+        if ($this->useDefaultComposeFileDiscovery()) {
+            $explicitEnvPath = $this->getExplicitEnvFilePath();
+            $defaultEnvPath = $this->composeSource . '/.env';
+
+            if ($explicitEnvPath !== null && !Path::refersToSamePath($explicitEnvPath, $defaultEnvPath)) {
+                return '--env-file ' . escapeshellarg($explicitEnvPath);
+            }
+
+            return '';
+        }
+
         $envPath = $this->getEffectiveEnvFilePath();
         if ($envPath !== null && is_file($envPath)) {
             return '--env-file ' . escapeshellarg($envPath);
@@ -2182,6 +2306,17 @@ class StackInfo
         $envFile = $this->buildEnvFileFlag();
         $envPath = $this->getEffectiveEnvFilePath();
 
+        if ($useDefaultDiscovery) {
+            $explicitEnvPath = $this->getExplicitEnvFilePath();
+            $defaultEnvPath = $this->composeSource . '/.env';
+
+            if ($explicitEnvPath === null || Path::refersToSamePath($explicitEnvPath, $defaultEnvPath)) {
+                $envPath = null;
+            } else {
+                $envPath = $explicitEnvPath;
+            }
+        }
+
         $result = [
             'projectName' => $this->projectName,
             'files' => $files,
@@ -2445,6 +2580,9 @@ class StackInfo
         // Create indirect file to store path to indirect project directory
         if ($indirectPath !== '') {
             file_put_contents("$path/indirect", $indirectPath);
+            file_put_contents("$path/indirect_mode", self::inferIndirectMode($indirectPath));
+        } elseif (is_file("$path/indirect_mode")) {
+            @unlink("$path/indirect_mode");
         }
 
         // Write metadata
@@ -2453,9 +2591,12 @@ class StackInfo
             file_put_contents("$path/description", $description);
         }
 
-        // Create default compose file at the appropriate location (indirect target or stack dir)
-        $composeTarget = ($indirectPath !== '') ? $indirectPath : $path;
-        self::writeDefaultComposeFile($composeTarget);
+        // Create default compose file for local stacks and indirect-directory
+        // stacks. For indirect-file stacks, the selected file already exists.
+        if ($indirectPath === '' || is_dir($indirectPath)) {
+            $composeTarget = ($indirectPath !== '') ? $indirectPath : $path;
+            self::writeDefaultComposeFile($composeTarget);
+        }
 
         // Build + cache the instance (resolves override, etc.)
         return self::fromProject($composeRoot, basename($path));

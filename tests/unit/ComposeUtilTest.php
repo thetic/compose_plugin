@@ -271,7 +271,7 @@ class ComposeUtilTest extends TestCase
         mkdir($stackDir, 0755, true);
         file_put_contents("$stackDir/" . COMPOSE_FILE_NAMES[0], "services:\n  web:\n    image: nginx\n");
         
-        $overrideInfo = OverrideInfo::fromStack($tempDir, $stackName);
+        $overrideInfo = \StackInfo::fromProject($tempDir, $stackName)->overrideInfo;
         file_put_contents($overrideInfo->getOverridePath(), "services:\n  web:\n    ports:\n      - 80:80\n");
                 
         $sanitizedStackName = \StackInfo::sanitizeProjectString($stackName);

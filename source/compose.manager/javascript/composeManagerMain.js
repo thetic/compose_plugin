@@ -48,6 +48,67 @@ function parseMemUsagePair(memStr) {
         limit: limit
     };
 }
+    function updateAddStackDefaultComposeDiscoveryState() {
+        var $checkbox = $('#compose-stack-use-default-compose-files');
+        var $notice = $('#compose-stack-default-compose-files-disabled-note');
+        if (!$checkbox.length) return;
+
+        var hasIndirectFile = ($('#compose-stack-indirect-file').val() || '').trim() !== '';
+        if (hasIndirectFile) {
+            if ($checkbox.is(':checked')) {
+                $checkbox.prop('checked', false);
+            }
+            $checkbox.prop('disabled', true);
+            if ($notice.length) {
+                $notice.text('Default discovery disabled because Indirect Compose File is set.').show();
+            }
+        } else {
+            $checkbox.prop('disabled', false);
+            if ($notice.length) {
+                $notice.hide();
+            }
+        }
+    }
+
+    function updateSettingsDefaultComposeDiscoveryState(suppressChangeTracking) {
+        var $checkbox = $('#settings-use-default-compose-files');
+        if (!$checkbox.length) return;
+
+        var $notice = $('#settings-default-compose-files-disabled-note');
+        if (!$notice.length) {
+            $notice = $('<div id="settings-default-compose-files-disabled-note" class="compose-status-warning" style="display:none;margin-top:8px;"></div>');
+            var $anchor = $checkbox.closest('label');
+            if ($anchor.length) {
+                $anchor.after($notice);
+            } else {
+                $checkbox.parent().append($notice);
+            }
+        }
+
+        var hasEnvPath = ($('#settings-env-path').val() || '').trim() !== '';
+        var hasExternalComposeFilePath = ($('#settings-external-compose-file').val() || '').trim() !== '';
+
+        if (hasEnvPath || hasExternalComposeFilePath) {
+            var reason = hasEnvPath && hasExternalComposeFilePath
+                ? 'Default discovery disabled because Env File Path and External Compose File are set.'
+                : (hasEnvPath
+                    ? 'Default discovery disabled because Env File Path is set.'
+                    : 'Default discovery disabled because External Compose File is set.');
+
+            if ($checkbox.is(':checked')) {
+                $checkbox.prop('checked', false);
+                if (!suppressChangeTracking) {
+                    $checkbox.trigger('change');
+                }
+            }
+            $checkbox.prop('disabled', true);
+            $notice.text(reason).show();
+        } else {
+            $checkbox.prop('disabled', false);
+            $notice.hide();
+        }
+    }
+
 
 // Backward-compatible helper used by existing code paths.
 function parseMemToBytes(memStr) {
@@ -580,7 +641,8 @@ function initEditorModal() {
     editorModal.editors['override'] = overrideEditor;
 
     // Initialize settings field change tracking
-    $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path, #settings-use-default-compose-files').on('input change', function() {            var fieldId = this.id.replace('settings-', '');
+    $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile, #settings-external-compose-path, #settings-external-compose-file, #settings-use-default-compose-files').on('input change', function() {
+        var fieldId = this.id.replace('settings-', '');
         var isCheckbox = this.type === 'checkbox';
         var currentValue = isCheckbox ? ($(this).is(':checked') ? 'true' : 'false') : $(this).val();
         var originalValue = editorModal.originalSettings[fieldId] || '';
@@ -593,6 +655,10 @@ function initEditorModal() {
 
         updateSaveButtonState();
         updateTabModifiedState();
+
+        if (fieldId === 'env-path' || fieldId === 'external-compose-file') {
+            updateSettingsDefaultComposeDiscoveryState();
+        }
     });
 
     // Override management mode is a saveable setting (deferred persist).
@@ -633,10 +699,33 @@ function initEditorModal() {
     // External compose path info toggle
     $('#settings-external-compose-path').on('input', function() {
         var path = $(this).val().trim();
-        if (path) {
+        var filePath = $('#settings-external-compose-file').val().trim();
+        if (path || filePath) {
             $('#settings-external-compose-info').show();
         } else {
             $('#settings-external-compose-info').hide();
+        }
+    });
+    $('#settings-external-compose-file').on('input', function() {
+        var path = $('#settings-external-compose-path').val().trim();
+        var filePath = $(this).val().trim();
+        if (path || filePath) {
+            $('#settings-external-compose-info').show();
+        } else {
+            $('#settings-external-compose-info').hide();
+        }
+
+        // Warn if the selected file lives inside the stack project folder
+        var stackPath = (editorModal.filePaths.stackMeta || '').replace(/\/$/, '');
+        var $warning = $('#settings-external-compose-file-warning');
+        if (filePath && stackPath && filePath.startsWith(stackPath + '/')) {
+            if (!$warning.length) {
+                $warning = $('<div id="settings-external-compose-file-warning" class="compose-status-error" style="margin-top:6px;"></div>');
+                $(this).after($warning);
+            }
+            $warning.text('This file is inside the stack project folder. The path must be external to this stack.').show();
+        } else if ($warning.length) {
+            $warning.hide();
         }
     });
 
@@ -2052,11 +2141,15 @@ function addStack() {
                         <div style="font-weight:bold;margin-bottom:8px;">Indirect Path</div>
                         <input type="text" id="compose-stack-indirect" placeholder="/mnt/user/compose/stackFolder" data-pickroot="/" data-picktop="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
 
+                        <div style="font-weight:bold;margin:10px 0 8px;">Indirect Compose File</div>
+                        <input type="text" id="compose-stack-indirect-file" placeholder="/mnt/user/compose/stackFolder/custom.compose.yml" data-pickroot="/" data-picktop="/mnt" data-pickcloseonfile="true" data-pickfilter="yml,yaml">
+
                         <div style="margin-top:14px;font-weight:bold;margin-bottom:8px;">Compose File Selection</div>
                         <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
                             <input type="checkbox" id="compose-stack-use-default-compose-files">
                             Use Docker Compose default file discovery (no explicit -f flags)
                         </label>
+                        <div id="compose-stack-default-compose-files-disabled-note" class="compose-status-warning" style="display:none;margin-top:8px;"></div>
 
                         <div style="margin-top:14px;font-weight:bold;margin-bottom:8px;">Override File Management</div>
                         <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
@@ -2088,17 +2181,22 @@ function addStack() {
         var defaultOverrideAutomatic = !(pluginCfg && pluginCfg.NEW_STACK_OVERRIDE_MANAGEMENT_AUTOMATIC === 'false');
         $('#compose-stack-use-default-compose-files').prop('checked', defaultUseDefaultComposeFiles);
         $('#compose-stack-override-management-automatic').prop('checked', defaultOverrideAutomatic);
+        updateAddStackDefaultComposeDiscoveryState();
     });
 
     // The add-stack modal is created dynamically, so attach the picker after insertion.
     if ($.fn.fileTreeAttach) {
-        var $indirectInput = $('#compose-stack-indirect');
-        composeBindFileTreeInputs($indirectInput, {
+        var $indirectInputs = $('#compose-stack-indirect, #compose-stack-indirect-file');
+        composeBindFileTreeInputs($indirectInputs, {
             zIndex: 100010,
             minWidth: 320,
             addClass: false
         });
     }
+
+    $('#compose-stack-indirect, #compose-stack-indirect-file').off('input.defaultComposeDiscovery').on('input.defaultComposeDiscovery', function() {
+        updateAddStackDefaultComposeDiscoveryState();
+    });
 
     window.closeComposeStackModal = function() {
         var overlay = document.getElementById('compose-stack-modal-overlay');
@@ -2111,11 +2209,17 @@ function addStack() {
         var name = document.getElementById('compose-stack-name').value.trim();
         var desc = document.getElementById('compose-stack-desc').value.trim();
         var indirect = document.getElementById('compose-stack-indirect').value.trim();
+        var indirectFile = document.getElementById('compose-stack-indirect-file').value.trim();
         var useDefaultComposeFiles = document.getElementById('compose-stack-use-default-compose-files').checked ? 'true' : 'false';
         var overrideManagementAutomatic = document.getElementById('compose-stack-override-management-automatic').checked ? 'true' : 'false';
         var errorDiv = document.getElementById('compose-stack-modal-error');
         if (!name) {
             errorDiv.textContent = "Please enter a stack name.";
+            errorDiv.style.display = "block";
+            return;
+        }
+        if (indirect && indirectFile) {
+            errorDiv.textContent = "Set either Indirect Path or Indirect Compose File, not both.";
             errorDiv.style.display = "block";
             return;
         }
@@ -2134,6 +2238,7 @@ function addStack() {
                 stackName: name,
                 stackDesc: desc,
                 stackPath: indirect,
+                stackFilePath: indirectFile,
                 useDefaultComposeFiles: useDefaultComposeFiles,
                 overrideManagementAutomatic: overrideManagementAutomatic
             },
@@ -4165,19 +4270,33 @@ function loadSettingsData(project, projectName) {
 
                 // External compose path
                 var externalComposePath = response.externalComposePath || '';
+                var externalComposeFilePath = response.externalComposeFilePath || '';
                 var invalidIndirectPath = response.invalidIndirectPath || '';
-                if (!externalComposePath && invalidIndirectPath) {
+                var indirectMode = response.indirectMode || '';
+                if (!externalComposePath && !externalComposeFilePath && invalidIndirectPath) {
                     // Pre-populate with the broken path so the user can fix it
-                    $('#settings-external-compose-path').val(invalidIndirectPath);
-                    editorModal.originalSettings['external-compose-path'] = '';
-                    editorModal.modifiedSettings.add('external-compose-path');
+                    if (indirectMode === 'file') {
+                        $('#settings-external-compose-path').val('');
+                        $('#settings-external-compose-file').val(invalidIndirectPath);
+                        editorModal.originalSettings['external-compose-path'] = '';
+                        editorModal.originalSettings['external-compose-file'] = '';
+                        editorModal.modifiedSettings.add('external-compose-file');
+                    } else {
+                        $('#settings-external-compose-path').val(invalidIndirectPath);
+                        $('#settings-external-compose-file').val('');
+                        editorModal.originalSettings['external-compose-path'] = '';
+                        editorModal.originalSettings['external-compose-file'] = '';
+                        editorModal.modifiedSettings.add('external-compose-path');
+                    }
                     $('#settings-invalid-indirect-warning').show();
                     $('#settings-external-compose-info').hide();
                 } else {
                     $('#settings-external-compose-path').val(externalComposePath);
+                    $('#settings-external-compose-file').val(externalComposeFilePath);
                     editorModal.originalSettings['external-compose-path'] = externalComposePath;
+                    editorModal.originalSettings['external-compose-file'] = externalComposeFilePath;
                     $('#settings-invalid-indirect-warning').hide();
-                    if (externalComposePath) {
+                    if (externalComposePath || externalComposeFilePath) {
                         $('#settings-external-compose-info').show();
                     } else {
                         $('#settings-external-compose-info').hide();
@@ -4193,6 +4312,7 @@ function loadSettingsData(project, projectName) {
                 var useDefaultComposeFiles = response.useDefaultComposeFiles === true;
                 $('#settings-use-default-compose-files').prop('checked', useDefaultComposeFiles);
                 editorModal.originalSettings['use-default-compose-files'] = useDefaultComposeFiles ? 'true' : 'false';
+                updateSettingsDefaultComposeDiscoveryState(true);
 
                 editorModal.filePaths.stackMeta = response.projectPath || (compose_root + '/' + project);
                 editorModal.filePaths.projectOverride = response.projectOverridePath || (compose_root + '/' + project + '/compose.override.yaml');
@@ -4230,12 +4350,15 @@ function loadSettingsData(project, projectName) {
         $('#settings-env-path').val('');
         $('#settings-default-profile').val('');
         $('#settings-external-compose-path').val('');
+        $('#settings-external-compose-file').val('');
         $('#settings-use-default-compose-files').prop('checked', false);
+        updateSettingsDefaultComposeDiscoveryState(true);
         editorModal.originalSettings['icon-url'] = '';
         editorModal.originalSettings['webui-url'] = '';
         editorModal.originalSettings['env-path'] = '';
         editorModal.originalSettings['default-profile'] = '';
         editorModal.originalSettings['external-compose-path'] = '';
+        editorModal.originalSettings['external-compose-file'] = '';
         editorModal.originalSettings['use-default-compose-files'] = 'false';
         editorModal.originalSettings['labels-view-mode'] = 'basic';
         editorModal.labelsViewMode = 'basic';
@@ -4864,8 +4987,8 @@ function saveSettings(saveErrors) {
         );
     }
 
-    // Save icon URL, webui URL, env path, default profile, and external compose path if any are modified
-    if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('webui-url') || editorModal.modifiedSettings.has('env-path') || editorModal.modifiedSettings.has('default-profile') || editorModal.modifiedSettings.has('external-compose-path') || editorModal.modifiedSettings.has('use-default-compose-files')) {
+    // Save icon URL, webui URL, env path, default profile, and external compose settings if any are modified
+    if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('webui-url') || editorModal.modifiedSettings.has('env-path') || editorModal.modifiedSettings.has('default-profile') || editorModal.modifiedSettings.has('external-compose-path') || editorModal.modifiedSettings.has('external-compose-file') || editorModal.modifiedSettings.has('use-default-compose-files')) {
         var iconUrl = $('#settings-icon-url').val();
         var webuiUrl = $('#settings-webui-url').val();
         if (webuiUrl && !isValidWebUIUrl(webuiUrl)) {
@@ -4887,6 +5010,24 @@ function saveSettings(saveErrors) {
         var envPath = $('#settings-env-path').val();
         var defaultProfile = $('#settings-default-profile').val();
         var externalComposePath = $('#settings-external-compose-path').val();
+        var externalComposeFilePath = $('#settings-external-compose-file').val();
+        if (externalComposePath && externalComposeFilePath) {
+            swal({
+                type: 'error',
+                title: 'Save Failed',
+                text: 'Set either External Compose Path or External Compose File, not both.'
+            });
+            return;
+        }
+        var stackPath = (editorModal.filePaths.stackMeta || '').replace(/\/$/, '');
+        if (externalComposeFilePath && stackPath && externalComposeFilePath.startsWith(stackPath + '/')) {
+            swal({
+                type: 'error',
+                title: 'Save Failed',
+                text: 'External Compose File cannot be inside the stack project folder. Use a path that is external to this stack.'
+            });
+            return;
+        }
         var useDefaultComposeFiles = $('#settings-use-default-compose-files').is(':checked') ? 'true' : 'false';
         savePromises.push(
             $.post(caURL, {
@@ -4897,6 +5038,7 @@ function saveSettings(saveErrors) {
                 envPath: envPath,
                 defaultProfile: defaultProfile,
                 externalComposePath: externalComposePath,
+                externalComposeFilePath: externalComposeFilePath,
                 useDefaultComposeFiles: useDefaultComposeFiles
             }).then(function(data) {
                 if (data) {
@@ -4912,12 +5054,14 @@ function saveSettings(saveErrors) {
                         editorModal.originalSettings['env-path'] = envPath;
                         editorModal.originalSettings['default-profile'] = defaultProfile;
                         editorModal.originalSettings['external-compose-path'] = externalComposePath;
+                        editorModal.originalSettings['external-compose-file'] = externalComposeFilePath;
                         editorModal.originalSettings['use-default-compose-files'] = useDefaultComposeFiles;
                         editorModal.modifiedSettings.delete('icon-url');
                         editorModal.modifiedSettings.delete('webui-url');
                         editorModal.modifiedSettings.delete('env-path');
                         editorModal.modifiedSettings.delete('default-profile');
                         editorModal.modifiedSettings.delete('external-compose-path');
+                        editorModal.modifiedSettings.delete('external-compose-file');
                         editorModal.modifiedSettings.delete('use-default-compose-files');
                         needsReload = true;
                         return true;
@@ -5142,6 +5286,7 @@ function doCloseEditorModal() {
     $('#settings-env-path').val('');
     $('#settings-default-profile').val('');
     $('#settings-external-compose-path').val('');
+    $('#settings-external-compose-file').val('');
     $('#settings-use-default-compose-files').prop('checked', false);
     $('#settings-override-management').prop('checked', true);
     $('#settings-override-management-label').text('Automatic');

@@ -186,6 +186,45 @@ class ComposeManagerMainSourceTest extends TestCase
         );
     }
 
+    public function testSettingsPageIncludesExternalComposeFileField(): void
+    {
+        $source = $this->getPhpSource();
+
+        $this->assertStringContainsString('id="settings-external-compose-file"', $source);
+        $this->assertStringContainsString('data-pickfilter="yml,yaml"', $source);
+        $this->assertStringContainsString('Path to a specific external compose file', $source);
+    }
+
+    public function testAddStackModalIncludesIndirectComposeFileField(): void
+    {
+        $source = $this->getJsSource();
+
+        $this->assertStringContainsString('id="compose-stack-indirect-file"', $source);
+        $this->assertStringContainsString('stackFilePath: indirectFile,', $source);
+        $this->assertStringContainsString('Set either Indirect Path or Indirect Compose File, not both.', $source);
+        $this->assertStringContainsString('Default discovery disabled because Indirect Compose File is set.', $source);
+    }
+
+    public function testSettingsSaveHandlesExternalComposeFileField(): void
+    {
+        $source = $this->getJsSource();
+
+        $this->assertStringContainsString("editorModal.modifiedSettings.has('external-compose-file')", $source);
+        $this->assertStringContainsString("var externalComposeFilePath = $('#settings-external-compose-file').val();", $source);
+        $this->assertStringContainsString('External Compose File cannot be inside the stack project folder.', $source);
+        $this->assertStringContainsString('externalComposeFilePath: externalComposeFilePath,', $source);
+    }
+
+    public function testInvalidIndirectRepairRoutesFileModeToExternalComposeFileField(): void
+    {
+        $source = $this->getJsSource();
+
+        $this->assertStringContainsString("var indirectMode = response.indirectMode || '';", $source);
+        $this->assertStringContainsString("if (indirectMode === 'file') {", $source);
+        $this->assertStringContainsString("$('#settings-external-compose-file').val(invalidIndirectPath);", $source);
+        $this->assertStringContainsString("editorModal.modifiedSettings.add('external-compose-file');", $source);
+    }
+
     // ===========================================
     // Regression Tests
     // ===========================================

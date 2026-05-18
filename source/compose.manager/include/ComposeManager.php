@@ -595,6 +595,12 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                         </div>
 
                         <div class="settings-field">
+                            <label for="settings-external-compose-file">External Compose File</label>
+                            <input type="text" id="settings-external-compose-file" placeholder="Optional specific compose file path" data-pickroot="/" data-picktop="/mnt" data-pickcloseonfile="true" data-pickfilter="yml,yaml">
+                            <div class="settings-field-help">Path to a specific external compose file (e.g., /mnt/user/appdata/myapp/custom.compose.yml). Leave empty to use folder mode or local project files.</div>
+                        </div>
+
+                        <div class="settings-field">
                             <label for="settings-env-path">External ENV File Path</label>
                             <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)" data-pickroot="/" data-picktop="/mnt" data-pickcloseonfile="true">
                             <div class="settings-field-help">Path to an external .env file (e.g., /mnt/user/appdata/myapp/.env). Leave empty to use the default .env file in the project folder.</div>

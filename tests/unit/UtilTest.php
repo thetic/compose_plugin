@@ -110,6 +110,29 @@ class UtilTest extends TestCase
         $this->assertFalse(\Path::isAbsolutePath('compose.yml'));
     }
 
+    public function testPathRefersToSamePathNormalizesEquivalentPaths(): void
+    {
+        $tempDir = $this->createTempDir();
+        $envFile = $tempDir . '/.env';
+        file_put_contents($envFile, "KEY=value\n");
+
+        $this->assertTrue(\Path::refersToSamePath($envFile, $tempDir . '/./.env'));
+    }
+
+    public function testPathIsAllowedPathMatchesRootAndChildren(): void
+    {
+        $tempDir = $this->createTempDir();
+        $childDir = $tempDir . '/child';
+        mkdir($childDir, 0755, true);
+        $childFile = $childDir . '/compose.yaml';
+        file_put_contents($childFile, "services:\n");
+        $otherDir = $this->createTempDir();
+
+        $this->assertTrue(\Path::isAllowedPath($tempDir, [$tempDir]));
+        $this->assertTrue(\Path::isAllowedPath($childFile, [$tempDir]));
+        $this->assertFalse(\Path::isAllowedPath($otherDir, [$tempDir]));
+    }
+
     /**
      * Test sanitizeProjectString with multiple consecutive special chars (dashes preserved, underscores collapsed)
      */
@@ -291,7 +314,7 @@ class UtilTest extends TestCase
         file_put_contents($stackDir . '/compose.override.yaml', $override);
 
         try {
-            $overrideInfo = \OverrideInfo::fromStack($tempDir, $stackName);
+            $overrideInfo = \StackInfo::fromProject($tempDir, $stackName)->overrideInfo;
             $result = $overrideInfo->migrateOnRename($oldCompose, $newCompose);
 
             $this->assertTrue($result['migrated']);
@@ -332,7 +355,7 @@ class UtilTest extends TestCase
         file_put_contents($stackDir . '/compose.override.yaml', $override);
 
         try {
-            $overrideInfo = \OverrideInfo::fromStack($tempDir, $stackName);
+            $overrideInfo = \StackInfo::fromProject($tempDir, $stackName)->overrideInfo;
             $result = $overrideInfo->migrateOnRename($compose, $compose);
 
             $this->assertFalse($result['migrated']);
@@ -369,7 +392,7 @@ class UtilTest extends TestCase
         file_put_contents($stackDir . '/compose.override.yaml', $override);
 
         try {
-            $overrideInfo = \OverrideInfo::fromStack($tempDir, $stackName);
+            $overrideInfo = \StackInfo::fromProject($tempDir, $stackName)->overrideInfo;
             $result = $overrideInfo->migrateOnRename($oldCompose, $newCompose);
 
             $this->assertTrue($result['migrated']);
