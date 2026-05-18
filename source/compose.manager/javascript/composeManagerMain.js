@@ -54,13 +54,19 @@ function parseMemUsagePair(memStr) {
         if (!$checkbox.length) return;
 
         var hasIndirectFile = ($('#compose-stack-indirect-file').val() || '').trim() !== '';
-        if (hasIndirectFile) {
+        var hasEnvPath = ($('#compose-stack-env-path').val() || '').trim() !== '';
+        if (hasIndirectFile || hasEnvPath) {
             if ($checkbox.is(':checked')) {
                 $checkbox.prop('checked', false);
             }
             $checkbox.prop('disabled', true);
             if ($notice.length) {
-                $notice.text('Default discovery disabled because Indirect Compose File is set.').show();
+                var reason = hasIndirectFile && hasEnvPath
+                    ? 'Default discovery disabled because Indirect Compose File and Env File Path are set.'
+                    : (hasIndirectFile
+                        ? 'Default discovery disabled because Indirect Compose File is set.'
+                        : 'Default discovery disabled because Env File Path is set.');
+                $notice.text(reason).show();
             }
         } else {
             $checkbox.prop('disabled', false);
@@ -2124,7 +2130,7 @@ function addStack() {
     // Show custom modal for stack creation
     var modalHtml = `
         <div id="compose-stack-modal-overlay" class="compose-modal-overlay" style="display:flex;" onclick="if (event.target === this) closeComposeStackModal();">
-            <div class="compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-stack-modal-title" aria-describedby="compose-stack-modal-desc" tabindex="-1">
+            <div class="compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-stack-modal-title" aria-describedby="compose-stack-modal-desc" tabindex="-1" style="max-width:560px;">
                 <div class="compose-modal-header">
                     <span id="compose-stack-modal-title">Add New Compose Stack</span>
                     <button type="button" class="editor-btn editor-btn-cancel" onclick="closeComposeStackModal()" aria-label="Close modal"><i class="fa fa-times"></i></button>
@@ -2138,7 +2144,10 @@ function addStack() {
                 
                     <details>
                         <summary>Advanced Options</summary></br>
-                        <div style="font-weight:bold;margin-bottom:8px;">Indirect Path</div>
+                        <div style="font-weight:bold;margin-bottom:8px;">External ENV File Path</div>
+                        <input type="text" id="compose-stack-env-path" placeholder="Default (.env in project or indirect folder)" data-pickroot="/" data-picktop="/mnt" data-pickcloseonfile="true">
+
+                        <div style="font-weight:bold;margin:14px 0 8px;">Indirect Path</div>
                         <input type="text" id="compose-stack-indirect" placeholder="/mnt/user/compose/stackFolder" data-pickroot="/" data-picktop="/mnt" data-pickfolders="true" data-pickcloseonfile="true">
 
                         <div style="font-weight:bold;margin:10px 0 8px;">Indirect Compose File</div>
@@ -2186,7 +2195,7 @@ function addStack() {
 
     // The add-stack modal is created dynamically, so attach the picker after insertion.
     if ($.fn.fileTreeAttach) {
-        var $indirectInputs = $('#compose-stack-indirect, #compose-stack-indirect-file');
+        var $indirectInputs = $('#compose-stack-indirect, #compose-stack-indirect-file, #compose-stack-env-path');
         composeBindFileTreeInputs($indirectInputs, {
             zIndex: 100010,
             minWidth: 320,
@@ -2194,7 +2203,7 @@ function addStack() {
         });
     }
 
-    $('#compose-stack-indirect, #compose-stack-indirect-file').off('input.defaultComposeDiscovery').on('input.defaultComposeDiscovery', function() {
+    $('#compose-stack-indirect, #compose-stack-indirect-file, #compose-stack-env-path').off('input.defaultComposeDiscovery').on('input.defaultComposeDiscovery', function() {
         updateAddStackDefaultComposeDiscoveryState();
     });
 
@@ -2210,6 +2219,7 @@ function addStack() {
         var desc = document.getElementById('compose-stack-desc').value.trim();
         var indirect = document.getElementById('compose-stack-indirect').value.trim();
         var indirectFile = document.getElementById('compose-stack-indirect-file').value.trim();
+        var envPath = document.getElementById('compose-stack-env-path').value.trim();
         var useDefaultComposeFiles = document.getElementById('compose-stack-use-default-compose-files').checked ? 'true' : 'false';
         var overrideManagementAutomatic = document.getElementById('compose-stack-override-management-automatic').checked ? 'true' : 'false';
         var errorDiv = document.getElementById('compose-stack-modal-error');
@@ -2239,6 +2249,7 @@ function addStack() {
                 stackDesc: desc,
                 stackPath: indirect,
                 stackFilePath: indirectFile,
+                envPath: envPath,
                 useDefaultComposeFiles: useDefaultComposeFiles,
                 overrideManagementAutomatic: overrideManagementAutomatic
             },

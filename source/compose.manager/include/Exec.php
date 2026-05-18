@@ -134,6 +134,14 @@ switch ($_POST['action']) {
             file_put_contents($labelsViewModeFile, 'advanced');
         }
 
+        $envPathInput = isset($_POST['envPath']) ? trim($_POST['envPath']) : '';
+        $envPathFile = "$stackPath/envpath";
+        if ($envPathInput !== '') {
+            file_put_contents($envPathFile, $envPathInput);
+        } elseif (is_file($envPathFile)) {
+            @unlink($envPathFile);
+        }
+
         composeLogger("Created stack: $stackName", null, 'user', 'info', 'stack');
         echo json_encode([
             'result' => 'success',
