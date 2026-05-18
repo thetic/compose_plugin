@@ -421,6 +421,26 @@ class ExecActionsTest extends TestCase
         $this->assertFileExists($indirectDir . '/.env');
     }
 
+    /**
+     * Test createEnvTemplate returns error when target path is a directory
+     */
+    public function testCreateEnvTemplateFailsWhenTargetIsDirectory(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $dirTarget = $this->testComposeRoot . '/env-dir-target';
+        mkdir($dirTarget, 0755, true);
+        file_put_contents($stackPath . '/envpath', $dirTarget);
+
+        $output = $this->executeAction('createEnvTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('directory', $result['message']);
+        $this->assertSame($dirTarget, file_get_contents($stackPath . '/envpath'));
+    }
+
     // ===========================================
     // saveEnv Action Tests
     // ===========================================
@@ -511,6 +531,25 @@ class ExecActionsTest extends TestCase
         $this->assertStringContainsString('net.unraid.docker.webui', $result['content']);
         $this->assertFileExists($stackPath . '/compose.override.yaml');
         $this->assertStringContainsString('services: {}', file_get_contents($stackPath . '/compose.override.yaml'));
+    }
+
+    /**
+     * Test createOverrideTemplate returns error when target path is a directory
+     */
+    public function testCreateOverrideTemplateFailsWhenTargetIsDirectory(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        @unlink($stackPath . '/compose.override.yaml');
+        mkdir($stackPath . '/compose.override.yaml', 0755, true);
+
+        $output = $this->executeAction('createOverrideTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('directory', $result['message']);
+        $this->assertTrue(is_dir($stackPath . '/compose.override.yaml'));
     }
 
     // ===========================================

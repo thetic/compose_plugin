@@ -278,18 +278,32 @@ switch ($_POST['action']) {
             break;
         }
 
-        if (!is_file($envPath)) {
-            file_put_contents($envPath, OverrideInfo::buildEnvTemplateContent());
+        if (is_dir($envPath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Target .env path is a directory.']);
+            break;
         }
 
-        $content = is_file($envPath) ? file_get_contents($envPath) : '';
+        if (!is_file($envPath)) {
+            $written = @file_put_contents($envPath, OverrideInfo::buildEnvTemplateContent());
+            if ($written === false) {
+                echo json_encode(['result' => 'error', 'message' => 'Failed to create .env template.']);
+                break;
+            }
+        }
+
+        if (!is_file($envPath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Failed to create .env template.']);
+            break;
+        }
+
+        $content = file_get_contents($envPath);
         $content = str_replace("\r", "", (string) $content);
 
         echo json_encode([
             'result' => 'success',
             'fileName' => $envPath,
             'content' => $content,
-            'exists' => true
+            'exists' => is_file($envPath)
         ]);
         break;
     case 'getOverride':
@@ -328,18 +342,32 @@ switch ($_POST['action']) {
             break;
         }
 
-        if (!is_file($overridePath)) {
-            file_put_contents($overridePath, OverrideInfo::buildTemplateContent());
+        if (is_dir($overridePath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Override target path is a directory.']);
+            break;
         }
 
-        $content = is_file($overridePath) ? file_get_contents($overridePath) : '';
+        if (!is_file($overridePath)) {
+            $written = @file_put_contents($overridePath, OverrideInfo::buildTemplateContent());
+            if ($written === false) {
+                echo json_encode(['result' => 'error', 'message' => 'Failed to create override template.']);
+                break;
+            }
+        }
+
+        if (!is_file($overridePath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Failed to create override template.']);
+            break;
+        }
+
+        $content = file_get_contents($overridePath);
         $content = str_replace("\r", "", (string) $content);
 
         echo json_encode([
             'result' => 'success',
             'fileName' => $overridePath,
             'content' => $content,
-            'exists' => true
+            'exists' => is_file($overridePath)
         ]);
         break;
     case 'saveYml':
