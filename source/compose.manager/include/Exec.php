@@ -256,12 +256,41 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $fileName = $stackInfo->getEnvFilePath() ?? ($stackInfo->composeSource . '/.env');
 
-        $scriptContents = is_file($fileName) ? file_get_contents($fileName) : "";
-        $scriptContents = str_replace("\r", "", $scriptContents);
-        if (!$scriptContents) {
-            $scriptContents = "\n";
+        $envExists = is_file($fileName);
+        $scriptContents = $envExists ? file_get_contents($fileName) : "";
+        $scriptContents = str_replace("\r", "", (string) $scriptContents);
+        echo json_encode([
+            'result' => 'success',
+            'fileName' => $fileName,
+            'content' => $scriptContents,
+            'exists' => $envExists
+        ]);
+        break;
+    case 'createEnvTemplate':
+        $script = getPostScript();
+
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $envPath = $stackInfo->getEnvFilePath() ?? ($stackInfo->composeSource . '/.env');
+
+        $envDir = dirname($envPath);
+        if (!is_dir($envDir)) {
+            echo json_encode(['result' => 'error', 'message' => 'Target directory does not exist.']);
+            break;
         }
-        echo json_encode(['result' => 'success', 'fileName' => $fileName, 'content' => $scriptContents]);
+
+        if (!is_file($envPath)) {
+            file_put_contents($envPath, OverrideInfo::buildEnvTemplateContent());
+        }
+
+        $content = is_file($envPath) ? file_get_contents($envPath) : '';
+        $content = str_replace("\r", "", (string) $content);
+
+        echo json_encode([
+            'result' => 'success',
+            'fileName' => $envPath,
+            'content' => $content,
+            'exists' => true
+        ]);
         break;
     case 'getOverride':
         $script = getPostScript();

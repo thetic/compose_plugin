@@ -328,6 +328,8 @@ class ExecActionsTest extends TestCase
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals($envContent, $result['content']);
+        $this->assertTrue($result['exists']);
+        $this->assertSame($stackPath . '/.env', $result['fileName']);
     }
 
     /**
@@ -347,6 +349,76 @@ class ExecActionsTest extends TestCase
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals("CUSTOM_VAR=custom_value", $result['content']);
+        $this->assertTrue($result['exists']);
+        $this->assertSame($customEnvPath, $result['fileName']);
+    }
+
+    /**
+     * Test getEnv returns blank content and exists=false when no env file
+     */
+    public function testGetEnvReturnsBlankWhenNoFile(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        @unlink($stackPath . '/.env');
+
+        $output = $this->executeAction('getEnv', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertSame('', $result['content']);
+        $this->assertFalse($result['exists']);
+        $this->assertSame($stackPath . '/.env', $result['fileName']);
+    }
+
+    // ===========================================
+    // createEnvTemplate Action Tests
+    // ===========================================
+
+    /**
+     * Test createEnvTemplate writes default .env template in stack path
+     */
+    public function testCreateEnvTemplateWritesDefaultPath(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        @unlink($stackPath . '/.env');
+
+        $output = $this->executeAction('createEnvTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertTrue($result['exists']);
+        $this->assertSame($stackPath . '/.env', $result['fileName']);
+        $this->assertFileExists($stackPath . '/.env');
+        $this->assertStringContainsString('IMAGE_TAG=latest', $result['content']);
+    }
+
+    /**
+     * Test createEnvTemplate writes .env in indirect folder when stack is indirect
+     */
+    public function testCreateEnvTemplateUsesIndirectFolder(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $indirectDir = $this->testComposeRoot . '/external-env';
+        mkdir($indirectDir, 0755, true);
+        file_put_contents($indirectDir . '/compose.yaml', "services:\n  app:\n    image: nginx:alpine\n");
+        @unlink($indirectDir . '/.env');
+
+        file_put_contents($stackPath . '/indirect', $indirectDir);
+        file_put_contents($stackPath . '/indirect_mode', 'folder');
+
+        $output = $this->executeAction('createEnvTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertTrue($result['exists']);
+        $this->assertSame($indirectDir . '/.env', $result['fileName']);
+        $this->assertFileExists($indirectDir . '/.env');
     }
 
     // ===========================================

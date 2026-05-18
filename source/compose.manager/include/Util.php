@@ -711,6 +711,22 @@ class OverrideInfo
     }
 
     /**
+     * Default template content for newly created .env files.
+     *
+     * @return string
+     */
+    public static function buildEnvTemplateContent(): string
+    {
+        return "# .env file - define environment variables used by docker compose\n"
+            . "# Variables defined here are automatically available in compose.yaml via \${VAR_NAME}\n"
+            . "#\n"
+            . "# Example:\n"
+            . "# IMAGE_TAG=latest\n"
+            . "# DATA_DIR=/mnt/user/appdata/myapp\n"
+            . "# PORT=8080\n";
+    }
+
+    /**
      * Core override resolution logic shared by both factories.
      *
      * Computes the override filename from the compose file, resolves project

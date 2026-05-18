@@ -4120,6 +4120,8 @@ function openEditorModalByProject(project, projectName, initialTab) {
     $('#labels-override-empty-state').hide();
     $('#labels-override-editor-wrap').show();
     $('#editor-validation-override').html('<i class="fa fa-check editor-validation-icon"></i> Ready').removeClass('valid error warning');
+    $('#env-empty-state').hide();
+    $('#env-editor-wrap').show();
 
     // Set modal title
     $('#editor-modal-title').text('Editing: ' + projectName);
@@ -4176,8 +4178,18 @@ function loadEditorFiles(project) {
             if (data) {
                 var response = jQuery.parseJSON(data);
                 editorModal.filePaths.env = response.fileName || '';
-                editorModal.originalContent['env'] = response.content || '';
-                if (editorModal.editors['env']) editorModal.editors['env'].setValue(response.content || '', -1);
+                editorModal.envExists = response.exists === true;
+                if (editorModal.envExists) {
+                    $('#env-empty-state').hide();
+                    $('#env-editor-wrap').show();
+                    editorModal.originalContent['env'] = response.content || '';
+                    if (editorModal.editors['env']) editorModal.editors['env'].setValue(response.content || '', -1);
+                } else {
+                    $('#env-empty-state').css('display', 'flex');
+                    $('#env-editor-wrap').hide();
+                    editorModal.originalContent['env'] = '';
+                    if (editorModal.editors['env']) editorModal.editors['env'].setValue('', -1);
+                }
                 updateEditorFileInfo();
             }
         }).fail(function() {
@@ -4576,6 +4588,56 @@ function createOverrideTemplate() {
         $('#labels-override-empty-state button').prop('disabled', false);
     });
 }
+
+function createEnvTemplate() {
+    var project = editorModal.currentProject;
+    if (!project) return;
+
+    $('#env-empty-state button').prop('disabled', true);
+
+    $.post(caURL, {
+        action: 'createEnvTemplate',
+        script: project
+    }).done(function(data) {
+        try {
+            if (!data) throw new Error('Empty server response');
+            var response = JSON.parse(data);
+            if (response.result !== 'success') {
+                throw new Error(response.message || 'Failed to create .env template.');
+            }
+
+            editorModal.envExists = true;
+            editorModal.filePaths.env = response.fileName || editorModal.filePaths.env;
+            editorModal.originalContent['env'] = response.content || '';
+            editorModal.modifiedTabs.delete('env');
+
+            if (editorModal.editors['env']) {
+                editorModal.editors['env'].setValue(response.content || '', -1);
+            }
+
+            $('#env-empty-state').hide();
+            $('#env-editor-wrap').show();
+            updateEditorFileInfo();
+            updateTabModifiedState();
+            updateSaveButtonState();
+        } catch (error) {
+            swal({
+                title: 'Create Failed',
+                text: error && error.message ? error.message : 'Failed to create .env template.',
+                type: 'error'
+            });
+        }
+    }).fail(function() {
+        swal({
+            title: 'Create Failed',
+            text: 'Failed to create .env template.',
+            type: 'error'
+        });
+    }).always(function() {
+        $('#env-empty-state button').prop('disabled', false);
+    });
+}
+
 
 // Render the WebUI Labels UI
 function renderLabelsUI(mainDoc, overrideDoc) {

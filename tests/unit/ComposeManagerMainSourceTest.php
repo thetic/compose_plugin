@@ -232,6 +232,23 @@ class ComposeManagerMainSourceTest extends TestCase
         $this->assertStringContainsString('overrideExists = true', $source);
     }
 
+    public function testEnvEditorShowsBlankStateAndCreateButton(): void
+    {
+        $source = $this->getPhpSource();
+
+        $this->assertStringContainsString('id="env-empty-state"', $source);
+        $this->assertStringContainsString('Create .env Template', $source);
+    }
+
+    public function testCreateEnvTemplateActionIsWiredInJs(): void
+    {
+        $source = $this->getJsSource();
+
+        $this->assertStringContainsString("action: 'createEnvTemplate'", $source);
+        $this->assertStringContainsString('function createEnvTemplate()', $source);
+        $this->assertStringContainsString('response.exists === true', $source);
+    }
+
     public function testInvalidIndirectRepairRoutesFileModeToExternalComposeFileField(): void
     {
         $source = $this->getJsSource();

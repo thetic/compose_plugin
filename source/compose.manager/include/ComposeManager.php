@@ -483,8 +483,14 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             <!-- ========== ENV EDITOR PANEL ========== -->
             <div class="editor-panel" id="editor-panel-env" role="tabpanel" aria-labelledby="editor-tab-env">
                 <div class="editor-modal-body">
-                    <div class="editor-container active" id="editor-container-env">
-                        <div id="editor-env" style="width: 100%; height: 100%;"></div>
+                    <div id="env-empty-state" style="display:none; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:12px; color:#aaa;">
+                        <p style="margin:0; text-align:center;">No <code>.env</code> file exists at this location yet.</p>
+                        <button class="editor-action-btn" onclick="createEnvTemplate()">Create .env Template</button>
+                    </div>
+                    <div id="env-editor-wrap">
+                        <div class="editor-container active" id="editor-container-env">
+                            <div id="editor-env" style="width: 100%; height: 100%;"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="editor-validation" id="editor-validation-env">
@@ -607,8 +613,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                         <div class="settings-field">
                             <label for="settings-env-path">External ENV File Path</label>
-                            <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)" data-pickroot="/" data-picktop="/mnt" data-pickcloseonfile="true">
-                            <div class="settings-field-help">Path to an external .env file (e.g., /mnt/user/appdata/myapp/.env). Leave empty to use the default .env file in the project folder.</div>
+                            <input type="text" id="settings-env-path" placeholder="Default (uses .env in compose source folder)" data-pickroot="/" data-picktop="/mnt" data-pickcloseonfile="true">
+                            <div class="settings-field-help">Path to an external .env file (e.g., /mnt/user/appdata/myapp/.env). Leave empty to use the default .env file in the compose source folder (project folder or indirect folder).</div>
                         </div>
 
                         <div class="settings-field">
