@@ -23,6 +23,8 @@ require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 class ExecActionsTest extends TestCase
 {
     private string $testComposeRoot;
+    /** @var string[] */
+    private array $externalCleanupPaths = [];
 
     protected function setUp(): void
     {
@@ -51,6 +53,16 @@ class ExecActionsTest extends TestCase
         if (is_dir($this->testComposeRoot)) {
             $this->recursiveDelete($this->testComposeRoot);
         }
+        foreach ($this->externalCleanupPaths as $path) {
+            if (is_link($path) || is_file($path)) {
+                @unlink($path);
+                continue;
+            }
+            if (is_dir($path)) {
+                $this->recursiveDelete($path);
+            }
+        }
+        $this->externalCleanupPaths = [];
         $_POST = [];
         parent::tearDown();
     }
