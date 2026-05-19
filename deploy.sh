@@ -156,8 +156,6 @@ else
       echo "Archive directory: $ARCHIVE_DIR"
       echo "Build completed but package not found"; exit 1
     fi
-    echo "Checking archive directory: $ARCHIVE_DIR"
-    ls -al "$ARCHIVE_DIR"
     PACKAGE_PATH=$(printf '%s\n' "${files[@]}" | sort -r | head -n1 || true)
     echo "Candidate package path: $PACKAGE_PATH"
     if [[ -z "$PACKAGE_PATH" || ! -f "$PACKAGE_PATH" ]]; then

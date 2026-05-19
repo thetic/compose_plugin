@@ -109,6 +109,9 @@ fi
 ARCHIVE_PATH="$OUTPUT_PATH"
 mkdir -p "$ARCHIVE_PATH"
 
+CACHE_PATH="$ARCHIVE_PATH/.build-cache"
+HOST_CACHE_PATH="$HOST_ARCHIVE_PATH/.build-cache"
+
 # Host path for docker socket operations should be the actual unRAID path.
 HOST_ARCHIVE_PATH="$ARCHIVE_PATH"
 if [[ "$in_container" == true && -d "/code" ]]; then
@@ -157,6 +160,8 @@ SOURCE_PATH="$SCRIPT_DIR/source"
 
 mkdir -p "$ARCHIVE_PATH"
 mkdir -p "$HOST_ARCHIVE_PATH"
+mkdir -p "$CACHE_PATH"
+mkdir -p "$HOST_CACHE_PATH"
 
 # CA bundle setup
 CONTAINER_CA_CERT="/etc/ssl/certs/ca-certificates.crt"
@@ -244,11 +249,13 @@ echo "Docker will mount SOURCE_PATH=$SOURCE_PATH"
 
 build_cmd_direct=(docker run --rm --tmpfs /tmp \
     -v "$HOST_ARCHIVE_PATH:/mnt/output:rw" \
+    -v "$HOST_CACHE_PATH:/mnt/cache:rw" \
     -v "$SOURCE_PATH:/mnt/source:ro" \
     -v "$HOST_CA_CERT:$CONTAINER_CA_CERT:ro" \
     -e TZ=America/New_York \
     -e COMPOSE_VERSION="$COMPOSE_VERSION" \
     -e OUTPUT_FOLDER=/mnt/output \
+    -e DOWNLOAD_CACHE_DIR=/mnt/cache \
     -e PKG_VERSION="$VERSION" \
     -e PKG_BUILD="$BUILD_NUM" \
     -e CA_CERT="$CONTAINER_CA_CERT" \
@@ -259,11 +266,13 @@ if "${build_cmd_direct[@]}"; then
   echo "Direct source mount works. Running build via direct mount..."
   if ! docker run --rm --tmpfs /tmp \
       -v "$HOST_ARCHIVE_PATH:/mnt/output:rw" \
+      -v "$HOST_CACHE_PATH:/mnt/cache:rw" \
       -v "$SOURCE_PATH:/mnt/source:ro" \
       -v "$HOST_CA_CERT:$CONTAINER_CA_CERT:ro" \
       -e TZ=America/New_York \
       -e COMPOSE_VERSION="$COMPOSE_VERSION" \
       -e OUTPUT_FOLDER=/mnt/output \
+      -e DOWNLOAD_CACHE_DIR=/mnt/cache \
       -e PKG_VERSION="$VERSION" \
       -e PKG_BUILD="$BUILD_NUM" \
       -e CA_CERT="$CONTAINER_CA_CERT" \
@@ -275,10 +284,12 @@ else
   echo "Direct mount failed, using tar stream fallback."
   if ! tar -C "$SOURCE_PATH" -cf - . | docker run --rm --tmpfs /tmp -i \
       -v "$HOST_ARCHIVE_PATH:/mnt/output:rw" \
+      -v "$HOST_CACHE_PATH:/mnt/cache:rw" \
       -v "$HOST_CA_CERT:$CONTAINER_CA_CERT:ro" \
       -e TZ=America/New_York \
       -e COMPOSE_VERSION="$COMPOSE_VERSION" \
       -e OUTPUT_FOLDER=/mnt/output \
+      -e DOWNLOAD_CACHE_DIR=/mnt/cache \
       -e PKG_VERSION="$VERSION" \
       -e PKG_BUILD="$BUILD_NUM" \
       -e CA_CERT="$CONTAINER_CA_CERT" \
