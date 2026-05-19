@@ -36,16 +36,12 @@
 >
 
 <CHANGES>
-###2026.05.18.1643
-- Features (env): add .env template creation and enhance editor state management
-- Features: implement override template creation and enhance editor state management
-- Features: add support for external ENV file path and update discovery logic on new stacks
-- Features (compose): add external compose file mode with strict path validation and default-discovery guardrails
-- Bug Fixes: handle errors for directory paths in createEnvTemplate and createOverrideTemplate actions
-- Bug Fixes (editor): enhance empty state UI for .env and override file sections
-- Bug Fixes: add ignore errors for undefined variables in Unraid templates
+###2026.05.18.2339
+- Features: implement download caching mechanism and enhance build scripts
+- Bug Fixes (tests): enhance cleanup in ExecActionsTest to remove external paths
+- Bug Fixes: preserve user-provided paths for indirect stack and compose file actions and add regression tests
 - [PR #108](https://github.com/mstrhakr/compose_plugin/pull/108)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.18.1643)
+- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.18.2339)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
