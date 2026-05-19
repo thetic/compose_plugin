@@ -60,7 +60,9 @@ switch ($_POST['action']) {
                 echo json_encode(['result' => 'error', 'message' => 'Indirect stack path does not exist.']);
                 break;
             }
-            $indirect = rtrim($realIndirect, '/');
+            // Preserve the user-provided path (e.g. /mnt/user/...) instead of
+            // persisting a resolved /mnt/diskX/... path from realpath().
+            $indirect = rtrim($indirectDir, '/');
         } elseif ($indirectFile !== '') {
             $realFile = realpath($indirectFile);
             if ($realFile === false || !is_file($realFile)) {
@@ -77,7 +79,8 @@ switch ($_POST['action']) {
                 echo json_encode(['result' => 'error', 'message' => 'Indirect compose file must be a .yml or .yaml file.']);
                 break;
             }
-            $indirect = $realFile;
+            // Preserve the originally-entered file path so /mnt/user is retained.
+            $indirect = $indirectFile;
         }
 
         $stackName = isset($_POST['stackName']) ? trim($_POST['stackName']) : '';
@@ -828,7 +831,6 @@ switch ($_POST['action']) {
                 echo json_encode(['result' => 'error', 'message' => 'External compose file cannot be inside the stack project folder. Use a path under /mnt/ or /boot/config/ that is external to this stack.']);
                 break;
             }
-            $externalComposeFilePath = $realFile;
         }
 
         // --- All validation passed, now write everything ---

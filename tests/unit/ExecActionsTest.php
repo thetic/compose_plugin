@@ -113,6 +113,52 @@ class ExecActionsTest extends TestCase
         return $stackPath;
     }
 
+    /**
+     * Prepare a symlink path under an allowed root (/mnt or /boot/config).
+     *
+     * @return array{symlink:string,target:string}
+     */
+    private function createAllowedSymlinkedPathFixture(bool $createComposeFile = false): array
+    {
+        $bases = ['/mnt', '/boot/config'];
+        $base = null;
+        foreach ($bases as $candidate) {
+            if (!is_dir($candidate) && !@mkdir($candidate, 0755, true)) {
+                continue;
+            }
+            if (is_writable($candidate)) {
+                $base = $candidate;
+                break;
+            }
+        }
+
+        if ($base === null) {
+            $this->markTestSkipped('Requires writable /mnt or /boot/config for allowed-path fixture.');
+        }
+
+        $suffix = 'compose_exec_fixture_' . getmypid() . '_' . bin2hex(random_bytes(4));
+        $target = $base . '/' . $suffix . '_target';
+        $symlink = $base . '/' . $suffix . '_link';
+
+        if (!@mkdir($target, 0755, true) && !is_dir($target)) {
+            $this->markTestSkipped('Unable to create allowed-path fixture directory.');
+        }
+
+        if ($createComposeFile) {
+            file_put_contents($target . '/compose.yaml', "services:\n  app:\n    image: redis\n");
+        }
+
+        if (!@symlink($target, $symlink)) {
+            $this->recursiveDelete($target);
+            $this->markTestSkipped('Symlink creation is unavailable in this environment.');
+        }
+
+        $this->externalCleanupPaths[] = $symlink;
+        $this->externalCleanupPaths[] = $target;
+
+        return ['symlink' => $symlink, 'target' => $target];
+    }
+
     // ===========================================
     // changeName Action Tests
     // ===========================================
@@ -839,6 +885,44 @@ class ExecActionsTest extends TestCase
         $result = json_decode($output, true);
         $this->assertEquals('error', $result['result']);
         $this->assertStringContainsString('Set either Indirect Path or Indirect Compose File', $result['message']);
+    }
+
+    public function testAddStackPreservesUserProvidedSymlinkIndirectFolderPath(): void
+    {
+        $fixture = $this->createAllowedSymlinkedPathFixture();
+
+        $output = $this->executeAction('addStack', [
+            'stackName' => 'Symlink Preserve Folder',
+            'stackPath' => $fixture['symlink'],
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+
+        $project = $result['project'] ?? '';
+        $this->assertNotSame('', $project);
+        $indirectFile = $this->testComposeRoot . '/' . $project . '/indirect';
+        $this->assertFileExists($indirectFile);
+        $this->assertSame($fixture['symlink'], trim((string) file_get_contents($indirectFile)));
+    }
+
+    public function testSetStackSettingsPreservesUserProvidedSymlinkExternalComposeFilePath(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $fixture = $this->createAllowedSymlinkedPathFixture(true);
+        $symlinkedComposeFile = $fixture['symlink'] . '/compose.yaml';
+
+        $output = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'externalComposeFilePath' => $symlinkedComposeFile,
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+
+        $indirectFile = $stackPath . '/indirect';
+        $this->assertFileExists($indirectFile);
+        $this->assertSame($symlinkedComposeFile, trim((string) file_get_contents($indirectFile)));
     }
 
     /**
