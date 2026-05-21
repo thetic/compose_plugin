@@ -509,6 +509,7 @@ var editorModal = {
     originalContent: {},
     modifiedTabs: new Set(),
     currentProject: null,
+    currentProjectName: null,
     validationTimeout: null,
     // Settings state
     originalSettings: {},
@@ -805,6 +806,11 @@ function switchTab(tabName) {
     if (validTabs.indexOf(tabName) === -1) {
         composeLogger('Invalid tab name: ' + tabName, null, 'user', 'error', 'switchTab');
         return;
+    }
+
+    if (tabName !== 'settings' && hasPathSensitiveSettingsChanges()) {
+        enforcePathSettingsExclusivity('opening other tabs');
+        tabName = 'settings';
     }
 
     // Update tab buttons
@@ -4087,6 +4093,7 @@ function openEditorModalByProject(project, projectName, initialTab) {
     }
 
     editorModal.currentProject = project;
+    editorModal.currentProjectName = projectName || project;
     editorModal.modifiedTabs = new Set();
     editorModal.modifiedSettings = new Set();
     editorModal.modifiedLabels = new Set();
@@ -4214,6 +4221,7 @@ function loadSettingsData(project, projectName) {
     // Set the name from projectName (display name)
     $('#settings-name').val(projectName || '');
     editorModal.originalSettings['name'] = projectName || '';
+    editorModal.currentProjectName = projectName || project;
 
     // Load description
     $.post(caURL, {
@@ -4539,11 +4547,16 @@ function createOverrideTemplate() {
     var project = editorModal.currentProject;
     if (!project) return;
 
+    if (enforcePathSettingsExclusivity('creating override templates')) {
+        return;
+    }
+
     $('#labels-override-empty-state button').prop('disabled', true);
 
     $.post(caURL, {
         action: 'createOverrideTemplate',
-        script: project
+        script: project,
+        expectedPath: editorModal.filePaths.effectiveOverride || editorModal.filePaths.projectOverride || ''
     }).done(function(data) {
         try {
             if (!data) {
@@ -4552,6 +4565,9 @@ function createOverrideTemplate() {
 
             var response = JSON.parse(data);
             if (response.result !== 'success') {
+                if (handleStaleEditorResponse(response, 'Override file location changed while this dialog was open. Reloading the editor.')) {
+                    return;
+                }
                 throw new Error(response.message || 'Failed to create override template.');
             }
 
@@ -4593,16 +4609,24 @@ function createEnvTemplate() {
     var project = editorModal.currentProject;
     if (!project) return;
 
+    if (enforcePathSettingsExclusivity('creating .env templates')) {
+        return;
+    }
+
     $('#env-empty-state button').prop('disabled', true);
 
     $.post(caURL, {
         action: 'createEnvTemplate',
-        script: project
+        script: project,
+        expectedPath: editorModal.filePaths.env || ''
     }).done(function(data) {
         try {
             if (!data) throw new Error('Empty server response');
             var response = JSON.parse(data);
             if (response.result !== 'success') {
+                if (handleStaleEditorResponse(response, '.env file location changed while this dialog was open. Reloading the editor.')) {
+                    return;
+                }
                 throw new Error(response.message || 'Failed to create .env template.');
             }
 
@@ -4852,6 +4876,126 @@ function updateSaveButtonState() {
     $('#editor-change-count').text(totalChanges + (totalChanges === 1 ? ' change' : ' changes'));
 }
 
+function hasPathSensitiveSettingsChanges() {
+    return editorModal.modifiedSettings.has('env-path') ||
+        editorModal.modifiedSettings.has('external-compose-path') ||
+        editorModal.modifiedSettings.has('external-compose-file') ||
+        editorModal.modifiedSettings.has('use-default-compose-files');
+}
+
+function hasPathDependentEdits() {
+    return editorModal.modifiedTabs.has('compose') ||
+        editorModal.modifiedTabs.has('env') ||
+        editorModal.modifiedTabs.has('override') ||
+        editorModal.modifiedLabels.size > 0;
+}
+
+function enforcePathSettingsExclusivity(actionLabel) {
+    if (!hasPathSensitiveSettingsChanges()) {
+        return false;
+    }
+
+    swal({
+        title: 'Save Settings First',
+        text: 'Path/discovery settings changed. Save settings and reload the editor before ' + actionLabel + '.',
+        type: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Save Settings & Reload',
+        cancelButtonText: 'Cancel'
+    }, function(confirmed) {
+        if (confirmed) {
+            saveSettingsWithOptionalReload(false);
+        }
+    });
+
+    return true;
+}
+
+function getExpectedSavePathForTab(tabName) {
+    switch (tabName) {
+        case 'compose':
+            return editorModal.filePaths.compose || '';
+        case 'env':
+            return editorModal.filePaths.env || '';
+        case 'override':
+            if (editorModal.labelsViewMode === 'basic') {
+                return editorModal.filePaths.projectOverride || '';
+            }
+            return editorModal.filePaths.effectiveOverride || editorModal.filePaths.projectOverride || '';
+        default:
+            return '';
+    }
+}
+
+function reloadEditorModal(targetTab, message) {
+    var project = editorModal.currentProject;
+    var projectName = editorModal.currentProjectName || $('#settings-name').val().trim() || project;
+    var nextTab = targetTab || editorModal.currentTab || 'compose';
+
+    if (!project) {
+        return;
+    }
+
+    doCloseEditorModal();
+    openEditorModalByProject(project, projectName, nextTab);
+
+    if (message) {
+        swal({
+            title: 'Editor Reloaded',
+            text: message,
+            type: 'info',
+            timer: 1800,
+            showConfirmButton: false
+        });
+    }
+}
+
+function handleStaleEditorResponse(response, message) {
+    if (!response || response.errorCode !== 'stale_path') {
+        return false;
+    }
+
+    reloadEditorModal(editorModal.currentTab, message || response.message || 'Stack paths changed while this dialog was open.');
+    return true;
+}
+
+function saveSettingsWithOptionalReload(closeAfterSave) {
+    var saveErrors = [];
+    var project = editorModal.currentProject;
+    var reloadTab = editorModal.currentTab || 'settings';
+
+    return saveSettings(saveErrors).then(function(result) {
+        if (result === true) {
+            if (closeAfterSave) {
+                doCloseEditorModal();
+            } else {
+                reloadEditorModal(reloadTab, 'Stack paths changed. Files were reloaded from the current target.');
+            }
+            if (project) {
+                setTimeout(function() {
+                    refreshStackByProject(project);
+                }, 100);
+            }
+            return true;
+        }
+
+        var errorText = saveErrors.length > 0 ? saveErrors.join('\n') : 'Failed to save stack settings.';
+        swal({
+            title: 'Save Failed',
+            text: errorText,
+            type: 'error'
+        });
+        return false;
+    }).fail(function() {
+        swal({
+            title: 'Save Failed',
+            text: 'Failed to save stack settings.',
+            type: 'error'
+        });
+        return false;
+    });
+}
+
 function handleOkayAction() {
     var totalChanges = editorModal.modifiedTabs.size + editorModal.modifiedSettings.size + editorModal.modifiedLabels.size;
     if (totalChanges > 0) {
@@ -4864,20 +5008,30 @@ function handleOkayAction() {
 function saveCurrentTab() {
     var currentTab = editorModal.currentTab;
     if (!currentTab) return;
+    var saveErrors = [];
+
+    if (currentTab !== 'settings' && enforcePathSettingsExclusivity('saving files')) {
+        return;
+    }
 
     // Handle override editor save (labels tab in advanced mode)
     if (currentTab === 'labels' && editorModal.labelsViewMode === 'advanced') {
         if (!editorModal.modifiedTabs.has('override')) return;
-        saveTab('override').then(function(result) {
+        saveTab('override', saveErrors).then(function(result) {
             if (result === true) {
                 $('#editor-validation-override').html('<i class="fa fa-check editor-validation-icon"></i> Saved!').removeClass('error warning').addClass('valid');
                 setTimeout(function() {
                     if (editorModal.editors['override']) validateYaml('override', editorModal.editors['override'].getValue());
                 }, 1500);
+            } else if (saveErrors.indexOf('__STALE_PATH__') !== -1) {
+                return;
             } else {
                 $('#editor-validation-override').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Save failed').removeClass('valid warning').addClass('error');
             }
         }).catch(function() {
+            if (saveErrors.indexOf('__STALE_PATH__') !== -1) {
+                return;
+            }
             $('#editor-validation-override').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Save failed').removeClass('valid warning').addClass('error');
         });
         return;
@@ -4887,17 +5041,22 @@ function saveCurrentTab() {
     if (currentTab !== 'compose' && currentTab !== 'env') return;
     if (!editorModal.modifiedTabs.has(currentTab)) return;
 
-    saveTab(currentTab).then(function(result) {
+    saveTab(currentTab, saveErrors).then(function(result) {
         if (result === true) {
             // Brief feedback in validation panel
             $('#editor-validation-' + currentTab).html('<i class="fa fa-check editor-validation-icon"></i> Saved!').removeClass('error warning').addClass('valid');
             setTimeout(function() {
                 if (editorModal.editors[currentTab]) validateYaml(currentTab, editorModal.editors[currentTab].getValue());
             }, 1500);
+        } else if (saveErrors.indexOf('__STALE_PATH__') !== -1) {
+            return;
         } else {
             $('#editor-validation-' + currentTab).html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Save failed').removeClass('valid warning').addClass('error');
         }
     }).catch(function() {
+        if (saveErrors.indexOf('__STALE_PATH__') !== -1) {
+            return;
+        }
         $('#editor-validation-' + currentTab).html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Save failed').removeClass('valid warning').addClass('error');
     });
 }
@@ -4926,6 +5085,10 @@ function parseSaveResponse(data, saveErrors, saveTarget) {
     if (typeof response === 'object' && response !== null && response.result) {
         if (response.result === 'success') {
             return true;
+        }
+        if (handleStaleEditorResponse(response, 'The save target changed while this dialog was open. Reloading the editor.')) {
+            if (saveErrors) saveErrors.push('__STALE_PATH__');
+            return false;
         }
         if (saveErrors) saveErrors.push(response.message || ('Failed to save ' + saveTarget + '.'));
         return false;
@@ -4957,7 +5120,8 @@ function saveTab(tabName, saveErrors) {
     var savePayload = {
         action: actionStr,
         script: project,
-        scriptContents: content
+        scriptContents: content,
+        expectedPath: getExpectedSavePathForTab(tabName)
     };
     if (tabName === 'override') {
         savePayload.managed = editorModal.labelsViewMode === 'basic' ? 1 : 0;
@@ -5002,8 +5166,31 @@ function saveAllChanges(closeAfterSave) {
     var saveErrors = [];
     var skippedManualLabels = false;
     var totalChanges = editorModal.modifiedTabs.size + editorModal.modifiedSettings.size + editorModal.modifiedLabels.size;
+    var pathSensitiveSettingsChanged = hasPathSensitiveSettingsChanges();
+    var pathDependentEdits = hasPathDependentEdits();
 
     if (totalChanges === 0) {
+        return;
+    }
+
+    if (pathSensitiveSettingsChanged && pathDependentEdits) {
+        swal({
+            title: 'Reload Required',
+            text: 'Compose path or discovery settings changed. Save settings and reload the editor before saving compose, .env, override, or label edits.',
+            type: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Save Settings Only',
+            cancelButtonText: 'Cancel'
+        }, function(confirmed) {
+            if (confirmed) {
+                saveSettingsWithOptionalReload(closeAfterSave);
+            }
+        });
+        return;
+    }
+
+    if (pathSensitiveSettingsChanged) {
+        saveSettingsWithOptionalReload(closeAfterSave);
         return;
     }
 
@@ -5069,8 +5256,14 @@ function saveAllChanges(closeAfterSave) {
                 }, 1600);
             }
         } else {
-            var errorText = saveErrors.length > 0 ?
-                saveErrors.join('\n') :
+            var filteredErrors = saveErrors.filter(function(message) {
+                return message !== '__STALE_PATH__';
+            });
+            if (filteredErrors.length === 0 && saveErrors.indexOf('__STALE_PATH__') !== -1) {
+                return;
+            }
+            var errorText = filteredErrors.length > 0 ?
+                filteredErrors.join('\n') :
                 'Some items could not be saved. Please try again.';
             swal({
                 title: "Save Failed",
@@ -5091,7 +5284,6 @@ function saveAllChanges(closeAfterSave) {
 function saveSettings(saveErrors) {
     var project = editorModal.currentProject;
     var savePromises = [];
-    var needsReload = false;
 
     // Save name if modified
     if (editorModal.modifiedSettings.has('name')) {
@@ -5102,9 +5294,9 @@ function saveSettings(saveErrors) {
                 script: project,
                 newName: newName
             }).then(function() {
+                editorModal.currentProjectName = newName || project;
                 editorModal.originalSettings['name'] = newName;
                 editorModal.modifiedSettings.delete('name');
-                needsReload = true;
                 return true;
             }).fail(function() {
                 if (saveErrors) saveErrors.push('Failed to save stack name.');
@@ -5142,7 +5334,7 @@ function saveSettings(saveErrors) {
                 title: 'Save Failed',
                 text: 'Invalid WebUI URL. Must be http:// or https:// (supports [IP] and [PORT:xxxx] placeholders).'
             });
-            return;
+            return $.Deferred().resolve(false).promise();
         }
         if (webuiUrl && /\[PORT\]/i.test(webuiUrl)) {
             swal({
@@ -5150,7 +5342,7 @@ function saveSettings(saveErrors) {
                 title: 'Save Failed',
                 text: 'Bare [PORT] placeholder is not supported at stack level. Use [PORT:xxxx] with a default port instead (e.g. [PORT:8080]).'
             });
-            return;
+            return $.Deferred().resolve(false).promise();
         }
         var envPath = $('#settings-env-path').val();
         var defaultProfile = $('#settings-default-profile').val();
@@ -5162,7 +5354,7 @@ function saveSettings(saveErrors) {
                 title: 'Save Failed',
                 text: 'Set either External Compose Path or External Compose File, not both.'
             });
-            return;
+            return $.Deferred().resolve(false).promise();
         }
         var stackPath = (editorModal.filePaths.stackMeta || '').replace(/\/$/, '');
         if (externalComposeFilePath && stackPath && externalComposeFilePath.startsWith(stackPath + '/')) {
@@ -5171,7 +5363,7 @@ function saveSettings(saveErrors) {
                 title: 'Save Failed',
                 text: 'External Compose File cannot be inside the stack project folder. Use a path that is external to this stack.'
             });
-            return;
+            return $.Deferred().resolve(false).promise();
         }
         var useDefaultComposeFiles = $('#settings-use-default-compose-files').is(':checked') ? 'true' : 'false';
         savePromises.push(
@@ -5208,7 +5400,6 @@ function saveSettings(saveErrors) {
                         editorModal.modifiedSettings.delete('external-compose-path');
                         editorModal.modifiedSettings.delete('external-compose-file');
                         editorModal.modifiedSettings.delete('use-default-compose-files');
-                        needsReload = true;
                         return true;
                     } else {
                         // Collect error message from server
@@ -5328,7 +5519,8 @@ function saveLabels(saveErrors) {
         action: 'saveOverride',
         script: project,
         scriptContents: rawOverride,
-        managed: editorModal.labelsViewMode === 'basic' ? 1 : 0
+        managed: editorModal.labelsViewMode === 'basic' ? 1 : 0,
+        expectedPath: getExpectedSavePathForTab('override')
     }).then(function(data) {
         if (!parseSaveResponse(data, saveErrors, 'WebUI labels')) {
             return false;
@@ -5401,6 +5593,7 @@ function closeEditorModal() {
 function doCloseEditorModal() {
     $('#editor-modal-overlay').removeClass('active').appendTo('body');
     editorModal.currentProject = null;
+    editorModal.currentProjectName = null;
     editorModal.currentTab = 'compose';
     editorModal.modifiedTabs = new Set();
     editorModal.modifiedSettings = new Set();

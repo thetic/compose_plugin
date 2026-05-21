@@ -20,6 +20,49 @@ if (!function_exists('getPostScript')) {
     }
 }
 
+if (!function_exists('getExpectedClientPath')) {
+    function getExpectedClientPath(): string
+    {
+        return isset($_POST['expectedPath']) ? trim((string) $_POST['expectedPath']) : '';
+    }
+}
+
+if (!function_exists('rejectStaleClientPath')) {
+    function rejectStaleClientPath(?string $actualPath, string $label): bool
+    {
+        $expectedPath = getExpectedClientPath();
+        if ($expectedPath === '') {
+            return false;
+        }
+
+        $actualPath = $actualPath !== null ? trim($actualPath) : '';
+        if ($actualPath !== '' && Path::refersToSamePath($expectedPath, $actualPath)) {
+            return false;
+        }
+
+        composeLogger(
+            "Rejected stale {$label} write target",
+            [
+                'expectedPath' => $expectedPath,
+                'actualPath' => $actualPath,
+            ],
+            'user',
+            'warning',
+            'editor'
+        );
+
+        echo json_encode([
+            'result' => 'error',
+            'errorCode' => 'stale_path',
+            'message' => 'The target path changed while the editor was open. Reload the editor and try again.',
+            'expectedPath' => $expectedPath,
+            'actualPath' => $actualPath,
+        ]);
+
+        return true;
+    }
+}
+
 switch ($_POST['action']) {
     case 'composeLogger':
         $message = $_POST['msg'] ?? '';
@@ -275,6 +318,10 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $envPath = $stackInfo->getEnvFilePath() ?? ($stackInfo->composeSource . '/.env');
 
+        if (rejectStaleClientPath($envPath, '.env template')) {
+            break;
+        }
+
         $envDir = dirname($envPath);
         if (!is_dir($envDir)) {
             echo json_encode(['result' => 'error', 'message' => 'Target directory does not exist.']);
@@ -334,6 +381,10 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $overridePath = $stackInfo->getPreferredOverridePath();
 
+        if (rejectStaleClientPath($overridePath, 'override template')) {
+            break;
+        }
+
         if ($overridePath === null) {
             echo json_encode(['result' => 'error', 'message' => 'Unable to resolve override path']);
             break;
@@ -380,6 +431,10 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $composeFilePath = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
 
+        if (rejectStaleClientPath($composeFilePath, 'compose file')) {
+            break;
+        }
+
         // Before saving, detect service renames and migrate override entries in the project override only
         if (is_file($composeFilePath)) {
             $oldContent = file_get_contents($composeFilePath);
@@ -396,6 +451,10 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $fileName = $stackInfo->getEnvFilePath() ?? ($stackInfo->composeSource . '/.env');
 
+        if (rejectStaleClientPath($fileName, '.env file')) {
+            break;
+        }
+
         file_put_contents($fileName, $scriptContents);
         echo "$fileName saved";
         break;
@@ -410,6 +469,10 @@ switch ($_POST['action']) {
         $overridePath = $isManaged
             ? $stackInfo->overrideInfo->getProjectOverridePath()
             : $stackInfo->getPreferredOverridePath();
+
+        if (rejectStaleClientPath($overridePath, 'override file')) {
+            break;
+        }
 
         if ($overridePath === null) {
             echo json_encode(['result' => 'error', 'message' => 'Unable to resolve override path']);
