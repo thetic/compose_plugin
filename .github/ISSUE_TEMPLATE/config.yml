@@ -1,10 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 issues:
   - feature_request.yaml
+  - bug_report.yaml
 contact_links:
   - name: Security policy
-    url: /security
-    about: Report security issues
-  - name: Support forum
-    url: https://forums.unraid.net
-    about: For usage questions
+    url: https://github.com/mstrhakr/compose_plugin/security/advisories/new
+    about: Report security issues privately via GitHub
+  - name: Unraid support forum for Compose Manager Plus
+    url: https://forums.unraid.net/topic/197334-plugin-compose-manager-plus/
+    about: For usage questions and support, please visit the Unraid support forum for Compose Manager Plus.
