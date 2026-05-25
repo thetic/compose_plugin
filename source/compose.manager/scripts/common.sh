@@ -50,14 +50,28 @@ composeLogger() {
     logger -t 'compose.manager' -p "$priority" "${prefix} ${msg}"
 }
 
-# Sanitize a string for use as a Docker Compose project name.
-# Replaces spaces, dots, and dashes with underscores and lowercases.
-sanitize() {
-   local s="${1?need a string}"
-   s="${s// /_}"
-   s="${s//./_}"
-   s="${s//-/_}"
-   echo "${s,,}"
+# Canonical Docker Compose project-name sanitizer.
+# Delegates to the dependency-free PHP helper so every code path shares one
+# implementation.
+canonicalize_project_name() {
+    local raw_name="${1-}"
+    local php_cmd="${COMPOSE_MANAGER_PHP:-php}"
+    local helper_file
+    helper_file="$(dirname "${BASH_SOURCE[0]}")/../include/ProjectNameSanitizer.php"
+
+    local canonical_name
+    # shellcheck disable=SC2016  # $argv[] are PHP variables, not shell — single quotes are intentional.
+    canonical_name=$("$php_cmd" -r '
+require_once $argv[1];
+echo compose_manager_sanitize_project_name((string) ($argv[2] ?? ""));
+' "$helper_file" "$raw_name" 2>/dev/null)
+
+    if [ -z "$canonical_name" ]; then
+        composeLogger "Failed to canonicalize project name: $raw_name" error compose
+        return 1
+    fi
+
+    echo "$canonical_name"
 }
 
 # Find the compose file in a directory using Docker Compose spec priority.

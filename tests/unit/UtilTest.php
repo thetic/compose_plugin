@@ -142,6 +142,96 @@ class UtilTest extends TestCase
         $this->assertEquals('my_stack-name_here', $result);
     }
 
+    /**
+     * Broad style-matrix: every rule exercised in one data-driven test so
+     * PHP, shell (common.bats), and legacy-sed (compose.bats) results stay in sync.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('sanitizeProjectStringMatrixProvider')]
+    public function testSanitizeProjectStringMatrix(string $input, string $expected): void
+    {
+        $this->assertEquals($expected, \StackInfo::sanitizeProjectString($input));
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function sanitizeProjectStringMatrixProvider(): array
+    {
+        return [
+            // identity / casing
+            'already valid lowercase'           => ['mystack',                        'mystack'],
+            'uppercase only'                    => ['MyStack',                        'mystack'],
+            'mixed alphanumeric'                => ['Stack2026v1',                    'stack2026v1'],
+            'underscore preserved'              => ['my_stack_name',                  'my_stack_name'],
+            'dash preserved'                    => ['my-stack-name',                  'my-stack-name'],
+            'mixed valid separators'            => ['my_stack-v2',                    'my_stack-v2'],
+
+            // space / dot replacement
+            'single space'                      => ['my stack name',                  'my_stack_name'],
+            'multiple spaces'                   => ['Stack With    Spaces',            'stack_with_spaces'],
+            'dot replaced'                      => ['my.stack.name',                  'my_stack_name'],
+            'many consecutive dots'             => ['name.with.many....dots',         'name_with_many_dots'],
+
+            // separator collapsing
+            'multiple underscores collapsed'    => ['my___stack',                     'my_stack'],
+            'multiple dashes collapsed'         => ['AdGuard---Home',                 'adguard-home'],
+            'mixed repeated separators'         => ['Prod__API---V2',                 'prod_api-v2'],
+            'mixed A--B__C..D'                  => ['A--B__C..D',                     'a-b_c_d'],
+            'combined space+dot+dash'           => ['My.Stack-Name Here',             'my_stack-name_here'],
+            'consecutive specials all types'    => ['my..stack--name  here',          'my_stack-name_here'],
+
+            // trim leading/trailing separators
+            'leading dash'                      => ['-leading',                       'leading'],
+            'trailing dash'                     => ['trailing-',                      'trailing'],
+            'leading underscore'                => ['_leading_underscore',            'leading_underscore'],
+            'trailing underscore'               => ['trailing_underscore_',           'trailing_underscore'],
+            'leading+trailing mixed'            => ['-_My Stack_-',                   'my_stack'],
+            'dots at boundaries'                => ['.My Stack.',                     'my_stack'],
+            'complex boundary'                  => ['..-My Stack-Name-..',            'my_stack-name'],
+
+            // special characters → underscore
+            'plus and at'                       => ['Stack+Name@Home',                'stack_name_home'],
+            'hash and exclamation'              => ['Stack#Prod!Beta',                'stack_prod_beta'],
+            'parens and brackets'               => ['name(2026)[prod]{x}',            'name_2026_prod_x'],
+            'comma semicolon equals'            => ['app,backup;v2=final',            'app_backup_v2_final'],
+            'dollar caret ampersand'            => ['foo$bar^baz&qux',                'foo_bar_baz_qux'],
+            'apostrophe'                        => ["rock'n'roll",                    'rock_n_roll'],
+            'slash'                             => ['stack/name',                     'stack_name'],
+            'colon'                             => ['stack:name',                     'stack_name'],
+            'at with version'                   => ['stack@v2.0',                     'stack_v2_0'],
+            'equals sign'                       => ['my.app=prod',                    'my_app_prod'],
+
+            // all-separator / empty → fallback
+            'only dashes'                       => ['---',                            'compose'],
+            'only underscores'                  => ['___',                            'compose'],
+            'only dots'                         => ['...',                            'compose'],
+            'mixed separators only'             => ['---___...',                      'compose'],
+            'whitespace only'                   => ['   ',                            'compose'],
+            'empty string'                      => ['',                               'compose'],
+
+            // real-world stack names
+            'Immich'                            => ['Immich',                         'immich'],
+            'AdGuard-Home'                      => ['AdGuard-Home',                   'adguard-home'],
+            'Pihole v6'                         => ['Pihole v6',                      'pihole_v6'],
+            'Jellyfin2025'                      => ['Jellyfin2025',                   'jellyfin2025'],
+            'traefik-v3.0'                      => ['traefik-v3.0',                   'traefik-v3_0'],
+            'Nginx_Proxy_Manager'               => ['Nginx_Proxy_Manager',            'nginx_proxy_manager'],
+            'WordPress'                         => ['WordPress',                      'wordpress'],
+            'Audible_Plex Downloader'           => ['Audible_Plex Downloader',        'audible_plex_downloader'],
+            'Home_Assistant'                    => ['Home_Assistant',                 'home_assistant'],
+            'Unifi_Network_Application'         => ['Unifi_Network_Application',      'unifi_network_application'],
+        ];
+    }
+
+    /**
+     * sanitizeProjectString must be idempotent: running it twice produces the same output.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('sanitizeProjectStringMatrixProvider')]
+    public function testSanitizeProjectStringIsIdempotent(string $input, string $_expected): void
+    {
+        $once  = \StackInfo::sanitizeProjectString($input);
+        $twice = \StackInfo::sanitizeProjectString($once);
+        $this->assertEquals($once, $twice, "Not idempotent for input '$input'");
+    }
+
     // isIndirect() and getPath() were moved to StackInfo instance methods.
     // See StackInfoTest for indirect resolution coverage.
 

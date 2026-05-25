@@ -26,14 +26,13 @@ log() {
 stop_stack() {
     local dir="$1"
     local stack_name="$2"
-    local sanitized_name="$3"
     local start_time=$(date +%s)
     
     log "Stopping stack: $stack_name"
     
     local project
     project=$(basename "$dir")
-    local project_name="$sanitized_name"
+    local project_name
 
     # Build args from centralized provider.
     local -a file_args=()
@@ -113,9 +112,8 @@ fi
 for stack_entry in "${stacks_to_stop[@]}"; do
     dir="${stack_entry%%|*}"
     stack_name="${stack_entry#*|}"
-    sanitized_name=$(sanitize "$stack_name")
-    
-    stop_stack "$dir" "$stack_name" "$sanitized_name" &
+
+    stop_stack "$dir" "$stack_name" &
 done
 
 # Wait for all stops to complete

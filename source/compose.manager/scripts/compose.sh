@@ -190,14 +190,17 @@ done
 # Build the compose base command as an array (no eval needed)
 compose_base=(docker compose "${project_dir_args[@]}" "${env_args[@]}" "${file_args[@]}" "${profile_args[@]}")
 
-# Sanitize the project name for Docker Compose (must be lowercase alphanumeric, hyphens, underscores)
-name=$(echo "$name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/_/g; s/__*/_/g; s/^[_-]*//; s/[_-]*$//')
+# Canonicalize project name through shared PHP sanitizer.
+if ! name=$(canonicalize_project_name "$name"); then
+  log_msg "ERROR" "Could not canonicalize project name"
+  exit 1
+fi
 
 # Acquire lock for operations that modify state (not for read-only commands)
 case $command in
   up|down|pull|update|stop)
-    # Sanitize name for lock file (same as PHP sanitizeStr)
-    lock_name=$(echo "$name" | tr ' .-' '___' | tr '[:upper:]' '[:lower:]')
+    # Lock by canonical project name so every path uses the same stack identity.
+    lock_name="$name"
     if ! acquire_lock "$lock_name"; then
       exit 1
     fi

@@ -1,5 +1,6 @@
 <?php
 
+require_once(__DIR__ . '/ProjectNameSanitizer.php');
 require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 
@@ -1595,26 +1596,11 @@ class StackInfo
      */
     public static function sanitizeProjectString(string $rawProjectString): string
     {
+        $wasEmpty = false;
+        $sanitizedProjectString = compose_manager_sanitize_project_name($rawProjectString, $wasEmpty);
 
-        // Trim and lowercase the input to start normalization.
-        $sanitizedProjectString = strtolower(trim($rawProjectString));
-
-        // Replace unsupported characters with underscore.
-        $sanitizedProjectString = preg_replace('/[^a-z0-9_-]/', '_', $sanitizedProjectString) ?? '';
-
-        // Collapse multiple underscores into one.
-        $sanitizedProjectString = preg_replace('/_+/', '_', $sanitizedProjectString);
-
-        // Collapse multiple dashes into one.
-        $sanitizedProjectString = preg_replace('/-+/', '-', $sanitizedProjectString);
-
-        // Remove leading or trailing underscores or dashes.
-        $sanitizedProjectString = trim($sanitizedProjectString, '_-');
-
-        // If the result is empty, default to 'compose' to ensure a valid project name.
-        if ($sanitizedProjectString === '') {
+        if ($wasEmpty) {
             composeLogger("Sanitized project string is empty after processing; defaulting to 'compose'", ['input' => $rawProjectString], 'user', 'warning', 'stack');
-            return 'compose';
         }
 
         return $sanitizedProjectString;

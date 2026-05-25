@@ -235,9 +235,16 @@ test_setup() {
 # Project Name Sanitizer Tests
 # ============================================================
 
+# Delegate to the canonical PHP sanitizer so these tests always exercise
+# the same logic path as production PHP and shell code.
+PROJECT_NAME_SANITIZER_PHP="$BATS_TEST_DIRNAME/../../source/compose.manager/include/ProjectNameSanitizer.php"
+
 sanitize_project_name() {
     local value="$1"
-    echo "$value" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/_/g; s/__*/_/g; s/^[_-]*//; s/[_-]*$//'
+    php -r '
+require_once $argv[1];
+echo compose_manager_sanitize_project_name((string) ($argv[2] ?? ""));
+' "$PROJECT_NAME_SANITIZER_PHP" "$value"
 }
 
 assert_sanitize_case() {
@@ -271,7 +278,11 @@ My Stack.v2|my_stack_v2
 my___stack|my_stack
 -_My Stack_-|my_stack
 .My Stack.|my_stack
----___...|
+Stack With    Spaces|stack_with_spaces
+name.with.many....dots|name_with_many_dots
+Prod__API---V2|prod_api-v2
+A--B__C..D|a-b_c_d
+---___...|compose
 EOF
 }
 
@@ -285,6 +296,10 @@ name(2026)[prod]{x}|name_2026_prod_x
 app,backup;v2=final|app_backup_v2_final
 foo$bar^baz&qux|foo_bar_baz_qux
 rock'n'roll|rock_n_roll
+stack/name|stack_name
+stack:name|stack_name
+stack@v2.0|stack_v2_0
+my.app=prod|my_app_prod
 EOF
 }
 
@@ -305,5 +320,46 @@ WordPress|wordpress
 audplexus|audplexus
 netdata|netdata
 Audible_Plex Downloader|audible_plex_downloader
+Home_Assistant|home_assistant
+AdGuard-Home|adguard-home
+Pihole v6|pihole_v6
+Jellyfin2025|jellyfin2025
+traefik-v3.0|traefik-v3_0
+EOF
+}
+
+@test "project name sanitizer boundary cases" {
+    while IFS='|' read -r input expected; do
+        assert_sanitize_case "$input" "$expected" || return 1
+    done <<'EOF'
+-leading|leading
+trailing-|trailing
+_leading_underscore|leading_underscore
+trailing_underscore_|trailing_underscore
+---|compose
+___|compose
+   |compose
+a|a
+1|1
+a-b|a-b
+a_b|a_b
+EOF
+}
+
+@test "project name sanitizer is idempotent" {
+    while IFS= read -r input; do
+        once=$(sanitize_project_name "$input")
+        twice=$(sanitize_project_name "$once")
+        if [ "$once" != "$twice" ]; then
+            echo "idempotency failed for '$input': first='$once' second='$twice'"
+            return 1
+        fi
+    done <<'EOF'
+My Space Stack
+Prod__API---V2
+my..stack--prod__v1
+Stack+Name@Home
+---___...
+-leading
 EOF
 }
