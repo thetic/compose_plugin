@@ -23,6 +23,8 @@ require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 class ExecActionsTest extends TestCase
 {
     private string $testComposeRoot;
+    /** @var string[] */
+    private array $externalCleanupPaths = [];
 
     protected function setUp(): void
     {
@@ -51,6 +53,16 @@ class ExecActionsTest extends TestCase
         if (is_dir($this->testComposeRoot)) {
             $this->recursiveDelete($this->testComposeRoot);
         }
+        foreach ($this->externalCleanupPaths as $path) {
+            if (is_link($path) || is_file($path)) {
+                @unlink($path);
+                continue;
+            }
+            if (is_dir($path)) {
+                $this->recursiveDelete($path);
+            }
+        }
+        $this->externalCleanupPaths = [];
         $_POST = [];
         parent::tearDown();
     }
@@ -111,6 +123,52 @@ class ExecActionsTest extends TestCase
         }
         
         return $stackPath;
+    }
+
+    /**
+     * Prepare a symlink path under an allowed root (/mnt or /boot/config).
+     *
+     * @return array{symlink:string,target:string}
+     */
+    private function createAllowedSymlinkedPathFixture(bool $createComposeFile = false): array
+    {
+        $bases = ['/mnt', '/boot/config'];
+        $base = null;
+        foreach ($bases as $candidate) {
+            if (!is_dir($candidate) && !@mkdir($candidate, 0755, true)) {
+                continue;
+            }
+            if (is_writable($candidate)) {
+                $base = $candidate;
+                break;
+            }
+        }
+
+        if ($base === null) {
+            $this->markTestSkipped('Requires writable /mnt or /boot/config for allowed-path fixture.');
+        }
+
+        $suffix = 'compose_exec_fixture_' . getmypid() . '_' . bin2hex(random_bytes(4));
+        $target = $base . '/' . $suffix . '_target';
+        $symlink = $base . '/' . $suffix . '_link';
+
+        if (!@mkdir($target, 0755, true) && !is_dir($target)) {
+            $this->markTestSkipped('Unable to create allowed-path fixture directory.');
+        }
+
+        if ($createComposeFile) {
+            file_put_contents($target . '/compose.yaml', "services:\n  app:\n    image: redis\n");
+        }
+
+        if (!@symlink($target, $symlink)) {
+            $this->recursiveDelete($target);
+            $this->markTestSkipped('Symlink creation is unavailable in this environment.');
+        }
+
+        $this->externalCleanupPaths[] = $symlink;
+        $this->externalCleanupPaths[] = $target;
+
+        return ['symlink' => $symlink, 'target' => $target];
     }
 
     // ===========================================
@@ -328,6 +386,8 @@ class ExecActionsTest extends TestCase
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals($envContent, $result['content']);
+        $this->assertTrue($result['exists']);
+        $this->assertSame($stackPath . '/.env', $result['fileName']);
     }
 
     /**
@@ -347,6 +407,96 @@ class ExecActionsTest extends TestCase
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals("CUSTOM_VAR=custom_value", $result['content']);
+        $this->assertTrue($result['exists']);
+        $this->assertSame($customEnvPath, $result['fileName']);
+    }
+
+    /**
+     * Test getEnv returns blank content and exists=false when no env file
+     */
+    public function testGetEnvReturnsBlankWhenNoFile(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        @unlink($stackPath . '/.env');
+
+        $output = $this->executeAction('getEnv', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertSame('', $result['content']);
+        $this->assertFalse($result['exists']);
+        $this->assertSame($stackPath . '/.env', $result['fileName']);
+    }
+
+    // ===========================================
+    // createEnvTemplate Action Tests
+    // ===========================================
+
+    /**
+     * Test createEnvTemplate writes default .env template in stack path
+     */
+    public function testCreateEnvTemplateWritesDefaultPath(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        @unlink($stackPath . '/.env');
+
+        $output = $this->executeAction('createEnvTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertTrue($result['exists']);
+        $this->assertSame($stackPath . '/.env', $result['fileName']);
+        $this->assertFileExists($stackPath . '/.env');
+        $this->assertStringContainsString('IMAGE_TAG=latest', $result['content']);
+    }
+
+    /**
+     * Test createEnvTemplate writes .env in indirect folder when stack is indirect
+     */
+    public function testCreateEnvTemplateUsesIndirectFolder(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $indirectDir = $this->testComposeRoot . '/external-env';
+        mkdir($indirectDir, 0755, true);
+        file_put_contents($indirectDir . '/compose.yaml', "services:\n  app:\n    image: nginx:alpine\n");
+        @unlink($indirectDir . '/.env');
+
+        file_put_contents($stackPath . '/indirect', $indirectDir);
+        file_put_contents($stackPath . '/indirect_mode', 'folder');
+
+        $output = $this->executeAction('createEnvTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertTrue($result['exists']);
+        $this->assertSame($indirectDir . '/.env', $result['fileName']);
+        $this->assertFileExists($indirectDir . '/.env');
+    }
+
+    /**
+     * Test createEnvTemplate returns error when target path is a directory
+     */
+    public function testCreateEnvTemplateFailsWhenTargetIsDirectory(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $dirTarget = $this->testComposeRoot . '/env-dir-target';
+        mkdir($dirTarget, 0755, true);
+        file_put_contents($stackPath . '/envpath', $dirTarget);
+
+        $output = $this->executeAction('createEnvTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('directory', $result['message']);
+        $this->assertSame($dirTarget, file_get_contents($stackPath . '/envpath'));
     }
 
     // ===========================================
@@ -390,24 +540,74 @@ class ExecActionsTest extends TestCase
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals($overrideContent, $result['content']);
+        $this->assertEquals($stackPath . '/compose.override.yaml', $result['fileName']);
+        $this->assertArrayNotHasKey('readingFromIndirect', $result);
+        $this->assertArrayNotHasKey('projectOverridePath', $result);
     }
 
     /**
      * Test getOverride returns empty when no file
      */
-    public function testGetOverrideCreatesWhenNoFile(): void
+    public function testGetOverrideReturnsBlankWhenNoFile(): void
     {
-        $this->createTestStack('test-stack');
-        
+        $stackPath = $this->createTestStack('test-stack');
+
         $output = $this->executeAction('getOverride', [
             'script' => 'test-stack',
         ]);
-        $overrideContent = "# Override file for UI labels (icon, webui, shell)\n";
-        $overrideContent .= "# This file is managed by Compose Manager\n";
-        $overrideContent .= "services: {}\n";
+
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
-        $this->assertEquals($overrideContent, $result['content']);
+        $this->assertSame('', $result['content']);
+        $this->assertSame($stackPath . '/compose.override.yaml', $result['fileName']);
+        $this->assertFalse($result['exists']);
+        $this->assertFileDoesNotExist($stackPath . '/compose.override.yaml');
+        $this->assertArrayNotHasKey('readingFromIndirect', $result);
+        $this->assertArrayNotHasKey('projectOverridePath', $result);
+    }
+
+    // ===========================================
+    // createOverrideTemplate Action Tests
+    // ===========================================
+
+    /**
+     * Test createOverrideTemplate writes the default template
+     */
+    public function testCreateOverrideTemplateWritesTemplate(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+
+        $output = $this->executeAction('createOverrideTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertSame($stackPath . '/compose.override.yaml', $result['fileName']);
+        $this->assertTrue($result['exists']);
+        $this->assertStringContainsString('Manual example:', $result['content']);
+        $this->assertStringContainsString('net.unraid.docker.webui', $result['content']);
+        $this->assertFileExists($stackPath . '/compose.override.yaml');
+        $this->assertStringContainsString('services: {}', file_get_contents($stackPath . '/compose.override.yaml'));
+    }
+
+    /**
+     * Test createOverrideTemplate returns error when target path is a directory
+     */
+    public function testCreateOverrideTemplateFailsWhenTargetIsDirectory(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        @unlink($stackPath . '/compose.override.yaml');
+        mkdir($stackPath . '/compose.override.yaml', 0755, true);
+
+        $output = $this->executeAction('createOverrideTemplate', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('directory', $result['message']);
+        $this->assertTrue(is_dir($stackPath . '/compose.override.yaml'));
     }
 
     // ===========================================
@@ -577,6 +777,66 @@ class ExecActionsTest extends TestCase
         $this->assertEquals('production', $result['defaultProfile']);
     }
 
+    public function testGetStackSettingsReturnsExternalComposeFileForFileMode(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $externalDir = $this->testComposeRoot . '/external';
+        $externalFile = $externalDir . '/custom.compose.yaml';
+        mkdir($externalDir, 0755, true);
+        file_put_contents($externalFile, "services:\n  app:\n    image: redis\n");
+        file_put_contents($stackPath . '/indirect', $externalFile);
+        file_put_contents($stackPath . '/indirect_mode', 'file');
+
+        $output = $this->executeAction('getStackSettings', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertSame('file', $result['indirectMode']);
+        $this->assertSame($externalFile, $result['externalComposeFilePath']);
+        $this->assertSame('', $result['externalComposePath']);
+    }
+
+    public function testGetStackSettingsPreservesBrokenIndirectFileModePath(): void
+    {
+        $stackPath = $this->createTestStack('test-stack', [COMPOSE_FILE_NAMES[0] => null]);
+        $missingFile = $this->testComposeRoot . '/external/missing.compose.yaml';
+        file_put_contents($stackPath . '/indirect', $missingFile);
+        file_put_contents($stackPath . '/indirect_mode', 'file');
+        @unlink($stackPath . '/' . COMPOSE_FILE_NAMES[0]);
+
+        $output = $this->executeAction('getStackSettings', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertSame('file', $result['indirectMode']);
+        $this->assertSame($missingFile, $result['invalidIndirectPath']);
+        $this->assertSame('', $result['externalComposeFilePath']);
+    }
+
+    public function testGetStackSettingsReturnsEffectiveDefaultDiscoveryFalseForFileMode(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $externalDir = $this->testComposeRoot . '/external-discovery';
+        $externalFile = $externalDir . '/compose.yaml';
+        mkdir($externalDir, 0755, true);
+        file_put_contents($externalFile, "services:\n  app:\n    image: redis\n");
+        file_put_contents($stackPath . '/indirect', $externalFile);
+        file_put_contents($stackPath . '/indirect_mode', 'file');
+        file_put_contents($stackPath . '/use_default_compose_files', 'true');
+
+        $output = $this->executeAction('getStackSettings', [
+            'script' => 'test-stack',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertFalse($result['useDefaultComposeFiles']);
+    }
+
     /**
      * Test getStackSettings error when stack not specified
      */
@@ -609,6 +869,72 @@ class ExecActionsTest extends TestCase
         
         $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
+    }
+
+    public function testSetStackSettingsRejectsBothExternalComposePathAndFile(): void
+    {
+        $this->createTestStack('test-stack');
+
+        $output = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'externalComposePath' => '/mnt/user/appdata/example',
+            'externalComposeFilePath' => '/mnt/user/appdata/example/compose.yaml',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('Set either External Compose Path or External Compose File', $result['message']);
+    }
+
+    public function testAddStackRejectsBothIndirectPathAndFile(): void
+    {
+        $output = $this->executeAction('addStack', [
+            'stackName' => 'My Stack',
+            'stackPath' => '/mnt/user/appdata/example',
+            'stackFilePath' => '/mnt/user/appdata/example/compose.yaml',
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('Set either Indirect Path or Indirect Compose File', $result['message']);
+    }
+
+    public function testAddStackPreservesUserProvidedSymlinkIndirectFolderPath(): void
+    {
+        $fixture = $this->createAllowedSymlinkedPathFixture();
+
+        $output = $this->executeAction('addStack', [
+            'stackName' => 'Symlink Preserve Folder',
+            'stackPath' => $fixture['symlink'],
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+
+        $project = $result['project'] ?? '';
+        $this->assertNotSame('', $project);
+        $indirectFile = $this->testComposeRoot . '/' . $project . '/indirect';
+        $this->assertFileExists($indirectFile);
+        $this->assertSame($fixture['symlink'], trim((string) file_get_contents($indirectFile)));
+    }
+
+    public function testSetStackSettingsPreservesUserProvidedSymlinkExternalComposeFilePath(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $fixture = $this->createAllowedSymlinkedPathFixture(true);
+        $symlinkedComposeFile = $fixture['symlink'] . '/compose.yaml';
+
+        $output = $this->executeAction('setStackSettings', [
+            'script' => 'test-stack',
+            'externalComposeFilePath' => $symlinkedComposeFile,
+        ]);
+
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+
+        $indirectFile = $stackPath . '/indirect';
+        $this->assertFileExists($indirectFile);
+        $this->assertSame($symlinkedComposeFile, trim((string) file_get_contents($indirectFile)));
     }
 
     /**

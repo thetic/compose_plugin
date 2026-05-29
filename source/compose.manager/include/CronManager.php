@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Centralized cron management for Compose Manager.
  *

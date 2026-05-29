@@ -11,12 +11,26 @@ require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 class StackInfoTest extends TestCase
 {
     private string $tempRoot;
+    private string $stackOrderFile;
 
     protected function setUp(): void
     {
         parent::setUp();
         \StackInfo::clearCache();
         $this->tempRoot = $this->createTempDir();
+        $this->stackOrderFile = COMPOSE_STACK_ORDER_FILE;
+        if (is_file($this->stackOrderFile)) {
+            @unlink($this->stackOrderFile);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_file($this->stackOrderFile)) {
+            @unlink($this->stackOrderFile);
+        }
+
+        parent::tearDown();
     }
 
     // ===========================================
@@ -122,9 +136,9 @@ class StackInfoTest extends TestCase
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertFalse($info->isIndirect);
-        // indirect file should be preserved (non-destructive handling)
+        // Structurally invalid path is silently ignored — not stored as invalidIndirectPath
         $this->assertFileExists("$stackDir/indirect");
-        $this->assertSame('/mnt/user/../etc/passwd', $info->invalidIndirectPath);
+        $this->assertNull($info->invalidIndirectPath);
     }
 
     public function testMissingDirIndirectPreserved(): void
@@ -138,8 +152,10 @@ class StackInfoTest extends TestCase
 
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
-        $this->assertFalse($info->isIndirect);
-        // indirect file should be preserved (non-destructive handling)
+        $this->assertTrue($info->isIndirect);
+        $this->assertSame('folder', $info->indirectMode);
+        $this->assertSame('/mnt/user/nonexistent_share', $info->composeSource);
+        $this->assertNull($info->composeFilePath);
         $this->assertFileExists("$stackDir/indirect");
         $this->assertSame('/mnt/user/nonexistent_share', $info->invalidIndirectPath);
     }
@@ -155,10 +171,29 @@ class StackInfoTest extends TestCase
         // Should NOT throw — constructs in degraded mode
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
-        $this->assertFalse($info->isIndirect);
+        $this->assertTrue($info->isIndirect);
+        $this->assertSame('folder', $info->indirectMode);
         $this->assertNull($info->composeFilePath);
         $this->assertSame('/mnt/user/gone', $info->invalidIndirectPath);
         $this->assertInstanceOf(\OverrideInfo::class, $info->overrideInfo);
+    }
+
+    public function testMissingIndirectFilePreservedInFileMode(): void
+    {
+        $stack = 'missing-file-indirect';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        $missingFile = $this->tempRoot . '/external/missing.compose.yaml';
+        mkdir($stackDir);
+        file_put_contents("$stackDir/indirect", $missingFile);
+        file_put_contents("$stackDir/indirect_mode", 'file');
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertTrue($info->isIndirect);
+        $this->assertSame('file', $info->indirectMode);
+        $this->assertSame(dirname($missingFile), $info->composeSource);
+        $this->assertNull($info->composeFilePath);
+        $this->assertSame($missingFile, $info->invalidIndirectPath);
     }
 
     public function testValidIndirectHasNoInvalidPath(): void
@@ -263,6 +298,19 @@ class StackInfoTest extends TestCase
     {
         $folders = \StackInfo::listProjectFolders('/nonexistent/path/that/does/not/exist');
         $this->assertSame([], $folders);
+    }
+
+    public function testListProjectFoldersHonorsSavedStackOrder(): void
+    {
+        mkdir($this->tempRoot . '/stack-a');
+        mkdir($this->tempRoot . '/stack-b');
+        mkdir($this->tempRoot . '/stack-c');
+
+        $this->assertTrue(saveComposeStackOrder($this->tempRoot, ['stack-c', 'stack-a', 'stack-b']));
+
+        $folders = \StackInfo::listProjectFolders($this->tempRoot);
+
+        $this->assertSame(['stack-c', 'stack-a', 'stack-b'], $folders);
     }
 
     // =========================================== 
@@ -382,6 +430,36 @@ class StackInfoTest extends TestCase
         $this->assertSame("$stackDir/compose.override.yaml", $info->getOverridePath());
     }
 
+    public function testPreferredOverridePathUsesIndirectFolder(): void
+    {
+        $stack = 'preferred-folder';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        $indirectDir = $this->tempRoot . '/indirect-folder-target';
+        mkdir($stackDir);
+        mkdir($indirectDir);
+        file_put_contents($stackDir . '/indirect', $indirectDir);
+        file_put_contents($indirectDir . '/compose.yaml', "services:\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame($indirectDir . '/compose.override.yaml', $info->getPreferredOverridePath());
+    }
+
+    public function testPreferredOverridePathUsesIndirectFile(): void
+    {
+        $stack = 'preferred-file';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        $indirectFile = $this->tempRoot . '/indirect-file-target/custom.compose.yaml';
+        mkdir($stackDir);
+        mkdir(dirname($indirectFile), 0755, true);
+        file_put_contents($stackDir . '/indirect', $indirectFile);
+        file_put_contents($indirectFile, "services:\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame(dirname($indirectFile) . '/custom.compose.override.yaml', $info->getPreferredOverridePath());
+    }
+
     // ===========================================
     // Lazy Metadata Getter Tests
     // ===========================================
@@ -453,6 +531,51 @@ class StackInfoTest extends TestCase
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
 
         $this->assertNull($info->getEnvFilePath());
+    }
+
+    public function testGetEffectiveEnvFilePathFallsBackWhenEnvpathEmpty(): void
+    {
+        $stack = 'empty-envpath-fallback';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/.env", "KEY=value\n");
+        file_put_contents("$stackDir/envpath", "   \n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame("$stackDir/.env", $info->getEffectiveEnvFilePath());
+    }
+
+    public function testGetEffectiveEnvFilePathFallsBackWhenEnvpathInvalid(): void
+    {
+        $stack = 'invalid-envpath-fallback';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n");
+        file_put_contents("$stackDir/.env", "KEY=value\n");
+        file_put_contents("$stackDir/envpath", "/path/that/does/not/exist/.env\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+
+        $this->assertSame("$stackDir/.env", $info->getEffectiveEnvFilePath());
+    }
+
+    public function testBuildComposeArgsUsesLocalEnvWhenEnvpathInvalid(): void
+    {
+        $stack = 'invalid-envpath-build-args';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        file_put_contents("$stackDir/.env", "KEY=value\n");
+        file_put_contents("$stackDir/envpath", "/path/that/does/not/exist/.env\n");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+        $args = $info->buildComposeArgs();
+
+        $this->assertStringContainsString('--env-file', $args['envFile']);
+        $this->assertStringContainsString($stackDir . '/.env', $args['envFile']);
+        $this->assertSame($stackDir . '/.env', $args['envFilePath']);
     }
 
     public function testGetIconUrlValid(): void
@@ -785,6 +908,55 @@ class StackInfoTest extends TestCase
         $this->assertStringContainsString('--env-file', $args['envFile']);
     }
 
+    public function testBuildComposeArgsWithComposeFileInEnv(): void
+    {
+        $stack = 'env-compose-file';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        file_put_contents("$stackDir/compose.debug.yaml", "services:\n  web:\n    image: nginx:alpine\n");
+        $envPath = $stackDir . '/.env';
+        file_put_contents($envPath, "COMPOSE_FILE=compose.debug.yaml");
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+        $args = $info->buildComposeArgs();
+
+        $this->assertSame(3, count($args['filePaths']));
+        $this->assertStringContainsString('compose.debug.yaml', $args['files']);
+        $this->assertContains($stackDir . '/compose.debug.yaml', $args['filePaths']);
+    }
+
+    public function testBuildComposeArgsWithQuotedComposeFileInEnv(): void
+    {
+        $stack = 'env-compose-file-quoted';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        file_put_contents("$stackDir/compose.debug.yaml", "services:\n  web:\n    image: nginx:alpine\n");
+        file_put_contents("$stackDir/compose.extra.yaml", "services:\n  web:\n    image: nginx:alpine\n");
+        $envPath = $stackDir . '/.env';
+        file_put_contents($envPath, 'COMPOSE_FILE="compose.debug.yaml":compose.extra.yaml');
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+        $args = $info->buildComposeArgs();
+
+        $this->assertSame(4, count($args['filePaths']));
+        $this->assertStringContainsString('compose.debug.yaml', $args['files']);
+        $this->assertStringContainsString('compose.extra.yaml', $args['files']);
+        $this->assertContains($stackDir . '/compose.debug.yaml', $args['filePaths']);
+        $this->assertContains($stackDir . '/compose.extra.yaml', $args['filePaths']);
+        $this->assertContains($stackDir . '/compose.override.yaml', $args['filePaths']);
+        $this->assertSame(
+            implode(PATH_SEPARATOR, [
+                $stackDir . '/compose.yaml',
+                $stackDir . '/compose.override.yaml',
+                $stackDir . '/compose.debug.yaml',
+                $stackDir . '/compose.extra.yaml',
+            ]),
+            $args['fileList']
+        );
+    }
+
     public function testBuildComposeArgsWithOverride(): void
     {
         $stack = 'override-args';
@@ -796,9 +968,50 @@ class StackInfoTest extends TestCase
         $info = \StackInfo::fromProject($this->tempRoot, $stack);
         $args = $info->buildComposeArgs();
 
-        // Should have two -f flags
-        $this->assertSame(2, substr_count($args['files'], '-f'));
+        // Should use two compose files: main + override
+        $this->assertSame(2, count($args['filePaths']));
         $this->assertStringContainsString('compose.override.yaml', $args['files']);
+    }
+
+    public function testBuildComposeArgsDefaultDiscoveryOmitsExplicitEnvWhenItMatchesLocalEnv(): void
+    {
+        $stack = 'default-discovery-local-env';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        mkdir($stackDir);
+        file_put_contents("$stackDir/compose.yaml", "services:\n  web:\n    image: nginx\n");
+        file_put_contents("$stackDir/.env", "KEY=value\n");
+        file_put_contents("$stackDir/envpath", $stackDir . '/./.env');
+        file_put_contents("$stackDir/use_default_compose_files", 'true');
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+        $args = $info->buildComposeArgs();
+
+        $this->assertFalse($info->useDefaultComposeFileDiscovery(), 'Explicit envpath should disable default discovery.');
+        $this->assertStringContainsString('--env-file', $args['envFile']);
+        $this->assertStringContainsString($stackDir . '/.env', $args['envFile']);
+        $this->assertSame($stackDir . '/.env', $args['envFilePath']);
+    }
+
+    public function testBuildComposeArgsIndirectFileModeDisablesDefaultDiscovery(): void
+    {
+        $stack = 'indirect-file-args';
+        $stackDir = $this->tempRoot . '/' . $stack;
+        $externalDir = $this->tempRoot . '/external-file-stack';
+        $externalFile = $externalDir . '/custom.compose.yaml';
+        mkdir($stackDir);
+        mkdir($externalDir, 0755, true);
+        file_put_contents($externalFile, "services:\n  app:\n    image: redis\n");
+        file_put_contents("$stackDir/indirect", $externalFile);
+        file_put_contents("$stackDir/indirect_mode", 'file');
+        file_put_contents("$stackDir/use_default_compose_files", 'true');
+
+        $info = \StackInfo::fromProject($this->tempRoot, $stack);
+        $args = $info->buildComposeArgs();
+
+        $this->assertFalse($info->useDefaultComposeFileDiscovery());
+        $this->assertStringContainsString('-f', $args['files']);
+        $this->assertStringContainsString($externalFile, $args['files']);
+        $this->assertStringNotContainsString('--project-directory', $args['files']);
     }
 
     // ===========================================
@@ -871,6 +1084,23 @@ class StackInfoTest extends TestCase
         $this->assertSame("services:\n  web:\n    image: nginx\n", file_get_contents("$indirectDir/compose.yaml"));
     }
 
+    public function testCreateNewWithIndirectComposeFileWritesFileModeWithoutCreatingDefaultCompose(): void
+    {
+        $indirectDir = $this->tempRoot . '/file-mode';
+        $indirectFile = $indirectDir . '/custom.compose.yaml';
+        mkdir($indirectDir, 0755, true);
+        file_put_contents($indirectFile, "services:\n  web:\n    image: nginx\n");
+
+        $stack = \StackInfo::createNew($this->tempRoot, 'Indirect File Stack', '', $indirectFile);
+
+        $this->assertTrue($stack->isIndirect);
+        $this->assertSame('file', $stack->indirectMode);
+        $this->assertSame(dirname($indirectFile), $stack->composeSource);
+        $this->assertSame($indirectFile, $stack->composeFilePath);
+        $this->assertSame('file', trim(file_get_contents($stack->path . '/indirect_mode')));
+        $this->assertFileDoesNotExist($indirectDir . '/compose.yaml');
+    }
+
     public function testCreateNewHandlesFolderCollision(): void
     {
         // Pre-create the folder that sanitizeProjectString would produce
@@ -891,10 +1121,10 @@ class StackInfoTest extends TestCase
         $stack = \StackInfo::createNew($this->tempRoot, 'Override Init');
 
         $this->assertInstanceOf(\OverrideInfo::class, $stack->overrideInfo);
-        // Override file should be created for non-indirect stacks
+        // Override file should not be created until explicitly requested
         $overridePath = $stack->getOverridePath();
         $this->assertNotNull($overridePath);
-        $this->assertFileExists($overridePath);
+        $this->assertFileDoesNotExist($overridePath);
     }
 
     public function testCreateNewIsCached(): void

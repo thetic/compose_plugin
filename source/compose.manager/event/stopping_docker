@@ -26,50 +26,38 @@ log() {
 stop_stack() {
     local dir="$1"
     local stack_name="$2"
-    local sanitized_name="$3"
     local start_time=$(date +%s)
     
     log "Stopping stack: $stack_name"
     
-    # Build command arguments
-    local -a file_args=()
-    if [ -f "$dir/indirect" ]; then
-        local indirect
-        indirect=$(< "$dir/indirect")
-        local compose_file
-        if ! compose_file=$(find_compose_file "$indirect"); then
-            compose_file="$indirect/compose.yaml"
-        fi
-        file_args=("-f" "$compose_file")
-    else
-        local compose_file
-        if ! compose_file=$(find_compose_file "$dir"); then
-            compose_file="$dir/compose.yaml"
-        fi
-        file_args=("-f" "$compose_file")
-    fi
-    
-    local -a override_args=()
+    local project
+    project=$(basename "$dir")
+    local project_name
 
-    
-    local compose_override_file
-    if ! compose_override_file=$(find_compose_override_file "$dir"); then
-        compose_override_file="$dir/compose.override.yaml"
-    fi
-    override_args=(-f "$compose_override_file")
-    
+    # Build args from centralized provider.
+    local -a file_args=()
     local -a env_args=()
-    if [ -f "$dir/envpath" ]; then
-        local envpath
-        envpath=$(< "$dir/envpath")
-        if [ -f "$envpath" ]; then
-            env_args=("--env-file" "$envpath")
-        fi
+    if ! load_compose_action_spec "$COMPOSE_ROOT" "$project" down "$dir"; then
+        local reason="${COMPOSE_SPEC_ERROR_MESSAGE:-compose args provider failed}"
+        log "ERROR: Failed to resolve compose args for stack '$stack_name': $reason; skipping shutdown stop"
+        return 1
+    fi
+
+    project_name="$COMPOSE_SPEC_PROJECT_NAME"
+    if [ "$COMPOSE_SPEC_USE_DEFAULT_FILE_DISCOVERY" = "true" ] && [ -n "$COMPOSE_SPEC_PROJECT_DIR" ]; then
+        file_args=("--project-directory" "$COMPOSE_SPEC_PROJECT_DIR")
+    else
+        for compose_file in "${COMPOSE_SPEC_COMPOSE_FILES[@]}"; do
+            file_args+=("-f" "$compose_file")
+        done
+    fi
+    if [ -n "$COMPOSE_SPEC_ENV_FILE_PATH" ]; then
+        env_args=("--env-file" "$COMPOSE_SPEC_ENV_FILE_PATH")
     fi
     
     # Try graceful stop first with timeout
     local exit_code
-    timeout $SHUTDOWN_TIMEOUT docker compose "${file_args[@]}" "${override_args[@]}" "${env_args[@]}" -p "$sanitized_name" stop 2>&1
+    timeout $SHUTDOWN_TIMEOUT docker compose "${file_args[@]}" "${env_args[@]}" -p "$project_name" stop 2>&1
     exit_code=$?
     
     local duration=$(($(date +%s) - start_time))
@@ -80,7 +68,7 @@ stop_stack() {
     elif [ $exit_code -eq 124 ]; then
         log "WARNING: Stack $stack_name stop timed out after ${SHUTDOWN_TIMEOUT}s, forcing..."
         # Force kill containers if graceful stop times out
-        docker compose "${file_args[@]}" "${override_args[@]}" "${env_args[@]}" -p "$sanitized_name" kill 2>&1
+        docker compose "${file_args[@]}" "${env_args[@]}" -p "$project_name" kill 2>&1
         log "Stack $stack_name force killed"
         return 124
     else
@@ -124,9 +112,8 @@ fi
 for stack_entry in "${stacks_to_stop[@]}"; do
     dir="${stack_entry%%|*}"
     stack_name="${stack_entry#*|}"
-    sanitized_name=$(sanitize "$stack_name")
-    
-    stop_stack "$dir" "$stack_name" "$sanitized_name" &
+
+    stop_stack "$dir" "$stack_name" &
 done
 
 # Wait for all stops to complete

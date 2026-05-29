@@ -2,6 +2,8 @@
 require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 
+$compose_root = $compose_root ?? locate_compose_root('compose.manager');
+
 $action = isset($_POST['action']) ? $_POST['action'] : '';
 $autofile = getAutoUpdateConfigFilePath();
 $legacyAutofile = rtrim($plugin_root ?? '', '/') . "/autoupdate.json";
@@ -109,24 +111,47 @@ switch ($action) {
             echo json_encode(array('error' => 'Compose file not found'));
             break;
         }
-        // Resolve project name - try to find the StackInfo, fall back to basename
+        // Resolve project name - always use compose-safe sanitized projectName.
         $stackInfo = StackInfo::fromComposePath($compose_root, $path);
         if ($stackInfo !== null) {
-            $projectName = $stackInfo->projectFolder;
+            $projectName = $stackInfo->projectName;
         } else {
             $projectName = basename($path);
             if (is_file("$path/name")) {
                 $projectName = trim(file_get_contents("$path/name"));
             }
-            $projectName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $projectName);
+            $projectName = StackInfo::sanitizeProjectString($projectName);
         }
 
         composeLogger("Running manual auto-update for: $projectName", null, 'user', 'info', 'autoupdate');
 
         $script = $plugin_root . "scripts/compose_autoupdate.sh";
+        if ($stackInfo !== null) {
+            $args = $stackInfo->buildComposeArgs();
+            $composeFileList = $stackInfo->buildComposeFileList();
+            $envFilePath = $args['envFilePath'] ?? null;
+            $projectDirectory = $args['projectDirectory'];
+        } else {
+            $composeFileList = $composeFile;
+            $envFilePath = null;
+            $projectDirectory = $path;
+        }
+
         // Allow overriding the shell command via environment for tests; default to sh
         $shCmd = getenv('COMPOSE_MANAGER_SH') ? getenv('COMPOSE_MANAGER_SH') : 'sh';
-        $cmd = $shCmd . ' ' . escapeshellarg($script) . " " . escapeshellarg($composeFile) . " " . escapeshellarg($projectName) . " 2>&1";
+
+        $envPrefix = '';
+        if ($composeFileList !== '') {
+            $envPrefix .= 'COMPOSE_FILE_LIST=' . escapeshellarg($composeFileList) . ' ';
+        }
+        if ($envFilePath !== null && $envFilePath !== '') {
+            $envPrefix .= 'COMPOSE_ENV_FILE=' . escapeshellarg($envFilePath) . ' ';
+        }
+        if ($composeFileList === '' && $projectDirectory !== '') {
+            $envPrefix .= 'COMPOSE_PROJECT_DIR=' . escapeshellarg($projectDirectory) . ' ';
+        }
+
+        $cmd = $envPrefix . $shCmd . ' ' . escapeshellarg($script) . " " . escapeshellarg($projectName) . " 2>&1";
         exec($cmd, $output, $rc);
         echo json_encode(array('rc' => $rc, 'output' => $output));
         break;

@@ -46,6 +46,75 @@ run_quiet() {
 
 # Note: run_quiet uses tee so log is live and stays in /tmp/build.log.
 
+download_file_quiet() {
+  local url="$1"
+  local output_path="$2"
+  local label="$3"
+
+  # Keep network transfer output out of console; preserve details in build log on failure.
+  # shellcheck disable=SC2046
+  if ! wget $(wget_args) -q -O "$output_path" "$url" >>"$LOG_FILE" 2>&1; then
+    echo "Download failed for ${label}: ${url}" | tee -a "$LOG_FILE"
+    exit 9
+  fi
+}
+
+DOWNLOAD_CACHE_DIR="${DOWNLOAD_CACHE_DIR:-}"
+if [[ -n "$DOWNLOAD_CACHE_DIR" ]]; then
+  mkdir -p "$DOWNLOAD_CACHE_DIR"
+fi
+
+sha256_file() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+download_with_sha_cache() {
+  local artifact_url="$1"
+  local checksum_url="$2"
+  local artifact_name="$3"
+  local checksum_name="${artifact_name}.sha256"
+  local expected_sha=""
+  local cache_file=""
+
+  # Always refresh checksum so cache validation tracks upstream updates.
+  echo "Fetching checksum for $artifact_name..." | tee -a "$LOG_FILE"
+  download_file_quiet "$checksum_url" "$checksum_name" "$artifact_name checksum"
+  expected_sha="$(awk 'NF {print $1; exit}' "$checksum_name")"
+  if [[ -z "$expected_sha" ]]; then
+    echo "Failed to parse SHA256 from $checksum_name" | tee -a "$LOG_FILE"
+    exit 7
+  fi
+
+  cache_file="${DOWNLOAD_CACHE_DIR%/}/${artifact_name}"
+  if [[ -n "$DOWNLOAD_CACHE_DIR" && -f "$cache_file" ]]; then
+    local cached_sha
+    cached_sha="$(sha256_file "$cache_file")"
+    if [[ "$cached_sha" == "$expected_sha" ]]; then
+      echo "Reusing cached $artifact_name (SHA256 match: $cached_sha) from $cache_file" | tee -a "$LOG_FILE"
+      run_quiet cp "$cache_file" "$artifact_name"
+    else
+      echo "Cached $artifact_name SHA mismatch (cached=$cached_sha expected=$expected_sha); re-downloading." | tee -a "$LOG_FILE"
+      run_quiet rm -f "$cache_file"
+    fi
+  fi
+
+  if [[ ! -f "$artifact_name" ]]; then
+    echo "Downloading $artifact_name..." | tee -a "$LOG_FILE"
+    download_file_quiet "$artifact_url" "$artifact_name" "$artifact_name"
+  fi
+
+  local artifact_sha
+  artifact_sha="$(sha256_file "$artifact_name")"
+  if [[ "$artifact_sha" != "$expected_sha" ]]; then
+    echo "Downloaded $artifact_name SHA mismatch; expected $expected_sha got $artifact_sha" | tee -a "$LOG_FILE"
+    exit 8
+  fi
+
+  if [[ -n "$DOWNLOAD_CACHE_DIR" ]]; then
+    run_quiet cp "$artifact_name" "$cache_file"
+  fi
+}
+
 wget_args() {
   local args=("--https-only" "--secure-protocol=TLSv1_2")
   if [[ -n "$CA_CERT" && -f "$CA_CERT" ]]; then
@@ -58,9 +127,10 @@ wget_args() {
 
 echo "Installing unzip dependency..."
 INFOZIP_PKG="infozip-6.0-x86_64-8.txz"
-run_quiet wget $(wget_args) "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}"
-run_quiet wget $(wget_args) "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}.sha256"
-run_quiet sha256sum -c "${INFOZIP_PKG}.sha256"
+download_with_sha_cache \
+  "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}" \
+  "https://mirrors.slackware.com/slackware/slackware64-current/slackware64/a/${INFOZIP_PKG}.sha256" \
+  "$INFOZIP_PKG"
 run_quiet rm -f "${INFOZIP_PKG}.sha256"
 run_quiet upgradepkg --install-new "${INFOZIP_PKG}"
 
@@ -80,9 +150,10 @@ run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/scripts/
 run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/include/"
 
 echo "Downloading Docker Compose CLI plugin v${COMPOSE_VERSION}..."
-run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64"
-run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64.sha256"
-run_quiet sha256sum -c docker-compose-linux-x86_64.sha256 | grep -q OK || exit 4
+download_with_sha_cache \
+  "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+  "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64.sha256" \
+  "docker-compose-linux-x86_64"
 run_quiet rm docker-compose-linux-x86_64.sha256
 
 echo "Installing Docker Compose CLI plugin v${COMPOSE_VERSION}..."

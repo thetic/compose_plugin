@@ -27,6 +27,19 @@ if (!function_exists('composeLogger')) {
     }
 }
 
+// Pre-define /boot and /var/lib/docker constants before Defines.php is loaded
+// so they resolve to writable temp paths on CI where /boot does not exist.
+$_bootConfigTemp = sys_get_temp_dir() . '/compose_manager_boot_config';
+if (!is_dir($_bootConfigTemp)) {
+    mkdir($_bootConfigTemp, 0755, true);
+}
+define('COMPOSE_UPDATE_STATUS_FILE', $_bootConfigTemp . '/update-status.json');
+define('COMPOSE_STACK_ORDER_FILE',   $_bootConfigTemp . '/stack-order.json');
+define('UNRAID_UPDATE_STATUS_FILE',  sys_get_temp_dir() . '/unraid-update-status.json');
+define('PENDING_RECHECK_FILE',       $_bootConfigTemp . '/pending-recheck.json');
+define('COMPOSE_TTYD_SOCKET_DIR',    sys_get_temp_dir());
+unset($_bootConfigTemp);
+
 // Load the plugin-tests framework
 require_once __DIR__ . '/framework/src/php/bootstrap.php';
 

@@ -162,7 +162,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     // Main row - Docker tab structure with expand arrow on left
     $o .= "<tr class='compose-sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson' data-webui='$webuiUrlHtml' data-containers='$containerNamesAttr' data-ctids='$containerIdsAttr' data-hasbuild='$hasBuild' data-invalid-indirect='" . ($hasInvalidIndirect ? '1' : '0') . "' data-invalid-indirect-path='$invalidIndirectPathHtml'>";
 
-// Arrow column
+    // Arrow column
     $o .= "<td class='col-arrow'>";
     $o .= "<i class='fa fa-chevron-right expand-icon' id='expand-icon-$id' onclick='toggleStackDetails(\"$id\");event.stopPropagation();' style='cursor:pointer;'></i>";
     $o .= "<i class='fa fa-arrows-v mover orange-text' aria-hidden='true' style='display:none;cursor:move;'></i>";
@@ -173,7 +173,7 @@ foreach (StackInfo::allFromRoot($compose_root) as $stackInfo) {
     $o .= "<td class='col-icon'>";
     $o .= "<span class='outer $outerClass'>";
     $o .= "<span id='stack-$id' class='hand' data-stackid='$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-isup='$isup' data-running='" . ($isrunning ? '1' : '0') . "'>";
-    $o .= "<img src='$imgSrc' class='img' onerror=\"this.src='/plugins/dynamix.docker.manager/images/question.png';\">"; 
+    $o .= "<img src='$imgSrc' class='img' onerror=\"this.src='/plugins/dynamix.docker.manager/images/question.png';\">";
     $o .= "</span>";
     $o .= "</span>";
     $o .= "</td>";

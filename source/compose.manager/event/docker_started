@@ -16,11 +16,75 @@ STARTUP_TIMEOUT=${AUTOSTART_TIMEOUT:-300}
 WAIT_FOR_DOCKER=${AUTOSTART_WAIT_FOR_DOCKER:-false}
 DOCKER_WAIT_TIMEOUT=${AUTOSTART_DOCKER_WAIT_TIMEOUT:-120}
 
+# Ensure Docker daemon is reachable before running compose commands.
+wait_for_docker_daemon() {
+    local waited=0
+    local check_interval=3
+
+    while [ $waited -lt $DOCKER_WAIT_TIMEOUT ]; do
+        if docker info >/dev/null 2>&1; then
+            log "Docker daemon is ready after ${waited}s"
+            return 0
+        fi
+
+        if [ $waited -eq 0 ]; then
+            log "Waiting for Docker daemon to become ready..."
+        fi
+
+        sleep $check_interval
+        waited=$((waited + check_interval))
+    done
+
+    log "ERROR: Docker daemon was not ready after ${DOCKER_WAIT_TIMEOUT}s"
+    return 1
+}
+
 # Logging helper — writes to log file and delegates to shared composeLogger for syslog
 log() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
     echo "$msg" >> "$LOG_FILE"
     composeLogger "$1" info autostart
+}
+
+# Load the saved UI stack order for the current compose root.
+# Prints "project<TAB>position" lines when a saved order exists.
+load_saved_stack_order() {
+    local compose_root="$1"
+    local php_cmd="${COMPOSE_MANAGER_PHP:-php}"
+
+    "$php_cmd" -r '
+$composeRoot = $argv[1] ?? "";
+$orderFile = "/boot/config/plugins/compose.manager/stack-order.json";
+if ($composeRoot === "" || !is_file($orderFile)) {
+    exit(0);
+}
+
+$normalized = realpath($composeRoot);
+if ($normalized === false || $normalized === null) {
+    $normalized = rtrim($composeRoot, "/");
+}
+
+$json = @file_get_contents($orderFile);
+if ($json === false || $json === "") {
+    exit(0);
+}
+
+$map = json_decode($json, true);
+if (!is_array($map)) {
+    exit(0);
+}
+
+$order = $map[$normalized] ?? [];
+if (!is_array($order)) {
+    exit(0);
+}
+
+foreach (array_values($order) as $index => $project) {
+    if (is_string($project) && $project !== "") {
+        echo $project, "\t", $index, "\n";
+    }
+}
+' "$compose_root"
 }
 
 
@@ -70,52 +134,36 @@ wait_for_docker_autostart() {
 start_stack() {
     local dir="$1"
     local stack_name="$2"
-    local sanitized_name="$3"
     local start_time=$(date +%s)
     
     log "Starting stack: $stack_name"
     
-    # Build command as an array to avoid shell injection via string interpolation
+    local project
+    project=$(basename "$dir")
+
+    # Build command as an array from centralized PHP compose args provider.
     local -a cmd_args=("$COMPOSE_WRAPPER" -c up)
+    if ! load_compose_action_spec "$COMPOSE_ROOT" "$project" up "$dir"; then
+        local reason="${COMPOSE_SPEC_ERROR_MESSAGE:-compose args provider failed}"
+        log "ERROR: Failed to resolve compose args for stack '$stack_name': $reason; skipping startup"
+        return 1
+    fi
 
-    if [ -f "$dir/indirect" ]; then
-        local indirect
-        indirect=$(< "$dir/indirect")
-        cmd_args+=(-d "$indirect")
+    cmd_args+=(-p "$COMPOSE_SPEC_PROJECT_NAME")
+    if [ "$COMPOSE_SPEC_USE_DEFAULT_FILE_DISCOVERY" = "true" ] && [ -n "$COMPOSE_SPEC_PROJECT_DIR" ]; then
+        cmd_args+=(-w "$COMPOSE_SPEC_PROJECT_DIR")
     else
-        local compose_file
-        if ! compose_file=$(find_compose_file "$dir"); then
-            compose_file="$dir/compose.yaml"
-        fi
-        cmd_args+=(-f "$compose_file")
-    fi
-
-    cmd_args+=(-p "$sanitized_name" -s "$dir")
-
-    local compose_override_file
-    if ! compose_override_file=$(find_compose_override_file "$dir"); then
-        compose_override_file="$dir/compose.override.yaml"
-    fi
-    cmd_args+=(-f "$compose_override_file")
-
-    if [ -f "$dir/envpath" ]; then
-        local env_file
-        env_file=$(< "$dir/envpath")
-        cmd_args+=(-e "$env_file")
-    fi
-
-    # Read default profile(s) for autostart
-    if [ -f "$dir/default_profile" ]; then
-        local default_profiles
-        default_profiles=$(< "$dir/default_profile")
-        IFS=',' read -ra PROFILE_ARRAY <<< "$default_profiles"
-        for p in "${PROFILE_ARRAY[@]}"; do
-            p=$(echo "$p" | xargs)  # trim whitespace
-            if [ -n "$p" ]; then
-                cmd_args+=(-g "$p")
-            fi
+        for compose_file in "${COMPOSE_SPEC_COMPOSE_FILES[@]}"; do
+            cmd_args+=(-f "$compose_file")
         done
     fi
+    if [ -n "$COMPOSE_SPEC_ENV_FILE_PATH" ]; then
+        cmd_args+=(-e "$COMPOSE_SPEC_ENV_FILE_PATH")
+    fi
+    for profile in "${COMPOSE_SPEC_PROFILES[@]}"; do
+        cmd_args+=(-g "$profile")
+    done
+    cmd_args+=(-s "$COMPOSE_SPEC_STACK_PATH")
 
     if [ "$AUTOSTART_FORCE_RECREATE" = "true" ]; then
         cmd_args+=(--recreate)
@@ -152,14 +200,31 @@ start_stack() {
 # Main execution
 log "=== Compose Manager Autostart Begin ==="
 
+if [ -z "$COMPOSE_ROOT" ] || [ ! -d "$COMPOSE_ROOT" ]; then
+    log "ERROR: Invalid compose root path: '$COMPOSE_ROOT'"
+    exit 1
+fi
+
+# Always wait for Docker daemon readiness to avoid early-boot startup races.
+if ! wait_for_docker_daemon; then
+    log "=== Compose Manager Autostart Aborted (docker unavailable) ==="
+    exit 1
+fi
+
 # Optionally wait for Docker autostart containers to complete
 if [ "$WAIT_FOR_DOCKER" = "true" ]; then
     wait_for_docker_autostart
 fi
 
-# Collect stacks with autostart enabled, sorted by priority
+# Collect stacks with autostart enabled, sorted by saved UI order.
 declare -a stacks_to_start
-declare -A stack_priorities
+declare -A stack_order_positions
+
+while IFS=$'\t' read -r project_name position; do
+    if [ -n "$project_name" ] && [ -n "$position" ]; then
+        stack_order_positions["$project_name"]=$position
+    fi
+done < <(load_saved_stack_order "$COMPOSE_ROOT")
 
 for dir in "$COMPOSE_ROOT"/*; do
     if [ -d "$dir" ]; then
@@ -173,29 +238,20 @@ for dir in "$COMPOSE_ROOT"/*; do
                     local_name=$(basename "$dir")
                 fi
                 
-                # Get priority (default 50, lower = start earlier)
-                # This can be set via startup_priority file or UI ordering later
-                local priority=50
-                if [ -f "$dir/startup_priority" ]; then
-                    priority=$(< "$dir/startup_priority")
-                    # Validate it's a number
-                    if ! [[ "$priority" =~ ^[0-9]+$ ]]; then
-                        priority=50
-                    fi
-                fi
-                
                 stacks_to_start+=("$dir|$local_name")
-                stack_priorities["$dir"]=$priority
+                stack_priorities["$dir"]=0
             fi
         fi
     fi
 done
 
-# Sort stacks by priority (lower number = start first)
+# Sort stacks by saved UI order.
 IFS=$'\n' sorted_stacks=($(for stack in "${stacks_to_start[@]}"; do
     dir="${stack%%|*}"
-    echo "${stack_priorities[$dir]}|$stack"
-done | sort -t'|' -k1 -n | cut -d'|' -f2-))
+    project="$(basename "$dir")"
+    order_position="${stack_order_positions[$project]:-999999}"
+    printf '%s\t%s\n' "$order_position" "$stack"
+done | sort -t$'\t' -k1,1n -k2,2f | cut -f2-))
 unset IFS
 
 total_stacks=${#sorted_stacks[@]}
@@ -215,13 +271,12 @@ current=0
 for stack_entry in "${sorted_stacks[@]}"; do
     dir="${stack_entry%%|*}"
     stack_name="${stack_entry#*|}"
-    sanitized_name=$(sanitize "$stack_name")
     current=$((current + 1))
     
     log "[$current/$total_stacks] Processing: $stack_name"
     
     # Start stack and wait for it to complete before moving to next
-    start_stack "$dir" "$stack_name" "$sanitized_name"
+    start_stack "$dir" "$stack_name"
     exit_code=$?
     
     case $exit_code in

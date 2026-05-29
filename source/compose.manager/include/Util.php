@@ -1,5 +1,6 @@
 <?php
 
+require_once(__DIR__ . '/ProjectNameSanitizer.php');
 require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 
@@ -219,22 +220,7 @@ function isAllowedAutoUpdatePath($path): bool
         return false;
     }
 
-    $realComposeRoot = realpath($compose_root);
-    if ($realComposeRoot !== false) {
-        $realComposeRoot = rtrim($realComposeRoot, DIRECTORY_SEPARATOR);
-        if ($realPath === $realComposeRoot || strpos($realPath, $realComposeRoot . DIRECTORY_SEPARATOR) === 0) {
-            return true;
-        }
-    }
-
-    if ($realPath === '/mnt' || strpos($realPath, '/mnt/') === 0) {
-        return true;
-    }
-    if ($realPath === '/boot/config' || strpos($realPath, '/boot/config/') === 0) {
-        return true;
-    }
-
-    return false;
+    return Path::isAllowedPath($realPath, [$compose_root, '/mnt', '/boot/config']);
 }
 
 /**
@@ -242,6 +228,58 @@ function isAllowedAutoUpdatePath($path): bool
  */
 class Path
 {
+    private static function normalizePath(string $path): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+
+        $realPath = realpath($path);
+        if ($realPath !== false) {
+            $path = $realPath;
+        }
+
+        if ($path !== DIRECTORY_SEPARATOR) {
+            $path = rtrim($path, '/\\');
+        }
+
+        return $path === '' ? DIRECTORY_SEPARATOR : $path;
+    }
+
+    public static function refersToSamePath(string $left, string $right): bool
+    {
+        $normalizedLeft = self::normalizePath($left);
+        $normalizedRight = self::normalizePath($right);
+
+        return $normalizedLeft !== '' && $normalizedLeft === $normalizedRight;
+    }
+
+    public static function isAllowedPath(string $path, array $allowedRoots): bool
+    {
+        $normalizedPath = self::normalizePath($path);
+        if ($normalizedPath === '') {
+            return false;
+        }
+
+        foreach ($allowedRoots as $allowedRoot) {
+            if (!is_string($allowedRoot)) {
+                continue;
+            }
+
+            $normalizedRoot = self::normalizePath($allowedRoot);
+            if ($normalizedRoot === '') {
+                continue;
+            }
+
+            if ($normalizedPath === $normalizedRoot || str_starts_with($normalizedPath, $normalizedRoot . DIRECTORY_SEPARATOR)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static function hasNewline(string $path): bool
     {
         return strpos($path, "\n") !== false;
@@ -260,6 +298,27 @@ class Path
     public static function hasTraversal(string $path): bool
     {
         return strpos($path, '/..') !== false || strpos($path, '../') !== false;
+    }
+
+    public static function isAbsolutePath(string $path): bool
+    {
+        return preg_match('#^([A-Za-z]:|/|\\\\)#', $path) === 1;
+    }
+}
+
+/**
+ * Generic shared string helper utilities.
+ */
+class Strings
+{
+    public static function stripQuotes(string $value): string
+    {
+        if ((str_starts_with($value, '"') && str_ends_with($value, '"')) ||
+            (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
+            return substr($value, 1, -1);
+        }
+
+        return $value;
     }
 }
 
@@ -302,7 +361,8 @@ const NON_WEBUI_PORTS = [
     22,    // SSH
     25,    // SMTP
     53,    // DNS
-    67, 68, // DHCP
+    67,    // DHCP
+    68,    // DHCP
     69,    // TFTP
     123,   // NTP
     143,   // IMAP
@@ -563,7 +623,6 @@ function pruneOverrideContentServices(string $overrideContent, array $validServi
  * @property bool $mismatchIndirectLegacy Whether there is a legacy-named indirect override that doesn't match the computed name
  * @property string|null $composeFilePath The resolved path to the main compose file for the stack
  * @method static OverrideInfo fromStackInfo(StackInfo $stackInfo) Create an OverrideInfo from a StackInfo instance (preferred)
- * @method static OverrideInfo fromStack(string $composeRoot, string $stack) Create an OverrideInfo by resolving paths from scratch (deprecated)
  * @method string|null getOverridePath() Get the path to the override file that should be used (indirect if present, else project)
  * @method array{changed: bool, removed: string[]} pruneOrphanServices(array $validServices) Prune orphaned services from the override file based on a list of valid service names
  * @method array{migrated: bool, migrations: array<array{oldName: string, newName: string}>} migrateRenamedServices(string $oldComposeContent, string $newComposeContent) Migrate override entries when services are renamed by comparing old and new compose content
@@ -615,51 +674,78 @@ class OverrideInfo
     }
 
     /**
-     * Create an OverrideInfo by resolving paths from scratch.
+     * Build the override filename that corresponds to a compose file path.
      *
-     * @deprecated Use StackInfo::fromProject() which provides OverrideInfo automatically
-     *             via fromStackInfo(), avoiding duplicate filesystem resolution.
-     *
-     * @param string $composeRoot
-     * @param string $stack
-     * @return OverrideInfo
+     * @param string $composePath Compose file path or name
+     * @return string
      */
-    public static function fromStack(string $composeRoot, string $stack): self
+    public static function buildComputedNameForPath(string $composePath): string
     {
-        $projectPath = rtrim($composeRoot, '/') . '/' . $stack;
-        $indirectPath = is_file("$projectPath/indirect")
-            ? trim(file_get_contents("$projectPath/indirect"))
-            : null;
-        if ($indirectPath === '') {
-            $indirectPath = null;
+        $baseName = basename($composePath);
+        $computedName = preg_replace('/(\.[^.]+)$/', '.override$1', $baseName);
+
+        if (!is_string($computedName) || $computedName === '') {
+            return $baseName . '.override';
         }
 
-        $composeSource = $indirectPath ?? $projectPath;
-        $foundCompose = findComposeFile($composeSource);
-        $composeFilePath = $foundCompose !== false ? $foundCompose : null;
-
-        return self::resolveOverride($projectPath, $indirectPath, $composeFilePath);
+        return $computedName;
     }
 
-     /**
-      * Core override resolution logic shared by both factories.
-      *
-      * Computes the override filename from the compose file, resolves project
-      * and indirect override paths while preserving legacy filenames as-is,
-      * and auto-creates a project override template if needed.
-      *
-      * @param string      $projectPath     Full path to the stack directory
-      * @param string|null $indirectPath     Indirect target directory, or null if not indirect
-      * @param string|null $composeFilePath  Resolved main compose file path, or null if none
-      * @return OverrideInfo
-      */
+    /**
+     * Default template content for newly created override files.
+     *
+     * @return string
+     */
+    public static function buildTemplateContent(): string
+    {
+        return "# Override file for UI labels (icon, webui, shell)\n"
+            . "# This file is managed by Compose Manager\n"
+            . "#\n"
+            . "# Manual example:\n"
+            . "# services:\n"
+            . "#   my-service:\n"
+            . "#     labels:\n"
+            . "#       net.unraid.docker.icon: https://icon-url\n"
+            . "#       net.unraid.docker.webui: https://service-url\n"
+            . "#       net.unraid.docker.shell: /bin/bash\n"
+            . "services: {}\n";
+    }
+
+    /**
+     * Default template content for newly created .env files.
+     *
+     * @return string
+     */
+    public static function buildEnvTemplateContent(): string
+    {
+        return "# .env file - define environment variables used by docker compose\n"
+            . "# Variables defined here are automatically available in compose.yaml via \${VAR_NAME}\n"
+            . "#\n"
+            . "# Example:\n"
+            . "# IMAGE_TAG=latest\n"
+            . "# DATA_DIR=/mnt/user/appdata/myapp\n"
+            . "# PORT=8080\n";
+    }
+
+    /**
+     * Core override resolution logic shared by both factories.
+     *
+     * Computes the override filename from the compose file, resolves project
+     * and indirect override paths while preserving legacy filenames as-is,
+     * and auto-creates a project override template if needed.
+     *
+     * @param string      $projectPath     Full path to the stack directory
+     * @param string|null $indirectPath     Indirect target directory, or null if not indirect
+     * @param string|null $composeFilePath  Resolved main compose file path, or null if none
+     * @return OverrideInfo
+     */
     private static function resolveOverride(string $projectPath, ?string $indirectPath, ?string $composeFilePath): self
     {
         $info = new self();
         $info->composeFilePath = $composeFilePath;
 
-        $composeBaseName = $composeFilePath !== null ? basename($composeFilePath) : COMPOSE_FILE_NAMES[0];
-        $info->computedName = preg_replace('/(\.[^.]+)$/', '.override$1', $composeBaseName);
+        $composeBaseName = $composeFilePath !== null ? $composeFilePath : COMPOSE_FILE_NAMES[0];
+        $info->computedName = self::buildComputedNameForPath($composeBaseName);
 
         $computedProjectOverride = $projectPath . '/' . $info->computedName;
         $computedIndirectOverride = $indirectPath !== null ? ($indirectPath . '/' . $info->computedName) : null;
@@ -686,14 +772,6 @@ class OverrideInfo
         $info->useIndirect = ($info->indirectOverride && is_file($info->indirectOverride));
         $info->mismatchIndirectLegacy = false;
 
-        if (!is_file($info->projectOverride) && !$info->useIndirect) {
-            $overrideContent = "# Override file for UI labels (icon, webui, shell)\n";
-            $overrideContent .= "# This file is managed by Compose Manager\n";
-            $overrideContent .= "services: {}\n";
-            file_put_contents($info->projectOverride, $overrideContent);
-            composeLogger("Created missing project override template at $info->projectOverride", null, 'user', 'info', 'override');
-        }
-
         return $info;
     }
 
@@ -704,6 +782,16 @@ class OverrideInfo
     public function getOverridePath(): ?string
     {
         return $this->useIndirect ? $this->indirectOverride : $this->projectOverride;
+    }
+
+    /**
+     * Get the project-only override path (for writing only, never indirect)
+     * Always returns the project directory override, never the indirect path.
+     * @return string|null
+     */
+    public function getProjectOverridePath(): ?string
+    {
+        return $this->projectOverride;
     }
 
     /**
@@ -718,7 +806,8 @@ class OverrideInfo
      */
     public function pruneOrphanServices(array $validServices): array
     {
-        $overridePath = $this->getOverridePath();
+        // Background auto-process: only ever modify app-managed project override, never external/indirect files
+        $overridePath = $this->getProjectOverridePath();
         if ($overridePath === null || $overridePath === '' || !is_file($overridePath)) {
             return ['changed' => false, 'removed' => []];
         }
@@ -767,7 +856,8 @@ class OverrideInfo
     {
         $result = ['migrated' => false, 'migrations' => []];
 
-        $overridePath = $this->getOverridePath();
+        // Background auto-process: only ever modify app-managed project override, never external/indirect files
+        $overridePath = $this->getProjectOverridePath();
         if ($overridePath === null || !is_file($overridePath)) {
             return $result;
         }
@@ -1209,6 +1299,7 @@ class ContainerInfo
  * @property string $displayName Display name (from ./name)
  * @property string $path Full path to the stack directory ($composeRoot/$project)
  * @property string|null $indirectPath Indirect path or null if not indirect
+ * @property string|null $indirectMode Indirect mode ('folder' or 'file')
  * @property string $composeSource Resolved compose source directory, direct or indirect
  * @property string|null $composeFilePath Full path to the main compose file, direct or indirect
  * @property bool $isIndirect Whether this stack uses an indirect compose path
@@ -1246,6 +1337,8 @@ class StackInfo
     public bool $isIndirect;
     /** @var string|null Path from a renamed indirect.invalid file, if present (needs user fix) */
     public ?string $invalidIndirectPath;
+    /** @var string|null Indirect mode ('folder' or 'file') */
+    public ?string $indirectMode;
     /** @var OverrideInfo Resolved override info (eager) */
     public OverrideInfo $overrideInfo;
 
@@ -1303,15 +1396,30 @@ class StackInfo
         // Resolve indirect path and compose source (indirect if present, else direct)
         $this->isIndirect = $this->isIndirect();
         $this->indirectPath = $this->readMetadata('indirect');
+        $this->indirectMode = $this->resolveIndirectMode();
         $this->invalidIndirectPath = $this->readInvalidIndirect();
-        if ($this->invalidIndirectPath === null && !$this->isIndirect && $this->indirectPath !== null && $this->indirectPath !== '') {
-            // Invalid indirect path still present in ./indirect (non-destructive handling).
+        if ($this->isIndirect && $this->indirectPath !== null && $this->indirectPath !== '') {
+            if ($this->indirectMode === 'file') {
+                $this->composeSource = dirname($this->indirectPath);
+                $this->composeFilePath = is_file($this->indirectPath) ? $this->indirectPath : null;
+            } elseif (is_file($this->indirectPath)) {
+                $this->composeFilePath = $this->indirectPath;
+                $this->composeSource = dirname($this->indirectPath);
+            } else {
+                $this->composeSource = $this->indirectPath;
+                $this->composeFilePath = self::getComposeFilePath($this->composeSource);
+            }
+        } else {
+            $this->composeSource = $this->path;
+            $this->composeFilePath = self::getComposeFilePath($this->composeSource);
+        }
+
+        if ($this->invalidIndirectPath === null && $this->indirectPath !== null && $this->indirectPath !== '' && $this->composeFilePath === null && $this->isIndirect) {
+            // Preserve the broken indirect target for repair flows.
             $this->invalidIndirectPath = $this->indirectPath;
         }
-        $this->composeSource = $this->isIndirect ? $this->indirectPath : $this->path;
 
         // Resolve compose file
-        $this->composeFilePath = self::getComposeFilePath($this->composeSource);
         if ($this->composeFilePath === null) {
             if ($this->invalidIndirectPath !== null) {
                 // Stack has a broken indirect reference — allow degraded construction
@@ -1372,6 +1480,10 @@ class StackInfo
      */
     private static function getComposeFilePath($path): string|null
     {
+        if (is_string($path) && is_file($path)) {
+            return preg_match('/\.ya?ml$/i', basename($path)) === 1 ? $path : null;
+        }
+
         $composeFilePath = null;
         foreach (COMPOSE_FILE_NAMES as $name) {
             if (is_file("$path/$name")) {
@@ -1404,12 +1516,6 @@ class StackInfo
                 composeLogger("Ignoring structurally invalid indirect path at $this->path/indirect: " . sanitizeLogText($indirectPath), null, 'user', 'warning', 'stack');
                 return false;
             }
-            if (!is_dir($indirectPath)) {
-                // Directory doesn't exist — may be a temporarily unmounted share (NFS, etc.).
-                // Ignore it and keep stack local without mutating files.
-                composeLogger("Ignoring unavailable indirect path (may be temporarily unavailable): " . sanitizeLogText($indirectPath), null, 'user', 'warning', 'stack');
-                return false;
-            }
             return true;
         }
         return false;
@@ -1435,6 +1541,52 @@ class StackInfo
     }
 
     /**
+     * Resolve the indirect mode for this stack.
+     *
+     * @return string|null
+     */
+    private function resolveIndirectMode(): ?string
+    {
+        $rawMode = $this->readMetadata('indirect_mode');
+        if ($rawMode !== null) {
+            $rawMode = strtolower(trim($rawMode));
+            if ($rawMode === 'file' || $rawMode === 'folder') {
+                return $rawMode;
+            }
+        }
+
+        $indirectRaw = $this->readMetadata('indirect');
+        if ($indirectRaw === null) {
+            return null;
+        }
+
+        $indirectRaw = trim($indirectRaw);
+        if ($indirectRaw === '') {
+            return null;
+        }
+
+        return self::inferIndirectMode($indirectRaw);
+    }
+
+    /**
+     * Infer indirect mode from the stored path value.
+     *
+     * @return string
+     */
+    private static function inferIndirectMode(string $indirectRaw): string
+    {
+        if (is_file($indirectRaw)) {
+            return 'file';
+        }
+
+        if (preg_match('/\.ya?ml$/i', basename($indirectRaw)) === 1) {
+            return 'file';
+        }
+
+        return 'folder';
+    }
+
+    /**
      * Canonical sanitizer for Display Name to Docker Compose project name.
      *
      * Docker Compose project names must match: [a-z0-9][a-z0-9_-]*
@@ -1444,26 +1596,11 @@ class StackInfo
      */
     public static function sanitizeProjectString(string $rawProjectString): string
     {
+        $wasEmpty = false;
+        $sanitizedProjectString = compose_manager_sanitize_project_name($rawProjectString, $wasEmpty);
 
-        // Trim and lowercase the input to start normalization.
-        $sanitizedProjectString = strtolower(trim($rawProjectString));
-
-        // Replace unsupported characters with underscore.
-        $sanitizedProjectString = preg_replace('/[^a-z0-9_-]/', '_', $sanitizedProjectString) ?? '';
-
-        // Collapse multiple underscores into one.
-        $sanitizedProjectString = preg_replace('/_+/', '_', $sanitizedProjectString);
-
-        // Collapse multiple dashes into one.
-        $sanitizedProjectString = preg_replace('/-+/', '-', $sanitizedProjectString);
-
-        // Remove leading or trailing underscores or dashes.
-        $sanitizedProjectString = trim($sanitizedProjectString, '_-');
-
-        // If the result is empty, default to 'compose' to ensure a valid project name.
-        if ($sanitizedProjectString === '') {
+        if ($wasEmpty) {
             composeLogger("Sanitized project string is empty after processing; defaulting to 'compose'", ['input' => $rawProjectString], 'user', 'warning', 'stack');
-            return 'compose';
         }
 
         return $sanitizedProjectString;
@@ -1516,6 +1653,286 @@ class StackInfo
     {
         $val = $this->readMetadata('envpath');
         return ($val !== null && $val !== '') ? $val : null;
+    }
+
+    /**
+     * Resolve the effective env file path for this stack.
+     *
+     * Resolution order:
+     * 1) `envpath` metadata (explicit stack setting) when it points to a
+     *    readable file
+     * 2) Local `.env` in compose source (direct or indirect)
+     *
+     * If `envpath` exists but is empty, it is treated as unset.
+     * If `envpath` exists but points to a missing file, it is treated as
+     * invalid and local `.env` is used as fallback when available.
+     *
+     * @return string|null
+     */
+    public function getEffectiveEnvFilePath(): ?string
+    {
+        $explicitEnvPath = $this->getExplicitEnvFilePath();
+        if ($explicitEnvPath !== null) {
+            return $explicitEnvPath;
+        }
+
+        $defaultEnvPath = $this->composeSource . '/.env';
+        return is_file($defaultEnvPath) ? $defaultEnvPath : null;
+    }
+
+    /**
+     * Resolve a valid explicit envpath configured in stack metadata.
+     *
+     * @return string|null
+     */
+    private function getExplicitEnvFilePath(): ?string
+    {
+        $rawEnvPath = $this->readMetadata('envpath');
+        if ($rawEnvPath === null) {
+            return null;
+        }
+
+        $rawEnvPath = trim($rawEnvPath);
+        if ($rawEnvPath === '') {
+            return null;
+        }
+
+        if (is_file($rawEnvPath)) {
+            return realpath($rawEnvPath) ?: $rawEnvPath;
+        }
+
+        composeLogger("Ignoring invalid envpath for stack $this->projectFolder: file not found", ['envpath' => $rawEnvPath], 'user', 'warning', 'stack');
+        return null;
+    }
+
+    /**
+     * Parse COMPOSE_FILE values from the configured env file.
+     *
+     * This is used to support projects that declare additional compose
+     * files via COMPOSE_FILE in the env file loaded with the stack.
+     *
+     * @return string[]
+     */
+    private function getAdditionalComposeFilesFromEnv(): array
+    {
+        $envFilePath = $this->getEffectiveEnvFilePath();
+        if ($envFilePath === null) {
+            return [];
+        }
+        if (!is_file($envFilePath)) {
+            return [];
+        }
+
+        $content = @file_get_contents($envFilePath);
+        if ($content === false) {
+            return [];
+        }
+
+        $files = [];
+        $envDir = dirname($envFilePath);
+        foreach (preg_split('/\R/', $content) as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#') || str_starts_with($line, ';')) {
+                continue;
+            }
+            if (!str_contains($line, '=')) {
+                continue;
+            }
+            [$key, $value] = explode('=', $line, 2);
+            $key = trim($key);
+            if ($key !== 'COMPOSE_FILE') {
+                continue;
+            }
+            $value = trim($value);
+            if ($value === '') {
+                continue;
+            }
+            foreach (self::splitComposeFileValue($value) as $entry) {
+                $entry = Strings::stripQuotes(trim($entry));
+                if ($entry === '') {
+                    continue;
+                }
+                if (Path::isAbsolutePath($entry)) {
+                    $files[] = $entry;
+                } else {
+                    $files[] = $envDir . '/' . $entry;
+                }
+            }
+            break;
+        }
+
+        return array_values(array_unique($files));
+    }
+
+    /**
+     * Normalize compose file paths for deduplication.
+     *
+     * @return string
+     */
+    private function normalizeComposeFilePath(string $path): string
+    {
+        // Normalize equivalent paths to avoid duplicate compose file entries
+        // when the same file is referenced via slightly different paths.
+        $real = realpath($path);
+        if ($real !== false) {
+            return $real;
+        }
+        return rtrim($path, '/\\');
+    }
+
+    /**
+     * Split a COMPOSE_FILE env value into individual file paths.
+     *
+     * This preserves quoted segments so values like
+     * `"compose.debug.yaml":compose.extra.yaml` are parsed correctly.
+     *
+     * @param string $value
+     * @return string[]
+     */
+    private static function splitComposeFileValue(string $value): array
+    {
+        $entries = [];
+        $current = '';
+        $quote = null;
+        $length = strlen($value);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $value[$i];
+            if ($quote === null && ($char === '"' || $char === "'")) {
+                $quote = $char;
+                $current .= $char;
+                continue;
+            }
+            if ($quote !== null && $char === $quote) {
+                $quote = null;
+                $current .= $char;
+                continue;
+            }
+            if ($quote === null && $char === PATH_SEPARATOR) {
+                $entries[] = $current;
+                $current = '';
+                continue;
+            }
+            $current .= $char;
+        }
+
+        $entries[] = $current;
+        return $entries;
+    }
+
+    private function getComposeFilePaths(): array
+    {
+        $paths = [];
+        $mainComposeFile = $this->composeFilePath ?? ($this->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
+        $paths[] = $mainComposeFile;
+
+        $overridePath = $this->getOverridePath();
+        if ($overridePath !== null) {
+            $paths[] = $overridePath;
+        }
+
+        foreach ($this->getAdditionalComposeFilesFromEnv() as $extraFile) {
+            $paths[] = $extraFile;
+        }
+
+        $normalized = [];
+        $unique = [];
+        foreach ($paths as $path) {
+            $key = $this->normalizeComposeFilePath($path);
+            if ($key !== '' && !isset($unique[$key])) {
+                $unique[$key] = true;
+                $normalized[] = $path;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Whether this stack should rely on Docker Compose default file discovery.
+     *
+     * When enabled, commands omit explicit `-f` flags and run with the stack
+     * compose source as project directory so Docker Compose can discover
+     * `compose.yaml`/`compose.override.yaml` and honor COMPOSE_FILE from `.env`.
+     *
+     * @return bool
+     */
+    public function useDefaultComposeFileDiscovery(): bool
+    {
+        $raw = $this->readMetadata('use_default_compose_files');
+        if ($raw === null) {
+            return false;
+        }
+
+        if (strtolower(trim($raw)) !== 'true') {
+            return false;
+        }
+
+        // Default discovery is disabled only when explicit env or indirect-file mode is set.
+        return !$this->hasManualComposePathOverrides();
+    }
+
+    /**
+     * Determine whether this stack has manual settings that require explicit mode.
+     *
+    * Explicit env-path and indirect-file selections are treated as explicit-mode
+    * signals, so default file discovery is bypassed.
+     *
+     * @return bool
+     */
+    private function hasManualComposePathOverrides(): bool
+    {
+        $configuredEnvPath = $this->readMetadata('envpath');
+        if ($configuredEnvPath !== null && trim($configuredEnvPath) !== '') {
+            return true;
+        }
+
+        return $this->indirectMode === 'file';
+    }
+
+    /**
+     * Build the `-f` flags for all compose file paths used by this stack.
+     *
+     * @return string
+     */
+    private function buildComposeFileFlags(): string
+    {
+        if ($this->useDefaultComposeFileDiscovery()) {
+            return '--project-directory ' . escapeshellarg($this->composeSource);
+        }
+
+        $flags = [];
+        foreach ($this->getComposeFilePaths() as $filePath) {
+            if (is_file($filePath)) {
+                $flags[] = '-f ' . escapeshellarg($filePath);
+            }
+        }
+        return implode(' ', $flags);
+    }
+
+    /**
+     * Get the env-file argument for the current stack, if configured.
+     *
+     * @return string
+     */
+    private function buildEnvFileFlag(): string
+    {
+        if ($this->useDefaultComposeFileDiscovery()) {
+            $explicitEnvPath = $this->getExplicitEnvFilePath();
+            $defaultEnvPath = $this->composeSource . '/.env';
+
+            if ($explicitEnvPath !== null && !Path::refersToSamePath($explicitEnvPath, $defaultEnvPath)) {
+                return '--env-file ' . escapeshellarg($explicitEnvPath);
+            }
+
+            return '';
+        }
+
+        $envPath = $this->getEffectiveEnvFilePath();
+        if ($envPath !== null && is_file($envPath)) {
+            return '--env-file ' . escapeshellarg($envPath);
+        }
+        return '';
     }
 
     /**
@@ -1667,7 +2084,7 @@ class StackInfo
             return true;
         }
 
-        $envFilePath = $this->getEnvFilePath();
+        $envFilePath = $this->getEffectiveEnvFilePath();
         if ($envFilePath !== null && is_file($envFilePath) && filemtime($envFilePath) > $cacheMtime) {
             return true;
         }
@@ -1690,16 +2107,10 @@ class StackInfo
             return [];
         }
 
-        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
-
-        $overridePath = $this->getOverridePath();
-        if ($overridePath !== null && is_file($overridePath)) {
-            $cmd .= " -f " . escapeshellarg($overridePath);
-        }
-
-        $envFilePath = $this->getEnvFilePath();
-        if ($envFilePath !== null && is_file($envFilePath)) {
-            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        $cmd = "docker compose " . $this->buildComposeFileFlags();
+        $envFlag = $this->buildEnvFileFlag();
+        if ($envFlag !== '') {
+            $cmd .= " " . $envFlag;
         }
         $cmd .= " config --profiles 2>/dev/null";
 
@@ -1739,6 +2150,29 @@ class StackInfo
     public function getOverridePath(): ?string
     {
         return $this->overrideInfo->getOverridePath();
+    }
+
+    /**
+     * Get the path where a new override template should be created.
+     *
+     * Uses the indirect target when the stack is indirect, otherwise the
+     * project override path.
+     *
+     * @return string|null
+     */
+    public function getPreferredOverridePath(): ?string
+    {
+        if (!$this->isIndirect || $this->indirectPath === null || $this->indirectPath === '') {
+            return $this->overrideInfo->getProjectOverridePath();
+        }
+
+        if ($this->indirectMode === 'file') {
+            $targetDir = dirname($this->indirectPath);
+            $targetName = OverrideInfo::buildComputedNameForPath($this->indirectPath);
+            return rtrim($targetDir, '/') . '/' . $targetName;
+        }
+
+        return rtrim($this->indirectPath, '/') . '/' . $this->overrideInfo->computedName;
     }
 
     /**
@@ -1824,16 +2258,10 @@ class StackInfo
             return [];
         }
 
-        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
-
-        $overridePath = $this->getOverridePath();
-        if ($overridePath !== null && is_file($overridePath)) {
-            $cmd .= " -f " . escapeshellarg($overridePath);
-        }
-
-        $envFilePath = $this->getEnvFilePath();
-        if ($envFilePath !== null && is_file($envFilePath)) {
-            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        $cmd = "docker compose " . $this->buildComposeFileFlags();
+        $envFlag = $this->buildEnvFileFlag();
+        if ($envFlag !== '') {
+            $cmd .= " " . $envFlag;
         }
         // Include all profile-scoped services so stack totals reflect the
         // full compose definition, not only default-profile services.
@@ -1877,9 +2305,9 @@ class StackInfo
      * Get the list of services defined in the main compose file only (without override).
      *
      * Used internally by pruneOrphanOverrideServices() to determine which services
-        * are valid. Excludes the override file so orphaned override services are not
-        * counted as valid, but enables all profiles so profile-tagged services remain
-        * valid targets for Unraid label metadata stored in the override file.
+     * are valid. Excludes the override file so orphaned override services are not
+     * counted as valid, but enables all profiles so profile-tagged services remain
+     * valid targets for Unraid label metadata stored in the override file.
      *
      * External callers should typically use getDefinedServices() which includes
      * the override file for a complete picture.
@@ -1892,11 +2320,10 @@ class StackInfo
             return [];
         }
 
-        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
-
-        $envFilePath = $this->getEnvFilePath();
-        if ($envFilePath !== null && is_file($envFilePath)) {
-            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        $cmd = "docker compose " . $this->buildComposeFileFlags();
+        $envFlag = $this->buildEnvFileFlag();
+        if ($envFlag !== '') {
+            $cmd .= " " . $envFlag;
         }
         $cmd .= " --profile '*' config --services 2>/dev/null";
 
@@ -1913,33 +2340,70 @@ class StackInfo
     /**
      * Build the common compose CLI arguments for this stack.
      *
-     * Returns the project name, file flags, and env-file flag suitable
-     * for passing to `docker compose`.
+     * Returns the project name, file flags, env-file flag, and additional
+     * metadata needed by callers.
      *
-     * @return array{projectName: string, files: string, envFile: string}
+     * @return array{
+     *   projectName: string,
+     *   files: string,
+     *   envFile: string,
+        *   projectDirectory: string,
+        *   useDefaultFileDiscovery: bool,
+     *   envFilePath?: string,
+        *   filePaths: string[],
+        *   fileList: string
+     * }
      */
     public function buildComposeArgs(): array
     {
-        $composeFile = $this->composeFilePath ?? ($this->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
+        $useDefaultDiscovery = $this->useDefaultComposeFileDiscovery();
+        $files = $this->buildComposeFileFlags();
+        $envFile = $this->buildEnvFileFlag();
+        $envPath = $this->getEffectiveEnvFilePath();
 
-        $files = "-f " . escapeshellarg($composeFile);
+        if ($useDefaultDiscovery) {
+            $explicitEnvPath = $this->getExplicitEnvFilePath();
+            $defaultEnvPath = $this->composeSource . '/.env';
 
-        $overridePath = $this->getOverridePath();
-        if ($overridePath !== null) {
-            $files .= " -f " . escapeshellarg($overridePath);
+            if ($explicitEnvPath === null || Path::refersToSamePath($explicitEnvPath, $defaultEnvPath)) {
+                $envPath = null;
+            } else {
+                $envPath = $explicitEnvPath;
+            }
         }
 
-        $envFile = "";
-        $envPath = $this->getEnvFilePath();
-        if ($envPath !== null && is_file($envPath)) {
-            $envFile = "--env-file " . escapeshellarg($envPath);
-        }
-
-        return [
+        $result = [
             'projectName' => $this->projectName,
             'files' => $files,
             'envFile' => $envFile,
+            'projectDirectory' => $this->composeSource,
+            'useDefaultFileDiscovery' => $useDefaultDiscovery,
         ];
+        if ($envPath !== null) {
+            $result['envFilePath'] = $envPath;
+        }
+        $result['filePaths'] = $useDefaultDiscovery ? [] : $this->getComposeFilePaths();
+        $result['fileList'] = $this->buildComposeFileList();
+
+        return $result;
+    }
+
+    /**
+     * Build a PATH_SEPARATOR-delimited list of compose file paths for shell environment use.
+     *
+     * @return string
+     */
+    public function buildComposeFileList(): string
+    {
+        if ($this->useDefaultComposeFileDiscovery()) {
+            return '';
+        }
+
+        $filePaths = $this->getComposeFilePaths();
+        $filePaths = array_filter($filePaths, static fn(string $value): bool => $value !== '');
+        $filePaths = array_map('trim', $filePaths);
+
+        return implode(PATH_SEPARATOR, $filePaths);
     }
 
     /**
@@ -2018,16 +2482,10 @@ class StackInfo
             return false;
         }
 
-        $cmd = "docker compose -f " . escapeshellarg($this->composeFilePath);
-
-        $overridePath = $this->getOverridePath();
-        if ($overridePath !== null && is_file($overridePath)) {
-            $cmd .= " -f " . escapeshellarg($overridePath);
-        }
-
-        $envFilePath = $this->getEnvFilePath();
-        if ($envFilePath !== null && is_file($envFilePath)) {
-            $cmd .= " --env-file " . escapeshellarg($envFilePath);
+        $cmd = "docker compose " . $this->buildComposeFileFlags();
+        $envFlag = $this->buildEnvFileFlag();
+        if ($envFlag !== '') {
+            $cmd .= " " . $envFlag;
         }
         $cmd .= " config 2>/dev/null";
 
@@ -2177,6 +2635,9 @@ class StackInfo
         // Create indirect file to store path to indirect project directory
         if ($indirectPath !== '') {
             file_put_contents("$path/indirect", $indirectPath);
+            file_put_contents("$path/indirect_mode", self::inferIndirectMode($indirectPath));
+        } elseif (is_file("$path/indirect_mode")) {
+            @unlink("$path/indirect_mode");
         }
 
         // Write metadata
@@ -2185,9 +2646,12 @@ class StackInfo
             file_put_contents("$path/description", $description);
         }
 
-        // Create default compose file at the appropriate location (indirect target or stack dir)
-        $composeTarget = ($indirectPath !== '') ? $indirectPath : $path;
-        self::writeDefaultComposeFile($composeTarget);
+        // Create default compose file for local stacks and indirect-directory
+        // stacks. For indirect-file stacks, the selected file already exists.
+        if ($indirectPath === '' || is_dir($indirectPath)) {
+            $composeTarget = ($indirectPath !== '') ? $indirectPath : $path;
+            self::writeDefaultComposeFile($composeTarget);
+        }
 
         // Build + cache the instance (resolves override, etc.)
         return self::fromProject($composeRoot, basename($path));

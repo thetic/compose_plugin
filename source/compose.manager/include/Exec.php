@@ -20,6 +20,49 @@ if (!function_exists('getPostScript')) {
     }
 }
 
+if (!function_exists('getExpectedClientPath')) {
+    function getExpectedClientPath(): string
+    {
+        return isset($_POST['expectedPath']) ? trim((string) $_POST['expectedPath']) : '';
+    }
+}
+
+if (!function_exists('rejectStaleClientPath')) {
+    function rejectStaleClientPath(?string $actualPath, string $label): bool
+    {
+        $expectedPath = getExpectedClientPath();
+        if ($expectedPath === '') {
+            return false;
+        }
+
+        $actualPath = $actualPath !== null ? trim($actualPath) : '';
+        if ($actualPath !== '' && Path::refersToSamePath($expectedPath, $actualPath)) {
+            return false;
+        }
+
+        composeLogger(
+            "Rejected stale {$label} write target",
+            [
+                'expectedPath' => $expectedPath,
+                'actualPath' => $actualPath,
+            ],
+            'user',
+            'warning',
+            'editor'
+        );
+
+        echo json_encode([
+            'result' => 'error',
+            'errorCode' => 'stale_path',
+            'message' => 'The target path changed while the editor was open. Reload the editor and try again.',
+            'expectedPath' => $expectedPath,
+            'actualPath' => $actualPath,
+        ]);
+
+        return true;
+    }
+}
+
 switch ($_POST['action']) {
     case 'composeLogger':
         $message = $_POST['msg'] ?? '';
@@ -34,25 +77,53 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'config' => $cfg]);
         break;
     case 'addStack':
-        // Validate indirect path (HTTP-boundary security check)
-        $indirect = isset($_POST['stackPath']) ? trim($_POST['stackPath']) : '';
-        if ($indirect !== '') {
-            $realIndirect = realpath(dirname($indirect));
+        // Validate optional indirect inputs (folder or specific compose file)
+        $indirectDir = isset($_POST['stackPath']) ? trim($_POST['stackPath']) : '';
+        $indirectFile = isset($_POST['stackFilePath']) ? trim($_POST['stackFilePath']) : '';
+        if ($indirectDir !== '' && $indirectFile !== '') {
+            echo json_encode(['result' => 'error', 'message' => 'Set either Indirect Path or Indirect Compose File, not both.']);
+            break;
+        }
+
+        $indirect = '';
+        if ($indirectDir !== '') {
+            $realIndirect = realpath($indirectDir);
             if ($realIndirect === false) {
-                composeLogger("Failed to create stack: Could not resolve indirect path: $indirect", null, 'user', 'error', 'stack');
+                composeLogger("Failed to create stack: Could not resolve indirect path: $indirectDir", null, 'user', 'error', 'stack');
                 echo json_encode(['result' => 'error', 'message' => 'Stack path is invalid or does not exist.']);
                 break;
             }
-            if (strpos($realIndirect, '/mnt/') !== 0 && strpos($realIndirect, '/boot/config/') !== 0) {
-                composeLogger("Failed to create stack: Invalid indirect path: $indirect", null, 'user', 'error', 'stack');
+            if (!Path::isAllowedPath($realIndirect, ['/mnt', '/boot/config'])) {
+                composeLogger("Failed to create stack: Invalid indirect path: $indirectDir", null, 'user', 'error', 'stack');
                 echo json_encode(['result' => 'error', 'message' => 'Stack path must be under /mnt/ or /boot/config/.']);
                 break;
             }
-            if (!is_dir($indirect)) {
-                composeLogger("Failed to create stack: Indirect stack path does not exist: $indirect", null, 'user', 'error', 'stack');
+            if (!is_dir($realIndirect)) {
+                composeLogger("Failed to create stack: Indirect stack path does not exist: $indirectDir", null, 'user', 'error', 'stack');
                 echo json_encode(['result' => 'error', 'message' => 'Indirect stack path does not exist.']);
                 break;
             }
+            // Preserve the user-provided path (e.g. /mnt/user/...) instead of
+            // persisting a resolved /mnt/diskX/... path from realpath().
+            $indirect = rtrim($indirectDir, '/');
+        } elseif ($indirectFile !== '') {
+            $realFile = realpath($indirectFile);
+            if ($realFile === false || !is_file($realFile)) {
+                composeLogger("Failed to create stack: Indirect compose file does not exist: $indirectFile", null, 'user', 'error', 'stack');
+                echo json_encode(['result' => 'error', 'message' => 'Indirect compose file does not exist.']);
+                break;
+            }
+            if (!Path::isAllowedPath($realFile, ['/mnt', '/boot/config'])) {
+                composeLogger("Failed to create stack: Invalid indirect compose file path: $indirectFile", null, 'user', 'error', 'stack');
+                echo json_encode(['result' => 'error', 'message' => 'Indirect compose file must be under /mnt/ or /boot/config/.']);
+                break;
+            }
+            if (preg_match('/\.ya?ml$/i', basename($realFile)) !== 1) {
+                echo json_encode(['result' => 'error', 'message' => 'Indirect compose file must be a .yml or .yaml file.']);
+                break;
+            }
+            // Preserve the originally-entered file path so /mnt/user is retained.
+            $indirect = $indirectFile;
         }
 
         $stackName = isset($_POST['stackName']) ? trim($_POST['stackName']) : '';
@@ -75,8 +146,57 @@ switch ($_POST['action']) {
             break;
         }
 
+        // Apply creation-time options, falling back to global defaults.
+        $cfg = @parse_plugin_cfg($sName);
+
+        $useDefaultComposeFilesRaw = isset($_POST['useDefaultComposeFiles'])
+            ? strtolower(trim((string) $_POST['useDefaultComposeFiles']))
+            : strtolower(trim((string) ($cfg['NEW_STACK_USE_DEFAULT_COMPOSE_FILES'] ?? 'false')));
+        $useDefaultComposeFiles = $useDefaultComposeFilesRaw === 'true';
+        if ($indirectFile !== '') {
+            $useDefaultComposeFiles = false;
+        }
+
+        $overrideManagementAutomaticRaw = isset($_POST['overrideManagementAutomatic'])
+            ? strtolower(trim((string) $_POST['overrideManagementAutomatic']))
+            : strtolower(trim((string) ($cfg['NEW_STACK_OVERRIDE_MANAGEMENT_AUTOMATIC'] ?? 'true')));
+        $overrideManagementAutomatic = $overrideManagementAutomaticRaw !== 'false';
+
+        $stackPath = $compose_root . '/' . $stack->projectFolder;
+
+        $useDefaultComposeFilesFile = "$stackPath/use_default_compose_files";
+        if ($useDefaultComposeFiles) {
+            file_put_contents($useDefaultComposeFilesFile, 'true');
+        } elseif (is_file($useDefaultComposeFilesFile)) {
+            @unlink($useDefaultComposeFilesFile);
+        }
+
+        $labelsViewModeFile = "$stackPath/labels_view_mode";
+        if ($overrideManagementAutomatic) {
+            if (is_file($labelsViewModeFile)) {
+                @unlink($labelsViewModeFile);
+            }
+        } else {
+            file_put_contents($labelsViewModeFile, 'advanced');
+        }
+
+        $envPathInput = isset($_POST['envPath']) ? trim($_POST['envPath']) : '';
+        $envPathFile = "$stackPath/envpath";
+        if ($envPathInput !== '') {
+            file_put_contents($envPathFile, $envPathInput);
+        } elseif (is_file($envPathFile)) {
+            @unlink($envPathFile);
+        }
+
         composeLogger("Created stack: $stackName", null, 'user', 'info', 'stack');
-        echo json_encode(['result' => 'success', 'message' => '', 'project' => $stack->projectFolder, 'projectName' => $stack->getName()]);
+        echo json_encode([
+            'result' => 'success',
+            'message' => '',
+            'project' => $stack->projectFolder,
+            'projectName' => $stack->getName(),
+            'useDefaultComposeFiles' => $useDefaultComposeFiles,
+            'overrideManagementAutomatic' => $overrideManagementAutomatic,
+        ]);
         break;
     case 'deleteStack':
         $stackName = isset($_POST['stackName']) ? basename(trim($_POST['stackName'])) : "";
@@ -90,8 +210,35 @@ switch ($_POST['action']) {
         $isInvalidIndirect = !$isIndirect && is_file("$folderName/indirect.invalid");
         $filesRemain = $isIndirect ? file_get_contents("$folderName/indirect")
             : ($isInvalidIndirect ? file_get_contents("$folderName/indirect.invalid") : "");
-        composeLogger("Deleting stack: $stackName", null, 'user', 'info', 'stack');
-        exec("rm -rf " . escapeshellarg($folderName));
+        composeLogger("Deleting stack: $stackName", [
+            'folderName' => $folderName,
+            'isIndirect' => $isIndirect,
+            'isInvalidIndirect' => $isInvalidIndirect,
+            'filesRemain' => $filesRemain
+        ], 'user', 'debug', 'stack');
+
+        $execOutput = [];
+        $execRc = 0;
+        exec("rm -rf " . escapeshellarg($folderName), $execOutput, $execRc);
+
+        $folderStillExists = is_dir($folderName);
+        if ($execRc !== 0 || $folderStillExists) {
+            composeLogger("Stack folder delete failed", [
+                'stackName' => $stackName,
+                'folderName' => $folderName,
+                'execRc' => $execRc,
+                'execOutput' => $execOutput,
+                'folderStillExists' => $folderStillExists,
+                'filesRemain' => $filesRemain
+            ], 'user', 'error', 'stack');
+            $msg = "Failed to delete stack folder. " .
+                ($execRc !== 0 ? "rm exit code: $execRc. " : "") .
+                ($folderStillExists ? "Folder still exists after rm. " : "") .
+                (count($execOutput) ? "Output: " . implode("; ", $execOutput) : "");
+            echo json_encode(['result' => 'error', 'message' => $msg]);
+            break;
+        }
+
         if ($filesRemain == "") {
             composeLogger("Deleted stack: $stackName", null, 'user', 'info', 'stack');
             echo json_encode(['result' => 'success', 'message' => '']);
@@ -155,26 +302,127 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $fileName = $stackInfo->getEnvFilePath() ?? ($stackInfo->composeSource . '/.env');
 
-        $scriptContents = is_file($fileName) ? file_get_contents($fileName) : "";
-        $scriptContents = str_replace("\r", "", $scriptContents);
-        if (!$scriptContents) {
-            $scriptContents = "\n";
+        $envExists = is_file($fileName);
+        $scriptContents = $envExists ? file_get_contents($fileName) : "";
+        $scriptContents = str_replace("\r", "", (string) $scriptContents);
+        echo json_encode([
+            'result' => 'success',
+            'fileName' => $fileName,
+            'content' => $scriptContents,
+            'exists' => $envExists
+        ]);
+        break;
+    case 'createEnvTemplate':
+        $script = getPostScript();
+
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $envPath = $stackInfo->getEnvFilePath() ?? ($stackInfo->composeSource . '/.env');
+
+        if (rejectStaleClientPath($envPath, '.env template')) {
+            break;
         }
-        echo json_encode(['result' => 'success', 'fileName' => $fileName, 'content' => $scriptContents]);
+
+        $envDir = dirname($envPath);
+        if (!is_dir($envDir)) {
+            echo json_encode(['result' => 'error', 'message' => 'Target directory does not exist.']);
+            break;
+        }
+
+        if (is_dir($envPath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Target .env path is a directory.']);
+            break;
+        }
+
+        if (!is_file($envPath)) {
+            $written = @file_put_contents($envPath, OverrideInfo::buildEnvTemplateContent());
+            if ($written === false) {
+                echo json_encode(['result' => 'error', 'message' => 'Failed to create .env template.']);
+                break;
+            }
+        }
+
+        if (!is_file($envPath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Failed to create .env template.']);
+            break;
+        }
+
+        $content = file_get_contents($envPath);
+        $content = str_replace("\r", "", (string) $content);
+
+        echo json_encode([
+            'result' => 'success',
+            'fileName' => $envPath,
+            'content' => $content,
+            'exists' => is_file($envPath)
+        ]);
         break;
     case 'getOverride':
         $script = getPostScript();
-        $projectPath = "$compose_root/$script";
 
-        // Get Override file path and ensure project override exists (create blank if not)
-        $overridePath = StackInfo::fromProject($compose_root, $script)->getOverridePath();
+        // Get Override file path - can read from indirect if present, else project
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $overridePath = $stackInfo->getPreferredOverridePath();
 
         $scriptContents = is_file($overridePath) ? file_get_contents($overridePath) : "";
         $scriptContents = str_replace("\r", "", $scriptContents);
         if (!$scriptContents) {
             $scriptContents = "";
         }
-        echo json_encode(['result' => 'success', 'fileName' => $overridePath, 'content' => $scriptContents]);
+        echo json_encode([
+            'result' => 'success',
+            'fileName' => $overridePath,
+            'content' => $scriptContents,
+            'exists' => is_file($overridePath)
+        ]);
+        break;
+    case 'createOverrideTemplate':
+        $script = getPostScript();
+
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        $overridePath = $stackInfo->getPreferredOverridePath();
+
+        if (rejectStaleClientPath($overridePath, 'override template')) {
+            break;
+        }
+
+        if ($overridePath === null) {
+            echo json_encode(['result' => 'error', 'message' => 'Unable to resolve override path']);
+            break;
+        }
+
+        $overrideDir = dirname($overridePath);
+        if (!is_dir($overrideDir)) {
+            echo json_encode(['result' => 'error', 'message' => 'Override target directory does not exist.']);
+            break;
+        }
+
+        if (is_dir($overridePath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Override target path is a directory.']);
+            break;
+        }
+
+        if (!is_file($overridePath)) {
+            $written = @file_put_contents($overridePath, OverrideInfo::buildTemplateContent());
+            if ($written === false) {
+                echo json_encode(['result' => 'error', 'message' => 'Failed to create override template.']);
+                break;
+            }
+        }
+
+        if (!is_file($overridePath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Failed to create override template.']);
+            break;
+        }
+
+        $content = file_get_contents($overridePath);
+        $content = str_replace("\r", "", (string) $content);
+
+        echo json_encode([
+            'result' => 'success',
+            'fileName' => $overridePath,
+            'content' => $content,
+            'exists' => is_file($overridePath)
+        ]);
         break;
     case 'saveYml':
         $script = getPostScript();
@@ -183,7 +431,11 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $composeFilePath = $stackInfo->composeFilePath ?? ($stackInfo->composeSource . '/' . COMPOSE_FILE_NAMES[0]);
 
-        // Before saving, detect service renames and migrate override entries
+        if (rejectStaleClientPath($composeFilePath, 'compose file')) {
+            break;
+        }
+
+        // Before saving, detect service renames and migrate override entries in the project override only
         if (is_file($composeFilePath)) {
             $oldContent = file_get_contents($composeFilePath);
             $stackInfo->overrideInfo->migrateOnRename($oldContent, $scriptContents);
@@ -199,16 +451,33 @@ switch ($_POST['action']) {
         $stackInfo = StackInfo::fromProject($compose_root, $script);
         $fileName = $stackInfo->getEnvFilePath() ?? ($stackInfo->composeSource . '/.env');
 
+        if (rejectStaleClientPath($fileName, '.env file')) {
+            break;
+        }
+
         file_put_contents($fileName, $scriptContents);
         echo "$fileName saved";
         break;
     case 'saveOverride':
         $script = getPostScript();
         $scriptContents = isset($_POST['scriptContents']) ? $_POST['scriptContents'] : "";
-        $projectPath = "$compose_root/$script";
+        $isManaged = isset($_POST['managed']) && $_POST['managed'] === '1';
 
-        // Get Override file path and ensure project override exists (create blank if not)
-        $overridePath = StackInfo::fromProject($compose_root, $script)->getOverridePath();
+        $stackInfo = StackInfo::fromProject($compose_root, $script);
+        // managed=1 (Automatic): plugin controls override, write to project dir only
+        // managed=0 (Manual): user controls override, write to the preferred override target
+        $overridePath = $isManaged
+            ? $stackInfo->overrideInfo->getProjectOverridePath()
+            : $stackInfo->getPreferredOverridePath();
+
+        if (rejectStaleClientPath($overridePath, 'override file')) {
+            break;
+        }
+
+        if ($overridePath === null) {
+            echo json_encode(['result' => 'error', 'message' => 'Unable to resolve override path']);
+            break;
+        }
 
         file_put_contents($overridePath, $scriptContents);
         echo "$overridePath saved";
@@ -409,6 +678,13 @@ switch ($_POST['action']) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
         }
+
+        try {
+            $stackInfo = StackInfo::fromProject($compose_root, $script);
+        } catch (\Throwable $e) {
+            echo json_encode(['result' => 'error', 'message' => 'Unable to load stack settings.']);
+            break;
+        }
         // Get env path
         $envPathFile = "$compose_root/$script/envpath";
         $envPath = is_file($envPathFile) ? trim(file_get_contents($envPathFile)) : "";
@@ -425,18 +701,46 @@ switch ($_POST['action']) {
         $defaultProfileFile = "$compose_root/$script/default_profile";
         $defaultProfile = is_file($defaultProfileFile) ? trim(file_get_contents($defaultProfileFile)) : "";
 
+        // Get labels tab view mode (per-stack)
+        $labelsViewModeFile = "$compose_root/$script/labels_view_mode";
+        $labelsViewMode = is_file($labelsViewModeFile) ? strtolower(trim(file_get_contents($labelsViewModeFile))) : 'basic';
+        if ($labelsViewMode !== 'advanced') {
+            $labelsViewMode = 'basic';
+        }
+
+        // Use Docker Compose default file discovery (no explicit -f)
+        // Use the StackInfo method so the effective value (gated by manual overrides) is returned.
+        $useDefaultComposeFiles = $stackInfo->useDefaultComposeFileDiscovery();
+
         // Get external compose path (indirect)
         $indirectFile = "$compose_root/$script/indirect";
         $invalidIndirectFile = "$compose_root/$script/indirect.invalid";
         $externalComposePath = "";
+        $externalComposeFilePath = "";
         $invalidIndirectPath = "";
         if (is_file($indirectFile)) {
             $raw = trim(file_get_contents($indirectFile));
-            if ($raw !== '' && is_dir($raw)) {
-                $externalComposePath = $raw;
-            } else {
-                // Path is invalid or directory unavailable — non-destructive handling
-                $invalidIndirectPath = $raw;
+            if ($raw !== '') {
+                if ($stackInfo->indirectMode === 'file') {
+                    if (is_file($raw)) {
+                        $externalComposeFilePath = $raw;
+                    } else {
+                        $invalidIndirectPath = $raw;
+                    }
+                } elseif ($stackInfo->indirectMode === 'folder') {
+                    if (is_dir($raw)) {
+                        $externalComposePath = $raw;
+                    } else {
+                        $invalidIndirectPath = $raw;
+                    }
+                } elseif (is_dir($raw)) {
+                    $externalComposePath = $raw;
+                } elseif (is_file($raw)) {
+                    $externalComposeFilePath = $raw;
+                } else {
+                    // Path is invalid or unavailable — non-destructive handling
+                    $invalidIndirectPath = $raw;
+                }
             }
         } elseif (is_file($invalidIndirectFile)) {
             // Legacy fallback: older versions renamed indirect → indirect.invalid
@@ -459,10 +763,41 @@ switch ($_POST['action']) {
             'iconUrl' => $iconUrl,
             'webuiUrl' => $webuiUrl,
             'defaultProfile' => $defaultProfile,
+            'labelsViewMode' => $labelsViewMode,
+            'useDefaultComposeFiles' => $useDefaultComposeFiles,
+            'indirectMode' => $stackInfo->indirectMode,
             'externalComposePath' => $externalComposePath,
+            'externalComposeFilePath' => $externalComposeFilePath,
             'invalidIndirectPath' => $invalidIndirectPath,
-            'availableProfiles' => $availableProfiles
+            'availableProfiles' => $availableProfiles,
+            'projectPath' => "$compose_root/$script",
+            'projectOverridePath' => $stackInfo->overrideInfo->getProjectOverridePath(),
+            'effectiveOverridePath' => $stackInfo->getPreferredOverridePath(),
         ]);
+        break;
+    case 'setLabelsViewMode':
+        $script = getPostScript();
+        if (!$script) {
+            echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
+            break;
+        }
+
+        $labelsViewMode = isset($_POST['labelsViewMode']) ? strtolower(trim((string) $_POST['labelsViewMode'])) : 'basic';
+        if ($labelsViewMode !== 'advanced' && $labelsViewMode !== 'basic') {
+            echo json_encode(['result' => 'error', 'message' => 'Invalid labels view mode.']);
+            break;
+        }
+
+        $labelsViewModeFile = "$compose_root/$script/labels_view_mode";
+        if ($labelsViewMode === 'advanced') {
+            file_put_contents($labelsViewModeFile, 'advanced');
+        } else {
+            if (is_file($labelsViewModeFile)) {
+                @unlink($labelsViewModeFile);
+            }
+        }
+
+        echo json_encode(['result' => 'success', 'labelsViewMode' => $labelsViewMode]);
         break;
     case 'detectWebui':
         $script = getPostScript();
@@ -509,17 +844,54 @@ switch ($_POST['action']) {
 
         $envPath = isset($_POST['envPath']) ? trim($_POST['envPath']) : "";
         $defaultProfile = isset($_POST['defaultProfile']) ? trim($_POST['defaultProfile']) : "";
+        $useDefaultComposeFiles = isset($_POST['useDefaultComposeFiles'])
+            && strtolower(trim((string) $_POST['useDefaultComposeFiles'])) === 'true';
 
         $externalComposePath = isset($_POST['externalComposePath']) ? trim($_POST['externalComposePath']) : "";
         $externalComposePath = rtrim($externalComposePath, '/');
+        $externalComposeFilePath = isset($_POST['externalComposeFilePath']) ? trim($_POST['externalComposeFilePath']) : "";
+
+        if (!empty($externalComposePath) && !empty($externalComposeFilePath)) {
+            echo json_encode(['result' => 'error', 'message' => 'Set either External Compose Path or External Compose File, not both.']);
+            break;
+        }
+
         if (!empty($externalComposePath)) {
             $realPath = realpath($externalComposePath) ?: $externalComposePath;
-            if (strpos($realPath, '/mnt/') !== 0 && strpos($realPath, '/boot/config/') !== 0) {
+            if (!Path::isAllowedPath($realPath, ['/mnt', '/boot/config'])) {
                 echo json_encode(['result' => 'error', 'message' => 'External compose path must be under /mnt/ or /boot/config/.']);
                 break;
             }
             if (!is_dir($externalComposePath)) {
                 echo json_encode(['result' => 'error', 'message' => 'External compose path directory does not exist: ' . $externalComposePath]);
+                break;
+            }
+
+            $projectPath = realpath("$compose_root/$script") ?: rtrim("$compose_root/$script", '/');
+            if (Path::refersToSamePath($realPath, $projectPath)) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose path cannot be the stack project folder. Use a path under /mnt/ or /boot/config/ that is external to this stack.']);
+                break;
+            }
+        }
+
+        if (!empty($externalComposeFilePath)) {
+            $realFile = realpath($externalComposeFilePath);
+            if ($realFile === false || !is_file($realFile)) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose file does not exist: ' . $externalComposeFilePath]);
+                break;
+            }
+            if (!Path::isAllowedPath($realFile, ['/mnt', '/boot/config'])) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose file must be under /mnt/ or /boot/config/.']);
+                break;
+            }
+            if (preg_match('/\.ya?ml$/i', basename($realFile)) !== 1) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose file must be a .yml or .yaml file.']);
+                break;
+            }
+
+            $projectPath = realpath("$compose_root/$script") ?: rtrim("$compose_root/$script", '/');
+            if (Path::refersToSamePath(dirname($realFile), $projectPath)) {
+                echo json_encode(['result' => 'error', 'message' => 'External compose file cannot be inside the stack project folder. Use a path under /mnt/ or /boot/config/ that is external to this stack.']);
                 break;
             }
         }
@@ -562,26 +934,53 @@ switch ($_POST['action']) {
             file_put_contents($defaultProfileFile, $defaultProfile);
         }
 
+        // Set compose file discovery mode
+        $useDefaultComposeFilesFile = "$compose_root/$script/use_default_compose_files";
+        if ($useDefaultComposeFiles) {
+            file_put_contents($useDefaultComposeFilesFile, 'true');
+        } else {
+            if (is_file($useDefaultComposeFilesFile)) {
+                @unlink($useDefaultComposeFilesFile);
+            }
+        }
+
         // Set external compose path (indirect)
         $indirectFile = "$compose_root/$script/indirect";
         $invalidIndirectFile = "$compose_root/$script/indirect.invalid";
-        if (empty($externalComposePath)) {
+        $indirectModeFile = "$compose_root/$script/indirect_mode";
+        $indirectTarget = '';
+        if (!empty($externalComposeFilePath)) {
+            $indirectTarget = $externalComposeFilePath;
+        } elseif (!empty($externalComposePath)) {
+            $indirectTarget = $externalComposePath;
+        }
+
+        if ($indirectTarget === '') {
             // Removing indirect: move compose file back to project folder if it only exists externally
             if (is_file($indirectFile)) {
                 $oldIndirectPath = trim(file_get_contents($indirectFile));
                 $localCompose = findComposeFile("$compose_root/$script");
-                $externalCompose = findComposeFile($oldIndirectPath);
+                $externalCompose = false;
+                if (is_dir($oldIndirectPath)) {
+                    $externalCompose = findComposeFile($oldIndirectPath);
+                } elseif (is_file($oldIndirectPath)) {
+                    $externalCompose = $oldIndirectPath;
+                }
                 if (!$localCompose && $externalCompose) {
                     copy($externalCompose, "$compose_root/$script/" . basename($externalCompose));
                 }
                 @unlink($indirectFile);
+            }
+            if (is_file($indirectModeFile)) {
+                @unlink($indirectModeFile);
             }
             // Also clean up any invalid indirect file when clearing the path
             if (is_file($invalidIndirectFile)) {
                 @unlink($invalidIndirectFile);
             }
         } else {
-            file_put_contents($indirectFile, $externalComposePath);
+            file_put_contents($indirectFile, $indirectTarget);
+            file_put_contents($indirectModeFile, is_file($indirectTarget) ? 'file' : 'folder');
             // Clean up the invalid file now that we have a corrected path
             if (is_file($invalidIndirectFile)) {
                 @unlink($invalidIndirectFile);
@@ -589,7 +988,13 @@ switch ($_POST['action']) {
             // Remove local compose file if it exists since we're now using external
             $localCompose = findComposeFile("$compose_root/$script");
             if ($localCompose) {
-                @unlink($localCompose);
+                $projectPath = realpath("$compose_root/$script") ?: rtrim("$compose_root/$script", '/');
+                $resolvedExternalPath = is_dir($indirectTarget)
+                    ? (realpath($indirectTarget) ?: rtrim($indirectTarget, '/'))
+                    : dirname($indirectTarget);
+                if ($resolvedExternalPath !== $projectPath) {
+                    @unlink($localCompose);
+                }
             }
         }
 
@@ -614,6 +1019,11 @@ switch ($_POST['action']) {
         break;
     case 'getStackContainers':
         $script = getPostScript();
+        composeLogger('getStackContainers start', [
+            'script' => $script,
+            'post' => $_POST,
+            'caller' => $_SERVER['REMOTE_ADDR'] ?? 'cli',
+        ], 'user', 'debug', 'getStackContainers');
         if (!$script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -621,10 +1031,8 @@ switch ($_POST['action']) {
 
         // Resolve stack identity and compose CLI arguments via StackInfo
         $stackInfo = StackInfo::fromProject($compose_root, $script);
-
         // Get container details in JSON format (all states)
         $rows = $stackInfo->getContainerList();
-
         // Hard dependency on Docker manager: use shared helpers directly.
         $networkDrivers = DockerUtil::driver();
         $hostIP = trim((string) DockerUtil::host());
@@ -641,6 +1049,9 @@ switch ($_POST['action']) {
         $stackState = $stackInfo->getStackState();
 
         foreach ($rows as $rawContainer) {
+            composeLogger('getStackContainers found container row', [
+                'rawContainer' => $rawContainer
+            ], 'user', 'debug', 'getStackContainers');
             // Get additional details using docker inspect
             $ctName = $rawContainer['Name'] ?? '';
             if ($ctName) {
@@ -785,7 +1196,29 @@ switch ($_POST['action']) {
             $containers[] = ContainerInfo::fromDockerInspect($rawContainer)->toArray();
         }
 
+        // --- Persistent container metadata cache ---
+        $cacheFile = '/boot/config/plugins/compose.manager/containers.cache.json';
+        $cache = is_file($cacheFile) ? json_decode(file_get_contents($cacheFile), true) : [];
+        $stackKey = $stackInfo->projectFolder;
+        if (!isset($cache[$stackKey])) $cache[$stackKey] = [];
+        foreach ($containers as $ct) {
+            $service = $ct['service'] ?? $ct['Name'] ?? '';
+            if ($service) {
+                $cache[$stackKey][$service] = $ct;
+            }
+        }
+        file_put_contents($cacheFile, json_encode($cache, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
         echo json_encode(['result' => 'success', 'containers' => $containers, 'stackState' => $stackState, 'projectName' => $stackInfo->projectFolder, 'startedAt' => $stackInfo->getStartedAt()]);
+        composeLogger('getStackContainers done', [
+            'script' => $script,
+            'containersCount' => count($containers),
+            'containerNames' => array_map(function ($c) {
+                return $c['name'] ?? ($c['Name'] ?? '');
+            }, $containers),
+            'stackState' => $stackState,
+            'projectName' => $stackInfo->projectFolder,
+        ], 'user', 'debug', 'getStackContainers');
         break;
     case 'getProfileServices':
         // Returns the list of services that docker compose would act on for the
