@@ -10,7 +10,7 @@
 <!ENTITY packageName "&name;-&packageVER;-noarch-&pkgBUILD;">
 <!ENTITY packagefile "&packageName;.txz">
 <!ENTITY github "mstrhakr/compose_plugin">
-<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/&name;.plg">
 <!ENTITY packageURL "https://github.com/&github;/releases/download/v&version;/&packagefile;">
 <!ENTITY pluginsPATH "/boot/config/plugins">
 <!ENTITY pluginLOC "&pluginsPATH;/&name;">
@@ -36,11 +36,77 @@
 >
 
 <CHANGES>
-###2026.05.25.0747
+###2026.05.28
 - Features: implement canonical project name sanitizer and update related functions and tests
+- Features: add path validation for editor actions and enhance handling of stale paths
+- Features: implement download caching mechanism and enhance build scripts
+- Features (env): add .env template creation and enhance editor state management
+- Features: implement override template creation and enhance editor state management
+- Features: add support for external ENV file path and update discovery logic on new stacks
+- Features (compose): add external compose file mode with strict path validation and default-discovery guardrails
+- Features (editor): enhance file info display with project directory and editing file paths
+- Features: add new stack defaults and override file management options in settings
+- Features (editor): replace save button with Okay and Apply buttons that follow the standard convention (okay = save and close, apply = save only)
+- Features: implement override file management settings and enhance labels view mode handling
+- Features: enhance compose command handling with file discovery and error logging
+- Features: add advanced labels view mode with toggle and override editor support
+- Features: implement Docker Compose default file discovery option and enhance project directory handling
+- Features: enhance dropdown context menu visibility and adjust positioning settings
+- Features: centralize compose command argument resolution and enhance event handling
+- Features: implement effective env file resolution for stacks and enhance related scripts
+- Features: enhance stack info handling and auto-update script for improved compose file management
 - Bug Fixes: disable blank issues and update contact links in issue template
-- [PR #108](https://github.com/mstrhakr/compose_plugin/pull/108)
-- [beta release diff](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.25.0747)
+- Bug Fixes (tests): enhance cleanup in ExecActionsTest to remove external paths
+- Bug Fixes: preserve user-provided paths for indirect stack and compose file actions and add regression tests
+- Bug Fixes: handle errors for directory paths in createEnvTemplate and createOverrideTemplate actions
+- Bug Fixes (editor): enhance empty state UI for .env and override file sections
+- Bug Fixes: add ignore errors for undefined variables in Unraid templates
+- Bug Fixes: guard file-path constants with defined() for CI compatibility
+- Bug Fixes: ensure logs command uses real project name
+- Bug Fixes: replace started with docker_started so compose attempt autostart at docker start instead of array start
+- Bug Fixes: implement loading and honoring saved stack order for startup autostart
+- Bug Fixes: correct getopt format option to ensure proper argument parsing
+- Bug Fixes: improve error handling for compose args resolution in event handlers
+- Bug Fixes: reorder logging for getStackContainers action
+- Bug Fixes: validate icon URL before updating label icon preview
+- Bug Fixes (editor): store labels tab basic/advanced view mode in stack settings
+- Bug Fixes: enhance external compose path handling to prevent self-referential paths fixes #107
+- Bug Fixes: enhance Docker daemon readiness check and improve error logging during autostart
+- Bug Fixes: update project name resolution to use sanitized projectName and enhance test payload structure
+- Bug Fixes: remove unused COMPOSE_SPEC_ACTION variable and add shellcheck comments for clarity
+- Bug Fixes: ensure proper destruction of context for element attachment
+- Bug Fixes: enhance COMPOSE_FILE handling and add support for quoted paths
+- Bug Fixes (deploy): prevent script failure when no package is found in archive
+- Bug Fixes (deploy): improve error handling for package path resolution and command checks
+- Bug Fixes (tests): update testEchoComposeCommandActions to use attribute-based data provider
+- Bug Fixes (tests): update subproject commit reference in framework
+- Bug Fixes (tests): update PHP version from 8.2 to 8.3 in workflow configuration
+- Bug Fixes (pkg_build): add shellcheck disables for wget commands to prevent warnings
+- Bug Fixes: formatting pass and fix missing closing brace
+- Bug Fixes (logging): replace console error/warn with composeLogger for improved logging consistency
+- Bug Fixes (cache): implement persistent container cache loading and retrieval for improved container metadata handling
+- Bug Fixes (caching): implement persistent container metadata caching in getStackContainers
+- Bug Fixes (actions): enhance logging for getStackContainers and (non)profile services retrieval
+- Bug Fixes (ui): improve modal responsiveness with flexible dimensions and scrolling
+- Bug Fixes (logging): enhance stack deletion logging and error handling in Exec.php
+- Bug Fixes (logging): remove extra debug log for referrer path check in settings
+- Refactoring: simplify handling of COMPOSE_FILE_LIST in compose_autoupdate.sh
+- Refactoring: extract js from main php file for maintainability and to enable autov
+- Chores: update changelog for v2026.05.25.0747 [skip ci]
+- Chores: update changelog for v2026.05.21.1026 [skip ci]
+- Chores: update changelog for v2026.05.18.2339 [skip ci]
+- Chores: update changelog for v2026.05.18.1643 [skip ci]
+- Chores: update changelog for v2026.05.17.0036 [skip ci]
+- Chores: update changelog for v2026.05.17.0021 [skip ci]
+- Chores: update changelog for v2026.05.16.1954 [skip ci]
+- Chores: update changelog for v2026.05.16.1708 [skip ci]
+- Chores: update changelog for v2026.05.15.1350 [skip ci]
+- Chores: update changelog for v2026.05.15.0838 [skip ci]
+- Chores: update changelog for v2026.05.14.1621 [skip ci]
+- Chores: update changelog for v2026.05.14.1611 [skip ci]
+- Chores: formatting fixes
+- Fix badge link for GitHub downloads in README
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.04.24...v2026.05.28)
 </CHANGES>
 
 <!-- The 'pre-install' script. -->
