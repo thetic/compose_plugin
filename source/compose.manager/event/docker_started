@@ -239,7 +239,6 @@ for dir in "$COMPOSE_ROOT"/*; do
                 fi
                 
                 stacks_to_start+=("$dir|$local_name")
-                stack_priorities["$dir"]=0
             fi
         fi
     fi
