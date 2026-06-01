@@ -966,6 +966,9 @@ function updateTabModifiedState() {
 // Update status cache per stack
 var stackUpdateStatus = {};
 
+// Set to true when docker.versions plugin is detected (populated from getSavedUpdateStatus response)
+var dockerVersionsInstalled = false;
+
 // Load saved update status from server (called on page load)
 // If auto-check is enabled and interval has elapsed, trigger a fresh check
 // Also checks for pending rechecks from recent update operations
@@ -978,6 +981,7 @@ function loadSavedUpdateStatus() {
                 var response = JSON.parse(data);
                 if (response.result === 'success' && response.stacks) {
                     stackUpdateStatus = response.stacks;
+                    if (response.dockerVersionsInstalled) dockerVersionsInstalled = true;
 
                     // Update the UI for each stack with saved status
                     for (var stackName in response.stacks) {
@@ -3501,6 +3505,62 @@ function mergeUpdateStatus(containers, project) {
     return containers;
 }
 
+// Show docker.versions changelog for a single container in a modal.
+// Only called when dockerVersionsInstalled is true; guards against NchanSubscriber
+// being unavailable (e.g. docker.versions removed without page reload).
+//
+// Coupling points with docker.versions (update here if that plugin changes them):
+//   - Nchan topic:  /sub/changelog
+//   - PHP endpoint: /plugins/docker.versions/server/GetChangelog.php
+function showComposeChangelog(containerName) {
+    if (typeof NchanSubscriber === 'undefined') return;
+
+    var nchan = new NchanSubscriber('/sub/changelog');
+    var timeoutId = null;
+
+    // Append all Nchan messages directly to the iframe body.  Avoids depending on
+    // docker.versions' internal HTML class names to route content to sub-elements.
+    nchan.on('message', function(data) {
+        var iframeDoc = $('#myIframe')[0] && $('#myIframe')[0].contentDocument;
+        if (!iframeDoc) return;
+        $(iframeDoc).find('body').css('background-color', 'white').append(data);
+    });
+    nchan.start();
+
+    swal({
+        title: 'Changelog: ' + containerName,
+        text: '<iframe id="myIframe" frameborder="0" scrolling="yes" width="100%" height="99%"></iframe>',
+        html: true,
+        closeOnConfirm: true,
+        showCancelButton: false,
+        allowOutsideClick: true,
+    }, function() {
+        clearTimeout(timeoutId);
+        nchan.stop();
+        swal.close();
+    });
+
+    // Size the dialog to match docker.versions' changelog modal without borrowing
+    // its CSS classes (avoids depending on its stylesheet being loaded).
+    // Equivalent to: .sweet-alert.change-log-summary + .change-log-iframe-container + #myIframe
+    $('.sweet-alert').css({ width: '75%', maxWidth: '75%' });
+    $('#myIframe').parent().css('height', '80%');
+    $('#myIframe').css('height', '75vh');
+
+    // Show a fallback if docker.versions sends nothing (endpoint moved, Nchan topic
+    // changed, or container not found by docker.versions).
+    timeoutId = setTimeout(function() {
+        var iframeDoc = $('#myIframe')[0] && $('#myIframe')[0].contentDocument;
+        if (iframeDoc && !$(iframeDoc).find('body').children().length) {
+            $(iframeDoc).find('body').html(
+                '<p style="padding:16px;color:#888;">Changelog unavailable — no data received from docker.versions.</p>'
+            );
+        }
+    }, 10000);
+
+    $.get('/plugins/docker.versions/server/GetChangelog.php', { 'cts[]': containerName });
+}
+
 // Unified stack action dialog - handles up, down, and update actions
 function showStackActionDialog(action, path, profile) {
     var stackName = basename(path);
@@ -3753,6 +3813,9 @@ function renderStackActionDialog(action, displayName, path, profile, containers,
                     html += ' <i class="fa fa-arrow-right compose-status-success" style="margin:0 4px;"></i> ';
                     html += '<span class="compose-status-success" title="' + composeEscapeAttr(remoteSha) + '">' + composeEscapeHtml(remoteSha.substring(0, 8)) + '</span>';
                     html += '</div>';
+                    if (dockerVersionsInstalled) {
+                        html += '<div style="margin-top:4px;"><a href="#" onclick="showComposeChangelog(' + JSON.stringify(containerName) + ');return false;" style="font-size:0.85em;"><i class="fa fa-list" style="margin-right:3px;"></i>Changelog</a></div>';
+                    }
                 } else if (localSha) {
                     // No update - just show current SHA (greyed)
                     html += '<div style="font-family:var(--font-bitstream);font-size:0.9em;margin-top:2px;" title="' + composeEscapeAttr(localSha) + '"><span class="compose-text-muted">' + composeEscapeHtml(localSha.substring(0, 8)) + '</span></div>';

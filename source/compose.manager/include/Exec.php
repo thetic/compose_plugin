@@ -1504,15 +1504,16 @@ switch ($_POST['action']) {
     case 'getSavedUpdateStatus':
         // Load saved update status from file
         $composeUpdateStatusFile = COMPOSE_UPDATE_STATUS_FILE;
+        $dockerVersionsInstalled = is_dir('/usr/local/emhttp/plugins/docker.versions');
         if (is_file($composeUpdateStatusFile)) {
             $savedStatus = json_decode(file_get_contents($composeUpdateStatusFile), true);
             if ($savedStatus) {
-                echo json_encode(['result' => 'success', 'stacks' => $savedStatus]);
+                echo json_encode(['result' => 'success', 'stacks' => $savedStatus, 'dockerVersionsInstalled' => $dockerVersionsInstalled]);
             } else {
-                echo json_encode(['result' => 'success', 'stacks' => []]);
+                echo json_encode(['result' => 'success', 'stacks' => [], 'dockerVersionsInstalled' => $dockerVersionsInstalled]);
             }
         } else {
-            echo json_encode(['result' => 'success', 'stacks' => []]);
+            echo json_encode(['result' => 'success', 'stacks' => [], 'dockerVersionsInstalled' => $dockerVersionsInstalled]);
         }
         break;
     case 'getLogs':
